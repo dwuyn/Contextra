@@ -36,7 +36,7 @@ Contextra is a sophisticated, AI-powered long-form story management platform. De
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/yourusername/contextra.git
+    git clone https://github.com/dwuyn/contextra.git
     cd contextra
     ```
 
