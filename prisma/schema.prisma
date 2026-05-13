@@ -1,0 +1,226 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector]
+}
+
+model User {
+  id               String   @id @default(uuid())
+  name             String
+  email            String   @unique
+  passwordHash     String
+  dateOfBirth      String?
+  profileImageUrl  String?
+  language         String   @default("en-US")
+  timeZone         String   @default("UTC")
+  securityMode     String   @default("standard")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  ownedProjects    Project[]      @relation("ProjectOwner")
+  collaborations   Collaborator[]
+  friendships      Friendship[]   @relation("UserFriendships")
+  friendOf         Friendship[]   @relation("FriendOf")
+  sentRequests     FriendRequest[] @relation("SentRequests")
+  receivedRequests FriendRequest[] @relation("ReceivedRequests")
+  sentMessages     DirectMessage[] @relation("SentMessages")
+  receivedMessages DirectMessage[] @relation("ReceivedMessages")
+}
+
+model Project {
+  id              String   @id @default(uuid())
+  ownerId         String
+  name            String
+  mode            String   @default("personal")
+  genre           String
+  summary         String
+  isPublic        Boolean  @default(false)
+  coverImageUrl   String?
+  tone            String   @default("")
+  audience        String   @default("")
+  sharedNotes     String   @default("")
+  worldRules      Json     @default("[]") // Array of strings
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  owner           User           @relation("ProjectOwner", fields: [ownerId], references: [id])
+  collaborators   Collaborator[]
+  characters      Character[]
+  chapters        Chapter[]
+  chapterVersions ChapterVersion[]
+  branches        Branch[]
+  usage           Usage[]
+  versions        Version[]
+  chatMessages    ChatMessage[]
+}
+
+model Collaborator {
+  id              String   @id @default(uuid())
+  projectId       String
+  userId          String
+  role            String   // owner, level-1, level-2, level-3
+  permissionLevel Int      @default(1)
+  createdAt       DateTime @default(now())
+
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id])
+}
+
+model Friendship {
+  id        String   @id @default(uuid())
+  userId    String
+  friendId  String
+  createdAt DateTime @default(now())
+
+  user      User     @relation("UserFriendships", fields: [userId], references: [id])
+  friend    User     @relation("FriendOf", fields: [friendId], references: [id])
+
+  @@unique([userId, friendId])
+}
+
+model FriendRequest {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     String   @default("pending") // pending, accepted, rejected
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sender     User     @relation("SentRequests", fields: [senderId], references: [id])
+  receiver   User     @relation("ReceivedRequests", fields: [receiverId], references: [id])
+}
+
+model DirectMessage {
+  id        String   @id @default(uuid())
+  senderId  String
+  receiverId String
+  content   String
+  fileName  String?
+  fileUrl   String?
+  createdAt DateTime @default(now())
+
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiver  User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+}
+
+model Character {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  role      String
+  memory    String
+  goals     String?
+  traits    Json     @default("[]") // Array of strings
+  updatedAt DateTime @updatedAt
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Branch {
+  id               String   @id @default(uuid())
+  projectId        String
+  name             String
+  description      String
+  basedOnChapterId String
+  status           String   @default("active") // active, merged
+  mergedInto       String?
+  highlights       Json     @default("[]") // Array of strings
+  createdAt        DateTime @default(now())
+
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chapters         Chapter[]
+}
+
+model Chapter {
+  id        String   @id @default(uuid())
+  projectId String
+  branchId  String
+  title     String
+  index     Int
+  summary   String
+  content   String
+  source    String   @default("manual") // manual, ai
+  aiContext Json?    // ChapterAIContextSnapshot
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  sceneChunks SceneChunk[]
+  summaryObj  ChapterSummary?
+}
+
+model SceneChunk {
+  id        String   @id @default(uuid())
+  chapterId String
+  content   String
+  vector    Unsupported("vector(768)")?
+  index     Int
+  createdAt DateTime @default(now())
+
+  chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+}
+
+model ChapterSummary {
+  id           String   @id @default(uuid())
+  chapterId    String   @unique
+  summary      String
+  keyEvents    Json
+  factsLearned Json
+  characters   Json
+  emotional    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  chapter      Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+}
+
+model ChapterVersion {
+  id          String   @id @default(uuid())
+  projectId   String
+  chapterId   String
+  content     String
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Usage {
+  id        String   @id @default(uuid())
+  projectId String
+  action    String
+  tokens    Int
+  costUsd   Float
+  model     String
+  actor     String
+  createdAt DateTime @default(now())
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Version {
+  id        String   @id @default(uuid())
+  projectId String
+  label     String
+  state     Json     // ProjectSnapshotState
+  createdAt DateTime @default(now())
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model ChatMessage {
+  id         String   @id @default(uuid())
+  projectId  String
+  senderId   String
+  content    String
+  fileName   String?
+  fileUrl    String?
+  createdAt  DateTime @default(now())
+
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
