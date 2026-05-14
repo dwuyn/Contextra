@@ -59,9 +59,12 @@ export function MainEditor({ onToggleHistory }: { onToggleHistory?: () => void }
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  useEffect(() => {
+  // Sync title when chapter changes (Adjusting state when props change)
+  const [prevChapterId, setPrevChapterId] = useState(currentChapter?.id);
+  if (currentChapter?.id !== prevChapterId) {
+    setPrevChapterId(currentChapter?.id);
     setTitle(currentChapter?.title || "");
-  }, [currentChapter?.id]);
+  }
 
   // Refs for auto-save on unmount
   const latestDataRef = useRef({
@@ -119,11 +122,13 @@ export function MainEditor({ onToggleHistory }: { onToggleHistory?: () => void }
       if (editor.getHTML() !== cachedContent) {
         editor.commands.setContent(cachedContent);
       }
-      setIsLoadingContent(false);
-      setHasUnsavedChanges(false);
+      queueMicrotask(() => {
+        setIsLoadingContent(false);
+        setHasUnsavedChanges(false);
+      });
       editor.setEditable(!!canEdit);
     } else {
-      setIsLoadingContent(true);
+      queueMicrotask(() => setIsLoadingContent(true));
       editor.setEditable(false);
       editor.commands.setContent("<p class='text-slate-400 italic'>Loading...</p>");
       
@@ -198,41 +203,6 @@ export function MainEditor({ onToggleHistory }: { onToggleHistory?: () => void }
     }
   }, [editor, pendingInsertion, clearPendingInsertion]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeydown = (e: KeyboardEvent) => {
-      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-      const modifier = isMac ? e.metaKey : e.ctrlKey;
-      if (!modifier || !editor || !project) return;
-
-      // Cmd+S → immediate save
-      if (e.key === "s") {
-        e.preventDefault();
-        const content = chapterContentCache[selectedChapterId || ""];
-        if (selectedChapterId && content !== undefined && hasUnsavedChanges) {
-          setIsSaving(true);
-          updateChapter(project.metadata.id, selectedChapterId, { title, content })
-            .then(() => setHasUnsavedChanges(false))
-            .catch(console.error)
-            .finally(() => setIsSaving(false));
-        }
-        return;
-      }
-
-      if (!e.shiftKey) return;
-
-      // Cmd+Shift+W → Write
-      if (e.key === "W" || e.key === "w") { e.preventDefault(); handleWrite(); }
-      // Cmd+Shift+R → Rewrite
-      if (e.key === "R" || e.key === "r") { e.preventDefault(); handleRewrite(); }
-      // Cmd+Shift+D → Describe
-      if (e.key === "D" || e.key === "d") { e.preventDefault(); handleDescribe(); }
-    };
-    window.addEventListener("keydown", handleKeydown);
-    return () => window.removeEventListener("keydown", handleKeydown);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, project, selectedChapterId, title, hasUnsavedChanges, chapterContentCache]);
-
   const handleWrite = async () => {
     if (!editor) return;
     const { state } = editor;
@@ -300,6 +270,41 @@ export function MainEditor({ onToggleHistory }: { onToggleHistory?: () => void }
       setIsGenerating(false);
     }
   };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeydown = (e: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+      const modifier = isMac ? e.metaKey : e.ctrlKey;
+      if (!modifier || !editor || !project) return;
+
+      // Cmd+S → immediate save
+      if (e.key === "s") {
+        e.preventDefault();
+        const content = chapterContentCache[selectedChapterId || ""];
+        if (selectedChapterId && content !== undefined && hasUnsavedChanges) {
+          setIsSaving(true);
+          updateChapter(project.metadata.id, selectedChapterId, { title, content })
+            .then(() => setHasUnsavedChanges(false))
+            .catch(console.error)
+            .finally(() => setIsSaving(false));
+        }
+        return;
+      }
+
+      if (!e.shiftKey) return;
+
+      // Cmd+Shift+W → Write
+      if (e.key === "W" || e.key === "w") { e.preventDefault(); handleWrite(); }
+      // Cmd+Shift+R → Rewrite
+      if (e.key === "R" || e.key === "r") { e.preventDefault(); handleRewrite(); }
+      // Cmd+Shift+D → Describe
+      if (e.key === "D" || e.key === "d") { e.preventDefault(); handleDescribe(); }
+    };
+    window.addEventListener("keydown", handleKeydown);
+    return () => window.removeEventListener("keydown", handleKeydown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, project, selectedChapterId, title, hasUnsavedChanges, chapterContentCache]);
 
   const handleBrainstorm = async () => {
     if (!editor || !project) return;

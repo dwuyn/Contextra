@@ -43,7 +43,7 @@ export function StoryBibleView() {
       <div className="max-w-5xl mx-auto w-full px-12 py-10">
         <header className="mb-10">
           <h1 className="text-3xl font-extrabold text-slate-900 mb-2">Story Bible</h1>
-          <p className="text-sm text-slate-400">Track the key details of your story's world to improve AI suggestions or fill it up step-by-step to grow your idea into a first draft.</p>
+          <p className="text-sm text-slate-400">Track the key details of your story&apos;s world to improve AI suggestions or fill it up step-by-step to grow your idea into a first draft.</p>
         </header>
 
         <div className="space-y-4">

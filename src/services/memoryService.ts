@@ -3,7 +3,7 @@ import { customAi } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 
 function stripReasoning(text: string) {
-  return text.replace(/<think>[\\s\\S]*?<\\/think>/g, "").trim();
+  return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 }
 
 /**
@@ -16,7 +16,7 @@ export async function compressChapter(chapterId: string) {
 
   if (!chapter) throw new Error("Chapter not found");
 
-  const prompt = \`
+  const prompt = `
 You are an expert story editor. Your task is to summarize the provided chapter content.
 Please identify:
 1. The key events and plot progressions.
@@ -24,9 +24,9 @@ Please identify:
 3. The specific characters involved and any changes to their state or relationships.
 4. The emotional tone of the chapter.
 
-Chapter Title: \${chapter.title}
+Chapter Title: ${chapter.title}
 Content:
-\${chapter.content}
+${chapter.content}
 
 Return ONLY valid JSON in the following format:
 {
@@ -36,7 +36,7 @@ Return ONLY valid JSON in the following format:
   "characters": ["character 1", "character 2"],
   "emotional": "tense, hopeful, etc."
 }
-\`.trim();
+`.trim();
 
   const { text } = await generateText({
     model: customAi.chat("gemma4:31b-cloud"),

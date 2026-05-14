@@ -16,22 +16,6 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<"directory" | "incoming" | "outgoing">("directory");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
-
-  useSSE((event, data) => {
-    if (event === "new_friend_request") {
-      setIncomingRequests(prev => {
-        if (prev.some(r => r.id === data.id)) return prev;
-        // Make sure data has all required fields for rendering
-        return [data, ...prev];
-      });
-    } else if (event === "friend_request_status_update") {
-      setOutgoingRequests(prev => prev.filter(r => r.id !== data.id));
-    }
-  });
-
   async function fetchInitialData() {
     setLoading(true);
     try {
@@ -49,6 +33,24 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      fetchInitialData();
+    });
+  }, []);
+
+  useSSE((event, data) => {
+    if (event === "new_friend_request") {
+      setIncomingRequests(prev => {
+        if (prev.some(r => r.id === data.id)) return prev;
+        // Make sure data has all required fields for rendering
+        return [data, ...prev];
+      });
+    } else if (event === "friend_request_status_update") {
+      setOutgoingRequests(prev => prev.filter(r => r.id !== data.id));
+    }
+  });
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();

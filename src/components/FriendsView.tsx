@@ -11,12 +11,20 @@ export function FriendsView({ onClose }: { onClose: () => void }) {
   const [friends, setFriends] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFriend, setSelectedFriend] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
   const [unreadMap, setUnreadMap] = useState<Record<string, boolean>>({});
   const [latestMessage, setLatestMessage] = useState<any>(null);
 
+  async function fetchFriends() {
+    try {
+      const data = await getFriends();
+      setFriends(data);
+    } catch (err) {
+      console.error("Failed to fetch friends", err);
+    }
+  }
+
   useEffect(() => {
-    fetchFriends();
+    queueMicrotask(() => fetchFriends());
   }, []);
 
   useSSE((event, data) => {
@@ -33,18 +41,6 @@ export function FriendsView({ onClose }: { onClose: () => void }) {
     setSelectedFriend(friend);
     setUnreadMap(prev => ({ ...prev, [friend.id]: false }));
   };
-
-  async function fetchFriends() {
-    setLoading(true);
-    try {
-      const data = await getFriends();
-      setFriends(data);
-    } catch (err) {
-      console.error("Failed to fetch friends", err);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const filteredFriends = friends.filter(f => 
     f.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -138,16 +134,29 @@ function EmbeddedChat({ friend, latestMessage }: { friend: any, latestMessage: a
   const [inputValue, setInputValue] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const fetchMessages = async () => {
+    try {
+      const data = await getDirectMessages(friend.id);
+      setMessages(data);
+    } catch (err) {
+      console.error("Failed to fetch messages", err);
+    }
+  };
+
   useEffect(() => {
-    fetchMessages();
+    queueMicrotask(() => {
+      fetchMessages();
+    });
   }, [friend.id]);
 
   useEffect(() => {
     if (latestMessage && latestMessage.senderId === friend.id) {
-      setMessages((prev) => {
-        // Prevent duplicate messages
-        if (prev.some(m => m.id === latestMessage.id)) return prev;
-        return [...prev, latestMessage];
+      queueMicrotask(() => {
+        setMessages((prev) => {
+          // Prevent duplicate messages
+          if (prev.some(m => m.id === latestMessage.id)) return prev;
+          return [...prev, latestMessage];
+        });
       });
     }
   }, [latestMessage, friend.id]);
@@ -157,15 +166,6 @@ function EmbeddedChat({ friend, latestMessage }: { friend: any, latestMessage: a
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
-
-  async function fetchMessages() {
-    try {
-      const data = await getDirectMessages(friend.id);
-      setMessages(data);
-    } catch (err) {
-      console.error("Failed to fetch messages", err);
-    }
-  }
 
   async function handleSendMessage(e: React.FormEvent) {
     e.preventDefault();

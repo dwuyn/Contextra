@@ -51,10 +51,10 @@ export async function processAndSaveChapterChunks(chapterId: string, content: st
     
     // Store in Prisma using raw SQL because Prisma doesn't natively support creating vectors with the ORM client methods yet,
     // though the Unsupported("vector") type is there, inserting usually requires string casting.
-    await prisma.$executeRaw\`
+    await prisma.$executeRaw`
       INSERT INTO "SceneChunk" ("id", "chapterId", "content", "vector", "index", "createdAt")
-      VALUES (gen_random_uuid(), \${chapterId}, \${chunkContent}, \${embedding}::vector, \${i}, NOW())
-    \`;
+      VALUES (gen_random_uuid(), ${chapterId}, ${chunkContent}, ${embedding}::vector, ${i}, NOW())
+    `;
   }
 }
 
@@ -66,17 +66,17 @@ export async function semanticSearch(query: string, projectId: string, branchId:
   
   // Use raw SQL for nearest neighbor search using the <-> operator (cosine distance)
   // We join with Chapter to ensure we only retrieve chunks from the current project/branch context.
-  const results = await prisma.$queryRaw<Array<{ content: string; chapterTitle: string; distance: number }>>\`
+  const results = await prisma.$queryRaw<Array<{ content: string; chapterTitle: string; distance: number }>>`
     SELECT
       sc.content,
       c.title as "chapterTitle",
-      sc.vector <-> \${queryEmbedding}::vector as distance
+      sc.vector <-> ${queryEmbedding}::vector as distance
     FROM "SceneChunk" sc
     JOIN "Chapter" c ON sc."chapterId" = c.id
-    WHERE c."projectId" = \${projectId} AND c."branchId" = \${branchId}
+    WHERE c."projectId" = ${projectId} AND c."branchId" = ${branchId}
     ORDER BY distance ASC
-    LIMIT \${limit}
-  \`;
+    LIMIT ${limit}
+  `;
 
-  return results.map(r => \`[From \${r.chapterTitle}]: \${r.content}\`);
+  return results.map(r => `[From ${r.chapterTitle}]: ${r.content}`);
 }

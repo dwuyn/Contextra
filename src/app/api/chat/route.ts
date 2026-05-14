@@ -31,8 +31,13 @@ Branch Context:
 - Current Branch: ${context.branchName}
 - Branch Description: ${context.branchDescription}
 
-Recent Continuity:
-${context.recentChapters.join("\n")}
+Recent Continuity (Sliding Window):
+...
+${context.slidingWindowText}
+...
+
+Retrieved Past Context:
+${context.ragContext && context.ragContext.length ? context.ragContext.join("\n\n") : "No relevant past scenes found."}
 
 Guidelines:
 - Be helpful, creative, and strictly adhere to the project's tone and continuity.
