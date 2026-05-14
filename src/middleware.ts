@@ -6,8 +6,9 @@ export async function middleware(request: NextRequest) {
   const session = request.cookies.get("session")?.value;
   
   const isAuthRoute = request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/register");
+  const isPublicRoute = request.nextUrl.pathname === "/";
 
-  if (!session && !isAuthRoute) {
+  if (!session && !isAuthRoute && !isPublicRoute) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

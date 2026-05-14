@@ -1,5 +1,5 @@
-import { AuthView } from "@/components/AuthView";
+import { LoginView } from "@/components/LoginView";
 
 export default function LoginPage() {
-  return <AuthView />;
+  return <LoginView />;
 }

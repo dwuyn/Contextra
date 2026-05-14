@@ -3,11 +3,12 @@ import { getSession } from "@/lib/auth";
 import { getHomeOverview } from "@/actions/projects";
 import { getUser } from "@/actions/auth";
 import { DashboardView } from "@/components/DashboardView";
+import { LandingView } from "@/components/LandingView";
 
 export default async function HomePage() {
   const session = await getSession();
   if (!session) {
-    redirect("/login");
+    return <LandingView />;
   }
 
   const [overview, user] = await Promise.all([
@@ -16,7 +17,7 @@ export default async function HomePage() {
   ]);
 
   if (!user) {
-    redirect("/login");
+    return <LandingView />;
   }
 
   return <DashboardView user={user} overview={overview} />;

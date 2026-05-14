@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { register, login } from "@/actions/auth";
+import { register } from "@/actions/auth";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-export function AuthView() {
-  const [isLogin, setIsLogin] = useState(true);
+export function RegisterView() {
   const [error, setError] = useState("");
   const router = useRouter();
 
@@ -17,11 +17,7 @@ export function AuthView() {
     const password = formData.get("password") as string;
 
     try {
-      if (isLogin) {
-        await login(email, password);
-      } else {
-        await register(name, email, password);
-      }
+      await register(name, email, password);
       router.push("/");
     } catch (err: any) {
       setError(err.message);
@@ -31,22 +27,20 @@ export function AuthView() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#f7f7f5] p-6">
       <div className="w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-8 shadow-xl">
-        <h1 className="text-3xl font-bold text-slate-900">{isLogin ? "Welcome back" : "Create account"}</h1>
+        <h1 className="text-3xl font-bold text-slate-900">Create account</h1>
         <p className="mt-2 text-sm text-slate-500">To start your monolithic Sudowrite experience.</p>
         
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-          {!isLogin && (
-            <label className="block">
-              <span className="sr-only">Full name</span>
-              <input
-                name="name"
-                type="text"
-                placeholder="Full name"
-                required
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
-              />
-            </label>
-          )}
+          <label className="block">
+            <span className="sr-only">Full name</span>
+            <input
+              name="name"
+              type="text"
+              placeholder="Full name"
+              required
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+            />
+          </label>
           <label className="block">
             <span className="sr-only">Email address</span>
             <input
@@ -71,17 +65,18 @@ export function AuthView() {
             type="submit"
             className="w-full rounded-2xl bg-slate-900 py-4 font-bold text-white transition-transform active:scale-95"
           >
-            {isLogin ? "Sign in" : "Create account"}
+            Create account
           </button>
         </form>
 
-        <button
-          type="button"
-          onClick={() => setIsLogin(!isLogin)}
-          className="mt-6 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
-        >
-          {isLogin ? "Need an account? Register" : "Have an account? Login"}
-        </button>
+        <div className="mt-6 text-center">
+          <Link
+            href="/login"
+            className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+          >
+            Have an account? Login
+          </Link>
+        </div>
 
         {error && <p className="mt-4 text-sm text-red-500 bg-red-50 p-3 rounded-xl">{error}</p>}
       </div>

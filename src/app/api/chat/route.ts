@@ -2,6 +2,7 @@ import { streamText } from 'ai';
 import { customAi } from '@/lib/ai';
 import { getSession } from '@/lib/auth';
 import { composeContext } from '@/services/contextService';
+import { semanticSearch } from '@/services/ragService';
 
 export const maxDuration = 300;
 
@@ -15,7 +16,8 @@ export async function POST(req: Request) {
     return new Response('Missing projectId or branchId', { status: 400 });
   }
 
-  const context = await composeContext(projectId, branchId);
+  const lastMessage = messages[messages.length - 1]?.content || "";
+  const context = await composeContext(projectId, branchId, lastMessage, semanticSearch);
 
   const systemPrompt = `
 You are an expert creative writing assistant. 
