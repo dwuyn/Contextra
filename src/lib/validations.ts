@@ -27,7 +27,9 @@ export const CreateChapterSchema = z.object({
 export const UpdateChapterSchema = z.object({
   title: z.string().optional(),
   summary: z.string().optional(),
-  content: z.string().optional()
+  content: z.string().optional(),
+  createVersion: z.boolean().optional(),
+  revalidate: z.boolean().optional(),
 });
 
 export const CreateBranchSchema = z.object({
@@ -42,20 +44,90 @@ export const UpsertCharacterSchema = z.object({
   memory: z.string()
 });
 
+export const OutlineChapterSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().trim().min(1).max(200),
+  summary: z.string().max(5000).default(""),
+});
+
+export const OutlineActSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().trim().min(1).max(200),
+  summary: z.string().max(5000).default(""),
+  chapters: z.array(OutlineChapterSchema).default([]),
+});
+
+export const ProjectOutlineSchema = z.object({
+  acts: z.array(OutlineActSchema).default([]),
+});
+
+export const GeneratedOutlineChapterSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  summary: z.string().max(5000).default(""),
+});
+
+export const GeneratedOutlineActSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  summary: z.string().max(5000).default(""),
+  chapters: z.array(GeneratedOutlineChapterSchema).default([]),
+});
+
+export const GeneratedOutlineSchema = z.object({
+  acts: z.array(GeneratedOutlineActSchema).min(1),
+});
+
 export const UpdateContextSchema = z.object({
   tone: z.string().optional(),
   audience: z.string().optional(),
   sharedNotes: z.string().optional(),
-  worldRules: z.any().optional()
+  worldRules: z.unknown().optional()
 });
+
+export const UpdateOutlineSchema = ProjectOutlineSchema;
 
 export const AddCollaboratorSchema = z.object({
   friendUserId: z.string().min(1),
   permissionLevel: z.number().int().min(1).max(3)
 });
 
+export const CreateProjectInviteSchema = z.object({
+  receiverUserId: z.string().min(1),
+  permissionLevel: z.number().int().min(1).max(3),
+});
+
+export const RespondProjectInviteSchema = z.object({
+  status: z.enum(["accepted", "declined"]),
+});
+
+export const UpsertProjectPresenceSchema = z.object({
+  chapterId: z.string().min(1).nullable().optional(),
+  state: z.enum(["viewing", "editing"]),
+});
+
+export const CreateCommentThreadSchema = z.object({
+  threadId: z.string().min(1),
+  chapterId: z.string().min(1),
+  selectedText: z.string().trim().min(1),
+  content: z.string().trim().min(1),
+  chapterContent: z.string().min(1),
+});
+
+export const ReplyToCommentThreadSchema = z.object({
+  content: z.string().trim().min(1),
+});
+
+export const UpdateCommentThreadStatusSchema = z.object({
+  status: z.enum(["open", "resolved"]),
+});
+
 export const SendProjectChatSchema = z.object({
   content: z.string().min(1),
   fileName: z.string().optional(),
   fileUrl: z.string().optional()
+});
+
+export const ProjectAiChatRequestSchema = z.object({
+  projectId: z.string().min(1),
+  branchId: z.string().min(1),
+  content: z.string().trim().min(1),
 });

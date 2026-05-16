@@ -12,18 +12,22 @@ export async function getDirectMessages(userId: string, friendId: string) {
   });
 }
 
-export async function sendDirectMessage(senderId: string, receiverId: string, content: string, fileName?: string, fileUrl?: string) {
-  // Verify they are friends
+export async function requireFriendship(userId: string, friendId: string) {
   const friendship = await prisma.friendship.findFirst({
     where: {
       OR: [
-        { userId: senderId, friendId: receiverId },
-        { userId: receiverId, friendId: senderId },
+        { userId, friendId },
+        { userId: friendId, friendId: userId },
       ],
     },
   });
 
   if (!friendship) throw new Error("You can only message friends");
+  return friendship;
+}
+
+export async function sendDirectMessage(senderId: string, receiverId: string, content: string, fileName?: string, fileUrl?: string) {
+  await requireFriendship(senderId, receiverId);
 
   return prisma.directMessage.create({
     data: {

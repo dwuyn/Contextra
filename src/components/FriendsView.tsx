@@ -1,18 +1,58 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { MessageSquare, Search, Send, User } from "lucide-react";
+import { useCallback, useState, useEffect, useRef } from "react";
+import { MessageSquare, Search, Send } from "lucide-react";
 import { getFriends } from "@/actions/friends";
 import { getDirectMessages, sendDirectMessage } from "@/actions/chat";
 import { useSSE } from "@/lib/hooks/useSSE";
 import { cn } from "@/lib/utils";
 
+type FriendSummary = {
+  id: string;
+  name: string;
+  email: string;
+  profileImageUrl?: string | null;
+  createdAt?: string;
+};
+
+type DirectMessageSummary = {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  content: string;
+  fileName?: string | null;
+  fileUrl?: string | null;
+  createdAt: string | Date;
+};
+
+function asString(value: unknown) {
+  return typeof value === "string" ? value : undefined;
+}
+
+function toDirectMessage(data: Record<string, unknown>): DirectMessageSummary | null {
+  const id = asString(data.id);
+  const senderId = asString(data.senderId);
+  const receiverId = asString(data.receiverId);
+  const content = asString(data.content);
+  if (!id || !senderId || !receiverId || !content) return null;
+
+  return {
+    id,
+    senderId,
+    receiverId,
+    content,
+    fileName: asString(data.fileName) ?? null,
+    fileUrl: asString(data.fileUrl) ?? null,
+    createdAt: asString(data.createdAt) ?? new Date(),
+  };
+}
+
 export function FriendsView({ onClose }: { onClose: () => void }) {
-  const [friends, setFriends] = useState<any[]>([]);
+  const [friends, setFriends] = useState<FriendSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFriend, setSelectedFriend] = useState<any>(null);
+  const [selectedFriend, setSelectedFriend] = useState<FriendSummary | null>(null);
   const [unreadMap, setUnreadMap] = useState<Record<string, boolean>>({});
-  const [latestMessage, setLatestMessage] = useState<any>(null);
+  const [latestMessage, setLatestMessage] = useState<DirectMessageSummary | null>(null);
 
   async function fetchFriends() {
     try {
@@ -29,15 +69,17 @@ export function FriendsView({ onClose }: { onClose: () => void }) {
 
   useSSE((event, data) => {
     if (event === "new_message") {
-      setLatestMessage(data);
+      const message = toDirectMessage(data);
+      if (!message) return;
+      setLatestMessage(message);
       // If the message is not from the currently selected friend, mark as unread
-      if (selectedFriend?.id !== data.senderId) {
-        setUnreadMap(prev => ({ ...prev, [data.senderId]: true }));
+      if (selectedFriend?.id !== message.senderId) {
+        setUnreadMap(prev => ({ ...prev, [message.senderId]: true }));
       }
     }
   });
 
-  const handleSelectFriend = (friend: any) => {
+  const handleSelectFriend = (friend: FriendSummary) => {
     setSelectedFriend(friend);
     setUnreadMap(prev => ({ ...prev, [friend.id]: false }));
   };
@@ -66,8 +108,12 @@ export function FriendsView({ onClose }: { onClose: () => void }) {
         {/* Left Sidebar */}
         <div className="w-64 flex flex-col space-y-6 min-h-0">
           <div className="relative shrink-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+            <label htmlFor="friends-search" className="sr-only">
+              Search friends
+            </label>
+            <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input 
+              id="friends-search"
               type="text" 
               placeholder="Search friends" 
               value={searchQuery}
@@ -129,25 +175,25 @@ export function FriendsView({ onClose }: { onClose: () => void }) {
   );
 }
 
-function EmbeddedChat({ friend, latestMessage }: { friend: any, latestMessage: any }) {
-  const [messages, setMessages] = useState<any[]>([]);
+function EmbeddedChat({ friend, latestMessage }: { friend: FriendSummary, latestMessage: DirectMessageSummary | null }) {
+  const [messages, setMessages] = useState<DirectMessageSummary[]>([]);
   const [inputValue, setInputValue] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     try {
       const data = await getDirectMessages(friend.id);
       setMessages(data);
     } catch (err) {
       console.error("Failed to fetch messages", err);
     }
-  };
+  }, [friend.id]);
 
   useEffect(() => {
     queueMicrotask(() => {
       fetchMessages();
     });
-  }, [friend.id]);
+  }, [fetchMessages]);
 
   useEffect(() => {
     if (latestMessage && latestMessage.senderId === friend.id) {
@@ -229,7 +275,11 @@ function EmbeddedChat({ friend, latestMessage }: { friend: any, latestMessage: a
       {/* Input */}
       <div className="p-4 bg-white border-t border-slate-100 shrink-0">
         <form onSubmit={handleSendMessage} className="relative flex items-center gap-3">
+          <label htmlFor="friend-message-input" className="sr-only">
+            Message {friend.name}
+          </label>
           <input 
+            id="friend-message-input"
             type="text" 
             placeholder="Type a message..."
             value={inputValue}
@@ -238,10 +288,11 @@ function EmbeddedChat({ friend, latestMessage }: { friend: any, latestMessage: a
           />
           <button 
             type="submit"
+            aria-label={`Send message to ${friend.name}`}
             disabled={!inputValue.trim()}
             className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-all shadow-sm shrink-0"
           >
-            <Send size={18} className="translate-x-0.5" />
+            <Send aria-hidden="true" size={18} className="translate-x-0.5" />
           </button>
         </form>
       </div>

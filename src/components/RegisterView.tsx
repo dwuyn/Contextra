@@ -5,6 +5,10 @@ import { register } from "@/actions/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unable to create an account. Please try again.";
+}
+
 export function RegisterView() {
   const [error, setError] = useState("");
   const router = useRouter();
@@ -19,8 +23,8 @@ export function RegisterView() {
     try {
       await register(name, email, password);
       router.push("/");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(getErrorMessage(err));
     }
   };
 
@@ -28,7 +32,7 @@ export function RegisterView() {
     <div className="flex min-h-screen items-center justify-center bg-[#f7f7f5] p-6">
       <div className="w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-8 shadow-xl">
         <h1 className="text-3xl font-bold text-slate-900">Create account</h1>
-        <p className="mt-2 text-sm text-slate-500">To start your monolithic Sudowrite experience.</p>
+        <p className="mt-2 text-sm text-slate-500">To start your monolithic Contextra experience.</p>
         
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           <label className="block">
@@ -78,7 +82,11 @@ export function RegisterView() {
           </Link>
         </div>
 
-        {error && <p className="mt-4 text-sm text-red-500 bg-red-50 p-3 rounded-xl">{error}</p>}
+        {error && (
+          <p role="alert" aria-live="assertive" className="mt-4 text-sm text-red-500 bg-red-50 p-3 rounded-xl">
+            {error}
+          </p>
+        )}
       </div>
     </div>
   );

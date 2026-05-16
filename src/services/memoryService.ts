@@ -6,16 +6,13 @@ function stripReasoning(text: string) {
   return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 }
 
-/**
- * Summarizes a chapter's events and characters and stores the compressed representation in the database.
- */
-export async function compressChapter(chapterId: string) {
-  const chapter = await prisma.chapter.findUnique({
-    where: { id: chapterId },
-  });
+type ChapterSummaryInput = {
+  chapterId: string;
+  title: string;
+  content: string;
+};
 
-  if (!chapter) throw new Error("Chapter not found");
-
+async function summarizeChapterContent({ title, content }: Omit<ChapterSummaryInput, "chapterId">) {
   const prompt = `
 You are an expert story editor. Your task is to summarize the provided chapter content.
 Please identify:
@@ -24,9 +21,9 @@ Please identify:
 3. The specific characters involved and any changes to their state or relationships.
 4. The emotional tone of the chapter.
 
-Chapter Title: ${chapter.title}
+Chapter Title: ${title}
 Content:
-${chapter.content}
+${content}
 
 Return ONLY valid JSON in the following format:
 {
@@ -46,19 +43,34 @@ Return ONLY valid JSON in the following format:
 
   const cleanText = stripReasoning(text);
 
-  let json;
   try {
-    json = JSON.parse(cleanText);
-  } catch (err) {
+    return JSON.parse(cleanText) as {
+      summary?: string;
+      keyEvents?: unknown;
+      factsLearned?: unknown;
+      characters?: unknown;
+      emotional?: string;
+    };
+  } catch {
     console.error("Failed to parse compression JSON:", cleanText);
     throw new Error("AI returned invalid JSON during chapter compression.");
   }
+}
 
-  // Save the summary
+export async function deleteChapterSummary(chapterId: string) {
+  await prisma.chapterSummary.deleteMany({ where: { chapterId } });
+}
+
+export async function upsertChapterSummary(input: ChapterSummaryInput) {
+  const json = await summarizeChapterContent({
+    title: input.title,
+    content: input.content,
+  });
+
   await prisma.chapterSummary.upsert({
-    where: { chapterId },
+    where: { chapterId: input.chapterId },
     create: {
-      chapterId,
+      chapterId: input.chapterId,
       summary: json.summary || "No summary provided.",
       keyEvents: json.keyEvents || [],
       factsLearned: json.factsLearned || [],
@@ -72,5 +84,27 @@ Return ONLY valid JSON in the following format:
       characters: json.characters || [],
       emotional: json.emotional || "neutral",
     },
+  });
+}
+
+/**
+ * Summarizes a chapter's events and characters and stores the compressed representation in the database.
+ */
+export async function compressChapter(chapterId: string) {
+  const chapter = await prisma.chapter.findUnique({
+    where: { id: chapterId },
+  });
+
+  if (!chapter) throw new Error("Chapter not found");
+
+  if (!chapter.content.trim()) {
+    await deleteChapterSummary(chapterId);
+    return;
+  }
+
+  await upsertChapterSummary({
+    chapterId,
+    title: chapter.title,
+    content: chapter.content,
   });
 }

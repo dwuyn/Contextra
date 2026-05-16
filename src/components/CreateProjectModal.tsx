@@ -5,34 +5,45 @@ import { createProject } from "@/actions/projects";
 import { useRouter } from "next/navigation";
 import { X, Globe, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useProjectStore } from "@/store/useProjectStore";
 import * as Dialog from "@radix-ui/react-dialog";
 
 export function CreateProjectModal({ onClose }: { onClose: () => void }) {
   const [title, setTitle] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const router = useRouter();
+  const requestTitleFocus = useProjectStore((state) => state.requestTitleFocus);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
 
     setLoading(true);
+    setError("");
     try {
       const project = await createProject({
-        name: title,
+        name: title.trim(),
         isPublic,
         mode: "personal",
-        genre: "Fiction",
-        summary: "A new story.",
+        genre: "",
+        summary: "",
       });
       if (project) {
+        const starterChapterId = project.chapters[0]?.id;
+        if (!starterChapterId) {
+          throw new Error("Project creation returned no starter chapter.");
+        }
+
+        requestTitleFocus(starterChapterId);
         router.push(`/project/${project.metadata.id}`);
       } else {
         throw new Error("Project creation returned no data.");
       }
     } catch (err) {
       console.error(err);
+      setError(err instanceof Error ? err.message : "Failed to create project.");
       setLoading(false);
     }
   };
@@ -116,6 +127,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
               >
                 {loading ? "Creating..." : "Create Project"}
               </button>
+              {error && <p className="rounded-xl bg-rose-50 p-3 text-sm font-medium text-rose-600">{error}</p>}
             </form>
           </div>
         </Dialog.Content>

@@ -1,13 +1,33 @@
 import { customAi } from "@/lib/ai";
+import * as z from "@/lib/validations";
 import { generateText } from "ai";
-import { PromptContext } from "./contextService";
+import type { ModelMessage } from "ai";
+import type { PromptContext } from "./contextService";
+import {
+  buildChapterGenerationPrompt,
+  buildChatSystemPrompt,
+  buildDescribePrompt,
+  buildRewritePrompt,
+} from "./writingPromptService";
 
 function stripReasoning(text: string) {
   return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 }
 
+type StoryBibleGenerationContext = {
+  projectName: string;
+  braindump: string;
+  genre: string;
+  tone: string;
+  audience: string;
+  synopsis: string;
+  worldRules: string[];
+  characters: Array<{ name: string; role: string; memory: string }>;
+  chapters: Array<{ title: string; summary: string }>;
+};
+
 export async function generateChapter(input: { title: string; instructions: string }, context: PromptContext) {
-  const prompt = buildPrompt(input, context);
+  const prompt = buildChapterGenerationPrompt(input, context);
 
   const { text } = await generateText({
     model: customAi.chat("gemma4:31b-cloud"),
@@ -35,128 +55,176 @@ export async function generateChapter(input: { title: string; instructions: stri
 }
 
 export async function rewriteSelection(input: { selection: string; instructions: string }, context: PromptContext) {
-  const prompt = `
-You are an expert editor. 
-Project Tone: ${context.tone}
-Project Audience: ${context.audience}
-
-Current selection to rewrite:
-"${input.selection}"
-
-Instructions for rewriting:
-${input.instructions}
-
-Return only the rewritten text. No conversational filler.
-`.trim();
-
   const { text } = await generateText({
     model: customAi.chat("gemma4:31b-cloud"),
-    prompt,
+    prompt: buildRewritePrompt(input, context),
   });
 
   return stripReasoning(text);
 }
 
 export async function describeSelection(input: { selection: string; sense: string }, context: PromptContext) {
-  const prompt = `
-You are an expert sensory writer.
-Project Tone: ${context.tone}
-
-Word/Phrase to describe: "${input.selection}"
-Focus on the sense of: ${input.sense}
-
-Provide a few atmospheric and vivid sentences expanding on this description.
-Return only the text. No conversational filler.
-`.trim();
-
   const { text } = await generateText({
     model: customAi.chat("gemma4:31b-cloud"),
-    prompt,
+    prompt: buildDescribePrompt(input, context),
   });
 
   return stripReasoning(text);
 }
 
-export async function chatWithAi(messages: { role: string; content: string }[], context: PromptContext) {
-  const ragContextBlock = context.ragContext.length ? context.ragContext.join("\n\n") : "No relevant past scenes found.";
-
-  const systemPrompt = `
-You are an expert creative writing assistant helping the user write "${context.projectName}".
-
-[STORY STATE]
-- Summary: ${context.projectSummary}
-- Tone: ${context.tone}
-- Audience: ${context.audience}
-
-[RULES / LORE]
-- ${context.worldRules.join("\n- ")}
-
-[BRANCH CONTEXT]
-- Current Branch: ${context.branchName}
-- Branch Description: ${context.branchDescription}
-
-[RETRIEVED PAST CONTEXT]
-${ragContextBlock}
-
-[RECENT PROSE]
-...
-${context.slidingWindowText}
-...
-
-Guidelines:
-- Be helpful, creative, and strictly adhere to the project's tone and continuity.
-- If asked about the world or characters, refer to the provided context.
-- Keep responses concise but engaging.
-`.trim();
-
+export async function generateSynopsisFromStoryBible(context: StoryBibleGenerationContext) {
   const { text } = await generateText({
     model: customAi.chat("gemma4:31b-cloud"),
-    system: systemPrompt,
-    messages: messages as any,
+    prompt: buildSynopsisPrompt(context),
+    temperature: 0.6,
+  });
+
+  return {
+    synopsis: stripReasoning(text),
+    tokens: 0,
+    costUsd: 0,
+    model: "custom-ai",
+  };
+}
+
+export async function generateOutlineFromStoryBible(context: StoryBibleGenerationContext) {
+  const { text } = await generateText({
+    model: customAi.chat("gemma4:31b-cloud"),
+    prompt: buildOutlinePrompt(context),
+    temperature: 0.7,
+  });
+
+  const cleanText = stripReasoning(text);
+
+  try {
+    const json = JSON.parse(cleanText);
+    const outline = z.GeneratedOutlineSchema.parse(json);
+    return {
+      outline,
+      tokens: 0,
+      costUsd: 0,
+      model: "custom-ai",
+    };
+  } catch (err) {
+    console.error("Failed to parse outline JSON:", cleanText, err);
+    throw new Error("AI returned an invalid outline. Please try again.");
+  }
+}
+
+export async function chatWithAi(messages: ModelMessage[], context: PromptContext) {
+  const { text } = await generateText({
+    model: customAi.chat("gemma4:31b-cloud"),
+    system: buildChatSystemPrompt(context),
+    messages,
   });
 
   return stripReasoning(text);
 }
 
-function buildPrompt(input: { title: string; instructions: string }, context: PromptContext) {
-  const worldRules = context.worldRules.length ? context.worldRules.join("\n- ") : "No world rules yet.";
-  const ragContextBlock = context.ragContext.length ? context.ragContext.join("\n\n") : "No relevant past scenes found.";
-  const branchHighlights = context.branchHighlights.length ? context.branchHighlights.join("\n- ") : "No branch highlights yet.";
+function buildSynopsisPrompt(context: StoryBibleGenerationContext) {
+  const worldRules = context.worldRules.length ? context.worldRules.map((rule) => `- ${rule}`).join("\n") : "- No world rules yet.";
+  const characters = context.characters.length
+    ? context.characters.map((character) => `- ${character.name} (${character.role}): ${character.memory}`).join("\n")
+    : "- No characters defined yet.";
+  const chapterDigest = context.chapters.length
+    ? context.chapters
+        .map((chapter, index) => `- Chapter ${index + 1}: ${chapter.title}${chapter.summary ? ` | ${chapter.summary}` : ""}`)
+        .join("\n")
+    : "- No chapters yet.";
 
   return `
-[STORY STATE]
-Project: ${context.projectName}
-Summary: ${context.projectSummary}
+You are an expert developmental editor creating a story synopsis for a writing project.
+
+Use the same primary language already present in the project materials. If the materials are mixed, prefer the language used in the braindump and existing synopsis.
+
+[PROJECT]
+Title: ${context.projectName}
+Genre: ${context.genre}
 Tone: ${context.tone}
 Audience: ${context.audience}
 
-[RULES / LORE]
-- ${worldRules}
+[BRAINDUMP]
+${context.braindump || "No braindump yet."}
+
+[EXISTING SYNOPSIS]
+${context.synopsis || "No synopsis yet."}
 
 [CHARACTERS]
-${context.characterDigest}
+${characters}
 
-[RETRIEVED PAST CONTEXT]
-${ragContextBlock}
+[WORLD RULES]
+${worldRules}
 
-[RECENT PROSE (SLIDING WINDOW)]
-...
-${context.slidingWindowText}
-...
+[REAL CHAPTERS]
+${chapterDigest}
 
-[CURRENT TASK]
-Requested chapter title: ${input.title}
-Instructions:
-${input.instructions}
+Write a polished synopsis that:
+- introduces the protagonist(s), central conflict, stakes, and tone
+- stays consistent with the supplied project information
+- is useful as future reference for writing
 
-You are an expert long-form writing assistant.
-Return only valid JSON with:
-- title
-- summary
-- content
+Return only the synopsis text. No markdown, no heading, no commentary.
+`.trim();
+}
+
+function buildOutlinePrompt(context: StoryBibleGenerationContext) {
+  const worldRules = context.worldRules.length ? context.worldRules.map((rule) => `- ${rule}`).join("\n") : "- No world rules yet.";
+  const characters = context.characters.length
+    ? context.characters.map((character) => `- ${character.name} (${character.role}): ${character.memory}`).join("\n")
+    : "- No characters defined yet.";
+  const chapterDigest = context.chapters.length
+    ? context.chapters
+        .map((chapter, index) => `- Chapter ${index + 1}: ${chapter.title}${chapter.summary ? ` | ${chapter.summary}` : ""}`)
+        .join("\n")
+    : "- No chapters yet.";
+
+  return `
+You are an expert story architect creating a structured novel outline.
+
+Use the same primary language already present in the project materials. If the materials are mixed, prefer the language used in the braindump and synopsis.
+
+[PROJECT]
+Title: ${context.projectName}
+Genre: ${context.genre}
+Tone: ${context.tone}
+Audience: ${context.audience}
+
+[BRAINDUMP]
+${context.braindump || "No braindump yet."}
+
+[SYNOPSIS]
+${context.synopsis || "No synopsis yet."}
+
+[CHARACTERS]
+${characters}
+
+[WORLD RULES]
+${worldRules}
+
+[REAL CHAPTERS]
+${chapterDigest}
+
+Return only valid JSON with this shape:
+{
+  "acts": [
+    {
+      "title": "Act title",
+      "summary": "Short act summary",
+      "chapters": [
+        {
+          "title": "Chapter title",
+          "summary": "Short chapter summary"
+        }
+      ]
+    }
+  ]
+}
 
 Requirements:
-- Keep continuity strictly aligned with the supplied context.
-- content must be clean HTML using paragraphs and simple inline tags when needed.
+- Create 3 to 5 acts when possible.
+- Each act should contain 2 to 5 chapters.
+- Keep the outline aligned with the supplied project details.
+- Keep chapter summaries concise and actionable.
+- Do not include any text outside the JSON.
 `.trim();
 }

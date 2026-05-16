@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(new TextEncoder().encode(": heartbeat\n\n"));
-        } catch (e) {
+        } catch {
           clearInterval(heartbeat);
         }
       }, 15000);

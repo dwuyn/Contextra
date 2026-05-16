@@ -3,65 +3,88 @@
 import { useProjectStore } from "@/store/useProjectStore";
 import { cn } from "@/lib/utils";
 import { X, Copy, Plus, ThumbsUp, ThumbsDown, Star, MessageSquare, History, Sparkles, Send, User } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, startTransition } from "react";
+import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
 export function AiCardsPane({ onClose, showCloseButton }: { onClose?: () => void; showCloseButton?: boolean }) {
-  const { 
-    aiCards, 
-    removeAiCard, 
-    project, 
-    activeBranchId 
-  } = useProjectStore();
+  const aiCards = useProjectStore((state) => state.aiCards);
+  const removeAiCard = useProjectStore((state) => state.removeAiCard);
+  const projectId = useProjectStore((state) => state.project?.metadata.id ?? null);
+  const messages = useProjectStore((state) => state.project?.aiMessages ?? []);
+  const activeBranchId = useProjectStore((state) => state.activeBranchId);
+  const appendProjectAiMessage = useProjectStore((state) => state.appendProjectAiMessage);
+  const updateProjectAiMessage = useProjectStore((state) => state.updateProjectAiMessage);
   const [activeTab, setActiveTab] = useState<"history" | "chat">("history");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
-  const [messages, setMessages] = useState<Array<{ id: string; role: "user" | "assistant"; content: string }>>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading || !project) return;
+    const trimmedInput = input.trim();
+    if (!trimmedInput || isLoading || !projectId || !activeBranchId) return;
 
-    const userMsg = { id: Date.now().toString(), role: "user" as const, content: input };
-    const assistantId = (Date.now() + 1).toString();
-    setMessages((prev) => [...prev, userMsg, { id: assistantId, role: "assistant" as const, content: "" }]);
+    const now = Date.now();
+    const userMessageId = `optimistic-user-${now}`;
+    const assistantMessageId = `optimistic-assistant-${now}`;
+
+    appendProjectAiMessage({
+      id: userMessageId,
+      projectId,
+      branchId: activeBranchId,
+      authorUserId: null,
+      role: "user",
+      content: trimmedInput,
+      createdAt: new Date().toISOString(),
+    });
+    appendProjectAiMessage({
+      id: assistantMessageId,
+      projectId,
+      branchId: activeBranchId,
+      authorUserId: null,
+      role: "assistant",
+      content: "",
+      createdAt: new Date().toISOString(),
+    });
     setInput("");
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/project-ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          projectId: project.metadata.id,
+          projectId,
           branchId: activeBranchId,
-          messages: [...messages, userMsg].map(({ role, content }) => ({ role, content })),
+          content: trimmedInput,
         }),
       });
+      if (!res.ok) throw new Error(await res.text());
 
       const reader = res.body?.getReader();
+      if (!reader) throw new Error("Missing AI response stream.");
+
       const decoder = new TextDecoder();
       let accumulated = "";
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          accumulated += decoder.decode(value, { stream: true });
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, content: accumulated } : m))
-          );
-        }
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += decoder.decode(value, { stream: true });
+        updateProjectAiMessage(assistantMessageId, { content: accumulated });
       }
+
+      startTransition(() => {
+        router.refresh();
+      });
     } catch (err) {
       console.error(err);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId ? { ...m, content: "Sorry, I encountered an error. Please try again." } : m
-        )
-      );
+      updateProjectAiMessage(assistantMessageId, {
+        content: "Sorry, I encountered an error. Please try again.",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -128,6 +151,7 @@ export function AiCardsPane({ onClose, showCloseButton }: { onClose?: () => void
                     <button
                       onClick={() => removeAiCard(card.id)}
                       className="text-slate-300 hover:text-slate-500 transition-colors"
+                      aria-label="Remove AI history card"
                     >
                       <X size={14} />
                     </button>
@@ -185,11 +209,7 @@ export function AiCardsPane({ onClose, showCloseButton }: { onClose?: () => void
                       : "bg-white border border-slate-100 text-slate-700 rounded-tl-none shadow-sm"
                   )}>
                     <div className="prose-sm max-w-none text-inherit leading-relaxed [&>p]:mb-2 last:[&>p]:mb-0 [&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4">
-                      <ReactMarkdown>
-                        {typeof (msg as any).content === "string"
-                          ? (msg as any).content
-                          : ((msg as any).parts ?? []).filter((p: any) => p.type === "text").map((p: any) => p.text).join("") || ""}
-                      </ReactMarkdown>
+                      <ReactMarkdown>{msg.content || (isLoading && msg.role === "assistant" ? "Thinking..." : "")}</ReactMarkdown>
                     </div>
                   </div>
                   <div className="mt-1 flex items-center gap-1 px-1">
@@ -207,13 +227,6 @@ export function AiCardsPane({ onClose, showCloseButton }: { onClose?: () => void
                 </div>
               ))
             )}
-            {isLoading && messages[messages.length - 1]?.role === "user" && (
-              <div className="flex flex-col items-start animate-pulse">
-                <div className="max-w-[85%] rounded-[20px] rounded-tl-none px-4 py-3 bg-white border border-slate-100 text-slate-300 text-sm shadow-sm">
-                  Thinking...
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -222,7 +235,11 @@ export function AiCardsPane({ onClose, showCloseButton }: { onClose?: () => void
       <div className="p-4 border-t border-slate-100 bg-white">
         {activeTab === "chat" ? (
           <form onSubmit={handleSubmit} className="relative">
+            <label htmlFor="ai-chat-input" className="sr-only">
+              Ask Contextra AI a question
+            </label>
             <input 
+              id="ai-chat-input"
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -232,10 +249,11 @@ export function AiCardsPane({ onClose, showCloseButton }: { onClose?: () => void
             />
             <button 
               type="submit"
+              aria-label="Send message to Contextra AI"
               disabled={!input.trim() || isLoading}
               className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center hover:bg-slate-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              <Send size={14} />
+              <Send aria-hidden="true" size={14} />
             </button>
           </form>
         ) : (

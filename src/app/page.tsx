@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getHomeOverview } from "@/actions/projects";
 import { getUser } from "@/actions/auth";

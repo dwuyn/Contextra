@@ -1,7 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
-import { X, User, Palette, LogOut, Camera, Lock } from "lucide-react";
+import { User, Palette, Camera, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePreferencesStore, ThemeType, FontType } from "@/store/usePreferencesStore";
 import { updateProfile, changePassword, logout } from "@/actions/auth";
@@ -39,6 +40,10 @@ const FONTS: { id: FontType; name: string }[] = [
   { id: "courier-new", name: "Courier New" },
 ];
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+}
+
 export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
   const [activeTab, setActiveTab] = useState<"appearance" | "account">("appearance");
   const { theme, font, setTheme, setFont } = usePreferencesStore();
@@ -49,6 +54,8 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
   const [email, setEmail] = useState(user.email);
   const [dob, setDob] = useState(user.dob || "");
   const [isUpdating, setIsUpdating] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [profileSuccess, setProfileSuccess] = useState("");
 
   // Password Form State
   const [oldPassword, setOldPassword] = useState("");
@@ -56,14 +63,19 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
 
   const handleUpdateProfile = async () => {
     setIsUpdating(true);
+    setProfileError("");
+    setProfileSuccess("");
     try {
       await updateProfile({ name, email, dob });
+      setProfileSuccess("Account updated.");
       router.refresh();
     } catch (err) {
       console.error(err);
+      setProfileError(getErrorMessage(err));
     } finally {
       setIsUpdating(false);
     }
@@ -76,14 +88,15 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
     }
     setIsChangingPassword(true);
     setPasswordError("");
+    setPasswordSuccess("");
     try {
       await changePassword(oldPassword, newPassword);
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      alert("Password updated successfully");
-    } catch (err: any) {
-      setPasswordError(err.message || "Failed to change password");
+      setPasswordSuccess("Password updated successfully.");
+    } catch (err) {
+      setPasswordError(getErrorMessage(err));
     } finally {
       setIsChangingPassword(false);
     }
@@ -189,7 +202,13 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
                     <div className="w-56 h-72 rounded-[32px] border border-slate-100 bg-[var(--background)] flex flex-col items-center justify-center p-6 shrink-0">
                       <div className="w-24 h-24 rounded-full bg-white border border-slate-200 flex items-center justify-center text-3xl font-bold text-slate-300 mb-6">
                         {user.profileImageUrl ? (
-                          <img src={user.profileImageUrl} alt={user.name} className="w-full h-full rounded-full object-cover" />
+                          <Image
+                            src={user.profileImageUrl}
+                            alt={user.name}
+                            width={96}
+                            height={96}
+                            className="w-full h-full rounded-full object-cover"
+                          />
                         ) : (
                           user.name[0].toUpperCase()
                         )}
@@ -261,6 +280,8 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
                           Logout
                         </button>
                       </div>
+                      {profileError && <p className="text-xs font-bold text-rose-500 px-2">{profileError}</p>}
+                      {profileSuccess && <p className="text-xs font-bold text-emerald-600 px-2">{profileSuccess}</p>}
                     </div>
                   </div>
                 </section>
@@ -302,6 +323,7 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
                       />
                     </label>
                     {passwordError && <p className="text-xs font-bold text-rose-500 px-2">{passwordError}</p>}
+                    {passwordSuccess && <p className="text-xs font-bold text-emerald-600 px-2">{passwordSuccess}</p>}
                     <button 
                       onClick={handleChangePassword}
                       disabled={isChangingPassword}

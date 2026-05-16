@@ -3,54 +3,48 @@ import { customAi } from '@/lib/ai';
 import { getSession } from '@/lib/auth';
 import { composeContext } from '@/services/contextService';
 import { semanticSearch } from '@/services/ragService';
+import { requireBranchInProject, requireProjectPermission } from '@/services/projectService';
+import { buildChatSystemPrompt } from '@/services/writingPromptService';
 
 export const maxDuration = 300;
+
+type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+type ChatRequestBody = {
+  messages?: ChatMessage[];
+  projectId?: string;
+  branchId?: string;
+};
 
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return new Response('Unauthorized', { status: 401 });
 
-  const { messages, projectId, branchId } = await req.json();
+  const { messages, projectId, branchId } = await req.json() as ChatRequestBody;
 
-  if (!projectId || !branchId) {
-    return new Response('Missing projectId or branchId', { status: 400 });
+  if (!projectId || !branchId || !Array.isArray(messages)) {
+    return new Response('Missing or invalid chat payload', { status: 400 });
+  }
+
+  try {
+    await requireProjectPermission(projectId, session.userId, 'view');
+    await requireBranchInProject(projectId, branchId);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Branch not found') {
+      return new Response('Branch not found', { status: 404 });
+    }
+    return new Response('Unauthorized', { status: 401 });
   }
 
   const lastMessage = messages[messages.length - 1]?.content || "";
   const context = await composeContext(projectId, branchId, lastMessage, semanticSearch);
 
-  const systemPrompt = `
-You are an expert creative writing assistant. 
-You are helping the user write a story called "${context.projectName}".
-
-Project Context:
-- Summary: ${context.projectSummary}
-- Tone: ${context.tone}
-- Audience: ${context.audience}
-- World Rules: ${context.worldRules.join(", ")}
-
-Branch Context:
-- Current Branch: ${context.branchName}
-- Branch Description: ${context.branchDescription}
-
-Recent Continuity (Sliding Window):
-...
-${context.slidingWindowText}
-...
-
-Retrieved Past Context:
-${context.ragContext && context.ragContext.length ? context.ragContext.join("\n\n") : "No relevant past scenes found."}
-
-Guidelines:
-- Be helpful, creative, and strictly adhere to the project's tone and continuity.
-- If asked to brainstorm, provide vivid and interesting options.
-- If asked about the world or characters, refer to the provided context.
-- Keep responses concise but engaging.
-`.trim();
-
   const result = streamText({
     model: customAi.chat("gemma4:31b-cloud"),
-    system: systemPrompt,
+    system: buildChatSystemPrompt(context),
     messages,
   });
 

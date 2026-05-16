@@ -39,13 +39,20 @@ export async function login(email: string, password: string) {
   return createSession(user);
 }
 
-export async function createSession(user: any) {
+type SessionUser = {
+  id: string;
+  email: string;
+  name: string;
+  profileImageUrl?: string | null;
+};
+
+export async function createSession(user: SessionUser) {
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const session = await encrypt({
     userId: user.id,
     email: user.email,
     name: user.name,
-    expires,
+    expires: expires.toISOString(),
   });
 
   const cookieStore = await cookies();

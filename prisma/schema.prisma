@@ -29,6 +29,12 @@ model User {
   receivedRequests FriendRequest[] @relation("ReceivedRequests")
   sentMessages     DirectMessage[] @relation("SentMessages")
   receivedMessages DirectMessage[] @relation("ReceivedMessages")
+  sentProjectInvites ProjectInvite[] @relation("ProjectInviteSender")
+  receivedProjectInvites ProjectInvite[] @relation("ProjectInviteReceiver")
+  presenceEntries   ProjectPresence[]
+  authoredCommentThreads CommentThread[] @relation("CommentThreadAuthor")
+  resolvedCommentThreads CommentThread[] @relation("CommentThreadResolver")
+  commentReplies    CommentReply[] @relation("CommentReplyAuthor")
 }
 
 model Project {
@@ -44,6 +50,7 @@ model Project {
   audience        String   @default("")
   sharedNotes     String   @default("")
   worldRules      Json     @default("[]") // Array of strings
+  outline         Json     @default("{\"acts\":[]}")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -56,6 +63,10 @@ model Project {
   usage           Usage[]
   versions        Version[]
   chatMessages    ChatMessage[]
+  aiMessages      ProjectAiMessage[]
+  invites         ProjectInvite[]
+  presence        ProjectPresence[]
+  commentThreads  CommentThread[]
 }
 
 model Collaborator {
@@ -68,6 +79,27 @@ model Collaborator {
 
   project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user            User     @relation(fields: [userId], references: [id])
+
+  @@unique([projectId, userId])
+}
+
+model ProjectInvite {
+  id              String   @id @default(uuid())
+  projectId       String
+  senderUserId    String
+  receiverUserId  String
+  permissionLevel Int
+  status          String   @default("pending") // pending, accepted, declined, canceled
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sender          User     @relation("ProjectInviteSender", fields: [senderUserId], references: [id])
+  receiver        User     @relation("ProjectInviteReceiver", fields: [receiverUserId], references: [id])
+
+  @@index([projectId, status])
+  @@index([receiverUserId, status])
+  @@index([senderUserId, status])
 }
 
 model Friendship {
@@ -152,6 +184,8 @@ model Chapter {
   branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
   sceneChunks SceneChunk[]
   summaryObj  ChapterSummary?
+  presenceEntries ProjectPresence[]
+  commentThreads CommentThread[]
 }
 
 model SceneChunk {
@@ -223,4 +257,72 @@ model ChatMessage {
   createdAt  DateTime @default(now())
 
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model ProjectPresence {
+  id           String   @id @default(uuid())
+  projectId    String
+  userId       String
+  chapterId    String?
+  state        String   @default("viewing") // viewing, editing
+  lastActiveAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id])
+  chapter      Chapter? @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, userId])
+  @@index([projectId, lastActiveAt])
+  @@index([chapterId, lastActiveAt])
+}
+
+model CommentThread {
+  id               String   @id @default(uuid())
+  projectId        String
+  chapterId        String
+  authorUserId     String
+  selectedText     String
+  status           String   @default("open") // open, resolved
+  resolvedAt       DateTime?
+  resolvedByUserId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chapter          Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  author           User     @relation("CommentThreadAuthor", fields: [authorUserId], references: [id])
+  resolvedBy       User?    @relation("CommentThreadResolver", fields: [resolvedByUserId], references: [id])
+  replies          CommentReply[]
+
+  @@index([projectId, chapterId, status])
+  @@index([chapterId, updatedAt])
+}
+
+model CommentReply {
+  id           String   @id @default(uuid())
+  threadId      String
+  authorUserId  String
+  content       String
+  createdAt     DateTime @default(now())
+
+  thread        CommentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author        User          @relation("CommentReplyAuthor", fields: [authorUserId], references: [id])
+
+  @@index([threadId, createdAt])
+}
+
+model ProjectAiMessage {
+  id           String   @id @default(uuid())
+  projectId    String
+  branchId     String
+  authorUserId String?
+  role         String
+  content      String
+  createdAt    DateTime @default(now())
+
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
 }

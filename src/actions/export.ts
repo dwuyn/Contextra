@@ -2,14 +2,13 @@
 
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getProject } from "@/services/projectService";
+import { requireHydratedProjectAccess } from "@/services/projectService";
 
 export async function exportProjectAction(projectId: string): Promise<string> {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
 
-  const project = await getProject(projectId, session.userId);
-  if (!project) throw new Error("Project not found or access denied");
+  const project = await requireHydratedProjectAccess(projectId, session.userId, "view");
 
   // Fetch full chapter content (not included in the skeleton getProject)
   const chapters = await prisma.chapter.findMany({
@@ -48,7 +47,7 @@ export async function exportProjectAction(projectId: string): Promise<string> {
     `## Characters`,
     ``,
     ...(project.characters.length > 0
-      ? project.characters.map((c: any) => `- **${c.name}** (${c.role}): ${c.memory}`)
+      ? project.characters.map((c) => `- **${c.name}** (${c.role}): ${c.memory}`)
       : ["_No characters defined yet._"]),
     ``,
     `## Chapters`,

@@ -15,5 +15,5 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     redirect("/");
   }
 
-  return <ProjectWorkspace project={project as any} />;
+  return <ProjectWorkspace project={project} />;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Brain, Layers, Link2, Sparkles, Wand2, ChevronRight, BookOpen, Database } from "lucide-react";
+import { Brain, Layers, Sparkles, ChevronRight, BookOpen, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function LandingView() {
@@ -42,7 +42,7 @@ export function LandingView() {
         <div className="max-w-5xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[11px] font-bold uppercase tracking-widest mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <Sparkles size={14} />
-            The ultimate storyteller's workspace
+            The ultimate storyteller&apos;s workspace
           </div>
           
           <h1 className="text-6xl md:text-8xl font-extrabold text-white tracking-tighter leading-[1.1] mb-8 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">

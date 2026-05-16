@@ -39,7 +39,7 @@ export async function respondToFriendRequest(requestId: string, action: "accepte
   const result = await friendsService.respondToFriendRequest(session.userId, requestId, action);
   
   // If accepted or rejected, notify the sender so they can remove it from their outgoing list
-  sendEvent((result as any).senderId, "friend_request_status_update", {
+  sendEvent(result.senderId, "friend_request_status_update", {
     id: requestId,
     status: action,
     receiverId: session.userId,

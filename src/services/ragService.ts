@@ -5,10 +5,16 @@ import { prisma } from "@/lib/prisma";
 const CHUNK_SIZE = 500;
 const OVERLAP = 50;
 
+function stripHtmlToPlainText(content: string) {
+  return content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 /**
  * Splits text into chunks by sentences/paragraphs, roughly matching the target token/word size.
  */
 function chunkText(text: string, maxWords: number = CHUNK_SIZE, overlapWords: number = OVERLAP): string[] {
+  if (!text.trim()) return [];
+
   // Simple word-based chunker. For production, consider a token-based chunker or sentence boundary detection.
   const words = text.split(/\s+/);
   if (words.length <= maxWords) return [text];
@@ -41,8 +47,9 @@ export async function processAndSaveChapterChunks(chapterId: string, content: st
   // Clear existing chunks for this chapter
   await prisma.sceneChunk.deleteMany({ where: { chapterId } });
 
-  // Clean HTML if necessary (simple strip for embeddings)
-  const cleanContent = content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const cleanContent = stripHtmlToPlainText(content);
+  if (!cleanContent) return;
+
   const chunks = chunkText(cleanContent);
 
   for (let i = 0; i < chunks.length; i++) {

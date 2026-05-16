@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Clock, RotateCcw, ChevronRight } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { getChapterVersions, restoreVersion } from "@/actions/projects";
@@ -14,39 +14,52 @@ interface Version {
 }
 
 export function VersionHistoryPanel({ onClose }: { onClose: () => void }) {
-  const { project, selectedChapterId, setChapterContent } = useProjectStore();
+  const projectId = useProjectStore((state) => state.project?.metadata.id ?? null);
+  const selectedChapterId = useProjectStore((state) => state.selectedChapterId);
+  const chapterTitle = useProjectStore((state) => {
+    const chapterId = state.selectedChapterId;
+    return state.project?.chapters.find((chapter) => chapter.id === chapterId)?.title ?? "this chapter";
+  });
+  const setChapterContent = useProjectStore((state) => state.setChapterContent);
   const [versions, setVersions] = useState<Version[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [isRestoring, setIsRestoring] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [restoreWarning, setRestoreWarning] = useState<string | null>(null);
 
-  const chapterTitle = project?.chapters?.find((c: any) => c.id === selectedChapterId)?.title ?? "this chapter";
+  useEffect(() => {
+    let cancelled = false;
+    if (!projectId || !selectedChapterId) return;
 
-  const load = async () => {
-    if (!project || !selectedChapterId || loading) return;
-    setLoading(true);
-    try {
-      const v = await getChapterVersions(project.metadata.id, selectedChapterId);
-      setVersions(v as unknown as Version[]);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    getChapterVersions(projectId, selectedChapterId)
+      .then((v) => {
+        if (!cancelled) {
+          setRestoreWarning(null);
+          setVersions(v as Version[]);
+        }
+      })
+      .catch(console.error)
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
-  // Load on mount
-  if (versions === null && !loading) {
-    load();
-  }
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, selectedChapterId]);
 
   const handleRestore = async (versionId: string) => {
-    if (!project || !selectedChapterId) return;
+    if (!projectId || !selectedChapterId) return;
     setIsRestoring(versionId);
+    setRestoreWarning(null);
     try {
-      const content = await restoreVersion(project.metadata.id, selectedChapterId, versionId);
-      setChapterContent(selectedChapterId, content ?? "");
-      onClose();
+      const result = await restoreVersion(projectId, selectedChapterId, versionId);
+      setChapterContent(selectedChapterId, result.content ?? "");
+      if (result.continuity.fresh) {
+        onClose();
+      } else {
+        setRestoreWarning(result.continuity.warning);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -79,8 +92,13 @@ export function VersionHistoryPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <p className="px-5 py-3 text-[11px] text-slate-400 border-b border-slate-50">
-        Showing last 20 auto-saved versions for <span className="font-bold text-slate-600">{chapterTitle}</span>.
+        Showing the last 20 saved checkpoints for <span className="font-bold text-slate-600">{chapterTitle}</span>.
       </p>
+      {restoreWarning && (
+        <div className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-800">
+          {restoreWarning}
+        </div>
+      )}
 
       {/* Version List */}
       <div className="flex-1 overflow-y-auto">
@@ -93,8 +111,8 @@ export function VersionHistoryPanel({ onClose }: { onClose: () => void }) {
         {!loading && versions?.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
             <Clock size={32} className="text-slate-200 mb-4" />
-            <p className="text-sm font-bold text-slate-400">No versions yet</p>
-            <p className="text-xs text-slate-300 mt-1">Versions are saved automatically as you write.</p>
+            <p className="text-sm font-bold text-slate-400">No checkpoints yet</p>
+            <p className="text-xs text-slate-300 mt-1">Checkpoints are created when you click Save or restore a version.</p>
           </div>
         )}
 

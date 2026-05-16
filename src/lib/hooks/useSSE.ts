@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 
-export function useSSE(onEvent: (event: string, data: any) => void) {
+type SSEPayload = Record<string, unknown>;
+
+export function useSSE(onEvent: (event: string, data: SSEPayload) => void) {
   const callbackRef = useRef(onEvent);
   
   useEffect(() => {
@@ -14,10 +16,15 @@ export function useSSE(onEvent: (event: string, data: any) => void) {
       new_message: (e: MessageEvent) => callbackRef.current("new_message", JSON.parse(e.data)),
       new_friend_request: (e: MessageEvent) => callbackRef.current("new_friend_request", JSON.parse(e.data)),
       friend_request_status_update: (e: MessageEvent) => callbackRef.current("friend_request_status_update", JSON.parse(e.data)),
+      project_invite_created: (e: MessageEvent) => callbackRef.current("project_invite_created", JSON.parse(e.data)),
+      project_invite_updated: (e: MessageEvent) => callbackRef.current("project_invite_updated", JSON.parse(e.data)),
+      project_presence_updated: (e: MessageEvent) => callbackRef.current("project_presence_updated", JSON.parse(e.data)),
+      project_comment_created: (e: MessageEvent) => callbackRef.current("project_comment_created", JSON.parse(e.data)),
+      project_comment_updated: (e: MessageEvent) => callbackRef.current("project_comment_updated", JSON.parse(e.data)),
     };
 
     Object.entries(handlers).forEach(([name, handler]) => {
-      eventSource.addEventListener(name, handler as any);
+      eventSource.addEventListener(name, handler);
     });
 
     eventSource.onerror = (err) => {

@@ -65,7 +65,7 @@ if (redisUrl) {
     });
 
     if (process.env.NODE_ENV === "development") {
-      (globalThis as any).__redis_subscriber_active = true;
+      globalThis.__redis_subscriber_active = true;
     }
   }
 }
@@ -86,7 +86,7 @@ export function addConnection(userId: string, controller: ReadableStreamDefaultC
   };
 }
 
-export function sendEvent(userId: string, event: string, data: any) {
+export function sendEvent(userId: string, event: string, data: unknown) {
   if (publisher) {
     // Distributed: Publish to Redis to reach all server instances
     publisher.publish("contextra_events", JSON.stringify({ userId, event, data })).catch((err) => {
@@ -108,4 +108,3 @@ export function sendEvent(userId: string, event: string, data: any) {
     }
   }
 }
-

@@ -1,18 +1,45 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, UserPlus, ArrowRight, X } from "lucide-react";
+import Image from "next/image";
+import { Search, X } from "lucide-react";
 import { searchPeople, discoverPeople } from "@/actions/people";
 import { sendFriendRequest, getFriendRequests, respondToFriendRequest } from "@/actions/friends";
 import { useSSE } from "@/lib/hooks/useSSE";
 import { cn } from "@/lib/utils";
 
+type PersonSummary = {
+  id: string;
+  name: string;
+  email: string;
+  profileImageUrl?: string | null;
+  isFriend?: boolean;
+  hasPendingRequest?: boolean;
+};
+
+type FriendRequestSummary = {
+  id: string;
+  senderId: string;
+  senderName?: string;
+  senderEmail?: string;
+  receiverId?: string;
+  receiverName?: string;
+  receiverEmail?: string;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+function asString(value: unknown) {
+  return typeof value === "string" ? value : undefined;
+}
+
 export function PeopleView({ onClose }: { onClose: () => void }) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [discoveredPeople, setDiscoveredPeople] = useState<any[]>([]);
-  const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
-  const [outgoingRequests, setOutgoingRequests] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<PersonSummary[]>([]);
+  const [discoveredPeople, setDiscoveredPeople] = useState<PersonSummary[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<FriendRequestSummary[]>([]);
+  const [outgoingRequests, setOutgoingRequests] = useState<FriendRequestSummary[]>([]);
   const [activeTab, setActiveTab] = useState<"directory" | "incoming" | "outgoing">("directory");
   const [loading, setLoading] = useState(false);
 
@@ -42,13 +69,21 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
 
   useSSE((event, data) => {
     if (event === "new_friend_request") {
+      const requestId = asString(data.id);
+      if (!requestId) return;
       setIncomingRequests(prev => {
-        if (prev.some(r => r.id === data.id)) return prev;
+        if (prev.some(r => r.id === requestId)) return prev;
         // Make sure data has all required fields for rendering
-        return [data, ...prev];
+        return [{
+          id: requestId,
+          senderId: asString(data.senderId) ?? "",
+          senderName: asString(data.senderName),
+          senderEmail: asString(data.senderEmail),
+        }, ...prev];
       });
     } else if (event === "friend_request_status_update") {
-      setOutgoingRequests(prev => prev.filter(r => r.id !== data.id));
+      const requestId = asString(data.id);
+      if (requestId) setOutgoingRequests(prev => prev.filter(r => r.id !== requestId));
     }
   });
 
@@ -107,7 +142,7 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in duration-300">
+    <div className="flex flex-col h-full animate-in fade-in duration-300" aria-busy={loading}>
       <header className="flex items-center justify-between mb-8">
         <div>
           <p className="text-xs font-medium text-slate-400 mb-2">Workspace</p>
@@ -125,8 +160,12 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
         {/* Left Sidebar */}
         <div className="w-64 space-y-6">
           <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+            <label htmlFor="people-search" className="sr-only">
+              Find people by email
+            </label>
+            <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input 
+              id="people-search"
               type="text" 
               placeholder="Find by email" 
               value={searchQuery}
@@ -266,7 +305,9 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
                         <div>
                           <p className="font-bold text-slate-900">{req.receiverName || req.receiverEmail}</p>
                           <p className="text-sm text-slate-400">{req.receiverEmail}</p>
-                          <p className="text-[10px] text-slate-400 italic mt-1">Sent on {new Date(req.createdAt).toLocaleDateString()}</p>
+                          <p className="text-[10px] text-slate-400 italic mt-1">
+                            Sent on {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : "recently"}
+                          </p>
                         </div>
                       </div>
                       <span className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg">
@@ -298,12 +339,18 @@ function SidebarItem({ label, count, active, onClick }: { label: string, count: 
   );
 }
 
-function PersonCard({ person, onSendRequest }: { person: any, onSendRequest: () => void }) {
+function PersonCard({ person, onSendRequest }: { person: PersonSummary, onSendRequest: () => void }) {
   return (
     <div className="group flex flex-col p-6 rounded-[28px] bg-white border border-slate-100 shadow-sm transition-all hover:shadow-md">
       <div className="flex items-center gap-4 mb-6">
         {person.profileImageUrl ? (
-          <img src={person.profileImageUrl} alt={person.name} className="h-14 w-14 rounded-2xl object-cover" />
+          <Image
+            src={person.profileImageUrl}
+            alt={person.name}
+            width={56}
+            height={56}
+            className="h-14 w-14 rounded-2xl object-cover"
+          />
         ) : (
           <div className="h-14 w-14 rounded-2xl bg-slate-50 text-slate-300 flex items-center justify-center font-bold text-xl uppercase">
             {person.name.substring(0, 2)}
