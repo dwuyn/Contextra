@@ -35,27 +35,6 @@ When AI features run, the app currently builds context from:
 
 This logic lives primarily in `src/services/contextService.ts`, `src/services/memoryService.ts`, and `src/services/ragService.ts`.
 
-## Environment variables
-
-Copy `.env.example` to `.env` and adjust the values for your setup.
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `DATABASE_URL` | Yes | Database connection used by the app and Prisma on the host machine |
-| `POSTGRES_DB` | Only for `docker-compose.yml` | Compose-time Postgres database name |
-| `POSTGRES_USER` | Only for `docker-compose.yml` | Compose-time Postgres user |
-| `POSTGRES_PASSWORD` | Only for `docker-compose.yml` | Compose-time Postgres password |
-| `JWT_SECRET` | Recommended locally, required in production | Cookie session signing secret |
-| `OPENAI_BASE_URL` | Yes in practice | OpenAI-compatible API base URL for chat and embeddings |
-| `OPENAI_API_KEY` | Depends on provider | API key or placeholder token for providers that do not require auth |
-| `REDIS_URL` | Optional | Enables Redis-backed SSE fan-out for multi-instance deployments |
-
-Important:
-
-- The current AI code is hard-coded to the model IDs `gemma4:31b-cloud` and `nomic-embed-text`.
-- If your provider exposes different model names, update the strings in `src/services/aiService.ts`, `src/services/memoryService.ts`, `src/services/ragService.ts`, `src/app/api/project-ai-chat/route.ts`, and `test-ai.ts`.
-- There are no required `NEXT_PUBLIC_*` variables in the current app.
-
 ## Local development
 
 ### Prerequisites
