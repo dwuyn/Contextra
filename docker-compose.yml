@@ -1,28 +1,58 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-contextra}
+      POSTGRES_USER: ${POSTGRES_USER:-contextra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-contextra}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-contextra}:${POSTGRES_PASSWORD:-contextra}@postgres:5432/${POSTGRES_DB:-contextra}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   next-app:
     build:
       context: .
       dockerfile: Dockerfile
+      target: runner
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-contextra}:${POSTGRES_PASSWORD:-contextra}@postgres:5432/${POSTGRES_DB:-contextra}?schema=public
+      HOSTNAME: 0.0.0.0
+      NODE_ENV: production
+      PORT: 3000
     depends_on:
-      - postgres
+      migrate:
+        condition: service_completed_successfully
     ports:
-      - "3000:3000"
+      - "${APP_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
 volumes:
   postgres-data:

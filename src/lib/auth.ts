@@ -13,11 +13,15 @@ export interface SessionPayload {
   [key: string]: unknown;
 }
 
-const secretKey = process.env.JWT_SECRET;
-if (!secretKey && process.env.NODE_ENV === "production") {
-  throw new Error("JWT_SECRET must be set in production");
+function getJwtKey() {
+  const secretKey = process.env.JWT_SECRET;
+
+  if (!secretKey && process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET must be set in production");
+  }
+
+  return new TextEncoder().encode(secretKey || "development-secret-change-me");
 }
-const key = new TextEncoder().encode(secretKey || "development-secret-change-me");
 
 export async function hashPassword(password: string) {
   return bcrypt.hash(password, 10);
@@ -32,11 +36,11 @@ export async function encrypt(payload: SessionPayload) {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
-    .sign(key);
+    .sign(getJwtKey());
 }
 
 export async function decrypt(input: string): Promise<SessionPayload> {
-  const { payload } = await jwtVerify(input, key, {
+  const { payload } = await jwtVerify(input, getJwtKey(), {
     algorithms: ["HS256"],
   });
   if (

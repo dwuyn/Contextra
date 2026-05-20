@@ -1,0 +1,15 @@
+.git
+.gitignore
+.next
+node_modules
+npm-debug.log
+Dockerfile*
+docker-compose*.yml
+docker-compose*.yaml
+.env
+.env.*
+google-key.json
+coverage
+dist
+tmp
+*.tsbuildinfo

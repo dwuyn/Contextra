@@ -82,17 +82,40 @@ npm run lint
 npm run build
 ```
 
-## Docker and Compose notes
+## Docker and Compose
 
-This repository includes a `Dockerfile` and `docker-compose.yml`, but the Compose stack is not a complete one-command development environment as committed.
+The repository now includes a production-style Docker setup that can bring up the app with PostgreSQL + `pgvector`, run Prisma migrations, and then start the Next.js server.
 
-- `docker-compose.yml` expects `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and `JWT_SECRET`
-- The Compose Postgres service uses `postgres:16-alpine`, which does not provide `pgvector` by default
-- The app's RAG and continuity pipeline depend on `CREATE EXTENSION vector`
-- Prisma migrations are not automatically executed by the runtime container
-- If your AI service runs on the host machine, `localhost` or `127.0.0.1` from inside the app container will not reach it; use a container-reachable URL instead
+### Compose startup
 
-If you want Docker-based development, use a Postgres image with `pgvector` preinstalled or install the extension before running migrations.
+1. Create your env file:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Start the stack:
+
+   ```bash
+   docker compose up --build
+   ```
+
+3. Open `http://localhost:3000`.
+
+If port `3000` is already in use on your machine, set `APP_PORT` in `.env` to another value such as `3001` and then open `http://localhost:<APP_PORT>`.
+
+### What the stack does
+
+- Runs Postgres 16 with `pgvector` available
+- Waits for the database health check to pass
+- Runs `prisma migrate deploy`
+- Starts the standalone Next.js server on port `3000`
+- Keeps Postgres on the internal Compose network by default so it does not fight with an existing local database on port `5432`
+
+### Notes
+
+- `OPENAI_BASE_URL` must be reachable from inside the container. If your AI service runs on the host machine, `localhost` from inside the container will not reach it.
+- Google TTS remains optional. If you want voice-reader features in Docker, mount the service-account key into the app container and set `GOOGLE_APPLICATION_CREDENTIALS` to the in-container path.
 
 ## Project structure
 
