@@ -1,13 +1,39 @@
 "use client";
 
-import { useProjectStore } from "@/store/useProjectStore";
+import { useProjectStore, type AiHistoryCard } from "@/store/useProjectStore";
 import { cn } from "@/lib/utils";
-import { X, Copy, Plus, ThumbsUp, ThumbsDown, Star, MessageSquare, History, Sparkles, Send, User } from "lucide-react";
+import {
+  X,
+  Copy,
+  Plus,
+  ThumbsUp,
+  ThumbsDown,
+  Star,
+  MessageSquare,
+  History,
+  Sparkles,
+  Send,
+  User,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
 import { useState, useRef, useEffect, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
-export function AiCardsPane({ onClose, showCloseButton }: { onClose?: () => void; showCloseButton?: boolean }) {
+export type AiCardsPaneTab = "history" | "chat";
+
+export function AiCardsPane({
+  activeTab,
+  onTabChange,
+  onClose,
+  showCloseButton,
+}: {
+  activeTab: AiCardsPaneTab;
+  onTabChange: (tab: AiCardsPaneTab) => void;
+  onClose?: () => void;
+  showCloseButton?: boolean;
+}) {
   const aiCards = useProjectStore((state) => state.aiCards);
   const removeAiCard = useProjectStore((state) => state.removeAiCard);
   const projectId = useProjectStore((state) => state.project?.metadata.id ?? null);
@@ -15,7 +41,6 @@ export function AiCardsPane({ onClose, showCloseButton }: { onClose?: () => void
   const activeBranchId = useProjectStore((state) => state.activeBranchId);
   const appendProjectAiMessage = useProjectStore((state) => state.appendProjectAiMessage);
   const updateProjectAiMessage = useProjectStore((state) => state.updateProjectAiMessage);
-  const [activeTab, setActiveTab] = useState<"history" | "chat">("history");
   const scrollRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -91,10 +116,17 @@ export function AiCardsPane({ onClose, showCloseButton }: { onClose?: () => void
   };
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (!scrollRef.current) {
+      return;
     }
-  }, [messages, activeTab]);
+
+    if (activeTab === "history") {
+      scrollRef.current.scrollTop = 0;
+      return;
+    }
+
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [activeTab, aiCards, messages]);
 
   return (
     <aside className="h-full w-96 border-l border-slate-200 bg-[var(--background)] flex flex-col">
@@ -106,7 +138,7 @@ export function AiCardsPane({ onClose, showCloseButton }: { onClose?: () => void
           </button>
         )}
         <button 
-          onClick={() => setActiveTab("history")}
+          onClick={() => onTabChange("history")}
           className={cn(
             "flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
             activeTab === "history" ? "border-indigo-600 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"
@@ -116,7 +148,7 @@ export function AiCardsPane({ onClose, showCloseButton }: { onClose?: () => void
           History
         </button>
         <button 
-          onClick={() => setActiveTab("chat")}
+          onClick={() => onTabChange("chat")}
           className={cn(
             "flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
             activeTab === "chat" ? "border-indigo-600 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"
@@ -143,8 +175,19 @@ export function AiCardsPane({ onClose, showCloseButton }: { onClose?: () => void
                 <div key={card.id} className="bg-white border border-slate-100 rounded-[24px] shadow-sm overflow-hidden group hover:shadow-md transition-all">
                   <div className="px-5 py-3 bg-slate-50/50 border-b border-slate-50 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center">
-                        <Sparkles size={10} className="text-indigo-600" />
+                      <div className={cn(
+                        "w-5 h-5 rounded-full flex items-center justify-center",
+                        card.status === "loading" && "bg-amber-100",
+                        card.status === "ready" && "bg-indigo-100",
+                        card.status === "error" && "bg-rose-100",
+                      )}>
+                        {card.status === "loading" ? (
+                          <Loader2 size={10} className="animate-spin text-amber-600" />
+                        ) : card.status === "error" ? (
+                          <AlertCircle size={10} className="text-rose-600" />
+                        ) : (
+                          <Sparkles size={10} className="text-indigo-600" />
+                        )}
                       </div>
                       <span className="text-[10px] font-black uppercase tracking-tighter text-slate-400">{card.type}</span>
                     </div>
@@ -156,33 +199,52 @@ export function AiCardsPane({ onClose, showCloseButton }: { onClose?: () => void
                       <X size={14} />
                     </button>
                   </div>
-                  <div className="p-5">
-                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                      {card.content}
-                    </p>
-                    
+                  <div className="p-5" aria-busy={card.status === "loading"}>
+                    <HistoryCardBody card={card} />
+
                     <div className="mt-6 flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        <button 
-                          onClick={() => useProjectStore.getState().insertContent(card.content)}
-                          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-slate-800 transition-colors"
-                        >
-                          <Plus size={12} />
-                          Insert
-                        </button>
-                        <button 
-                          onClick={() => navigator.clipboard.writeText(card.content)}
-                          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-slate-50 transition-colors"
-                        >
-                          <Copy size={12} />
-                          Copy
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <IconButton title="Coming soon" icon={<ThumbsUp size={12} />} />
-                        <IconButton title="Coming soon" icon={<ThumbsDown size={12} />} />
-                        <IconButton title="Coming soon" icon={<Star size={12} />} />
-                      </div>
+                      {card.status === "ready" ? (
+                        <div className="flex items-center gap-1">
+                          <button 
+                            onClick={() => useProjectStore.getState().insertContent(card.content)}
+                            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-slate-800 transition-colors"
+                          >
+                            <Plus size={12} />
+                            Insert
+                          </button>
+                          <button 
+                            onClick={() => navigator.clipboard.writeText(card.content)}
+                            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-slate-50 transition-colors"
+                          >
+                            <Copy size={12} />
+                            Copy
+                          </button>
+                        </div>
+                      ) : (
+                        <div className={cn(
+                          "inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest",
+                          card.status === "loading" ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700",
+                        )}>
+                          {card.status === "loading" ? (
+                            <>
+                              <Loader2 size={10} className="animate-spin" />
+                              Working
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle size={10} />
+                              Failed
+                            </>
+                          )}
+                        </div>
+                      )}
+                      {card.status === "ready" && (
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <IconButton title="Coming soon" icon={<ThumbsUp size={12} />} />
+                          <IconButton title="Coming soon" icon={<ThumbsDown size={12} />} />
+                          <IconButton title="Coming soon" icon={<Star size={12} />} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -269,6 +331,45 @@ export function AiCardsPane({ onClose, showCloseButton }: { onClose?: () => void
         )}
       </div>
     </aside>
+  );
+}
+
+function HistoryCardBody({ card }: { card: AiHistoryCard }) {
+  if (card.status === "loading") {
+    return (
+      <div className="flex items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3">
+        <Loader2 size={16} className="mt-0.5 animate-spin text-amber-600" />
+        <p className="text-sm font-medium leading-relaxed text-amber-900 whitespace-pre-wrap">
+          {card.content}
+        </p>
+      </div>
+    );
+  }
+
+  if (card.status === "error") {
+    return (
+      <div className="rounded-2xl border border-rose-100 bg-rose-50/80 px-4 py-3">
+        <div className="flex items-start gap-3">
+          <AlertCircle size={16} className="mt-0.5 text-rose-600" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium leading-relaxed text-rose-900 whitespace-pre-wrap">
+              {card.content}
+            </p>
+            {card.errorMessage ? (
+              <p className="text-xs leading-relaxed text-rose-700">
+                {card.errorMessage}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+      {card.content}
+    </p>
   );
 }
 

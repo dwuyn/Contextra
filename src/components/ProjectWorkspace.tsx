@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { useProjectStore } from "@/store/useProjectStore";
 import { SidebarNavigator } from "@/components/SidebarNavigator";
 import { MainEditor } from "@/components/MainEditor";
 import { CollaborationPanel } from "@/components/CollaborationPanel";
+import type { AiCardsPaneTab } from "@/components/AiCardsPane";
 import { useSSE } from "@/lib/hooks/useSSE";
 import { Menu, Bot, History, Users } from "lucide-react";
 import type { ProjectCommentThread, ProjectData, ProjectInvite, ProjectPresence } from "@/types/project";
@@ -35,9 +37,11 @@ const VersionHistoryPanel = dynamic(
 );
 
 export function ProjectWorkspace({ project }: { project: ProjectData }) {
+  const router = useRouter();
   const setProject = useProjectStore((state) => state.setProject);
   const syncProjectInvite = useProjectStore((state) => state.syncProjectInvite);
   const syncProjectPresence = useProjectStore((state) => state.syncProjectPresence);
+  const removeCollaboratorLocally = useProjectStore((state) => state.removeCollaboratorLocally);
   const upsertCommentThread = useProjectStore((state) => state.upsertCommentThread);
   const setSelectedProjectId = useProjectStore((state) => state.setSelectedProjectId);
   const setSelectedChapterId = useProjectStore((state) => state.setSelectedChapterId);
@@ -51,6 +55,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAiPaneOpen, setIsAiPaneOpen] = useState(false);
   const [hasOpenedAiPane, setHasOpenedAiPane] = useState(false);
+  const [aiPaneTab, setAiPaneTab] = useState<AiCardsPaneTab>("history");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isCollabOpen, setIsCollabOpen] = useState(false);
   const [presenceNow, setPresenceNow] = useState(() => Date.now());
@@ -95,8 +100,24 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
       return;
     }
 
+    if (event === "project_access_revoked") {
+      const projectName = typeof data.projectName === "string" ? data.projectName : hydratedProject.metadata.name;
+      const kind = data.kind === "left" ? "left" : "removed";
+      const nextSearchParams = new URLSearchParams({
+        membership: kind,
+        project: projectName,
+      });
+      router.replace(`/?${nextSearchParams.toString()}`);
+      return;
+    }
+
     if (event === "project_invite_updated" && data.invite) {
       syncProjectInvite(data.invite as ProjectInvite);
+      return;
+    }
+
+    if (event === "project_member_removed" && typeof data.memberUserId === "string") {
+      removeCollaboratorLocally(data.memberUserId);
       return;
     }
 
@@ -132,6 +153,12 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
     }
 
     setIsAiPaneOpen((value) => !value);
+  };
+
+  const handleOpenAiHistory = () => {
+    setHasOpenedAiPane(true);
+    setIsAiPaneOpen(true);
+    setAiPaneTab("history");
   };
 
   return (
@@ -235,7 +262,14 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
 
         {/* Editor Area */}
         <div className="flex-1 overflow-hidden">
-          {isStoryBibleOpen ? <StoryBibleView /> : <MainEditor onToggleHistory={() => setIsHistoryOpen((v) => !v)} />}
+          {isStoryBibleOpen ? (
+            <StoryBibleView />
+          ) : (
+            <MainEditor
+              onToggleHistory={() => setIsHistoryOpen((v) => !v)}
+              onOpenAiHistory={handleOpenAiHistory}
+            />
+          )}
         </div>
       </main>
 
@@ -272,7 +306,12 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
           isAiPaneOpen ? "translate-x-0 lg:w-96" : "translate-x-full lg:translate-x-0 lg:w-0",
         ].join(" ")}>
           <div className="h-full overflow-hidden shadow-2xl lg:shadow-none">
-            <AiCardsPane onClose={() => setIsAiPaneOpen(false)} showCloseButton={isAiPaneOpen} />
+            <AiCardsPane
+              activeTab={aiPaneTab}
+              onTabChange={setAiPaneTab}
+              onClose={() => setIsAiPaneOpen(false)}
+              showCloseButton={isAiPaneOpen}
+            />
           </div>
         </div>
       )}

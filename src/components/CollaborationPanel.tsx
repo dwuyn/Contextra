@@ -1,14 +1,18 @@
 "use client";
 
-import { startTransition, useDeferredValue, useEffect, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useState, type ReactNode } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { useRouter } from "next/navigation";
 import {
   Check,
   Clock3,
   Eye,
+  LogOut,
   Loader2,
   MessageSquare,
   PencilLine,
   Send,
+  Trash2,
   UserPlus,
   Users,
   X,
@@ -19,6 +23,7 @@ import {
   cancelProjectInvite,
   createProjectInvite,
   getChapterCommentThreads,
+  removeProjectMember,
   replyToCommentThread,
   updateCommentThreadStatus,
 } from "@/actions/projects";
@@ -31,6 +36,11 @@ type FriendSummary = {
   email: string;
   profileImageUrl?: string | null;
 };
+
+type MembershipDialogState =
+  | { kind: "remove"; memberUserId: string; memberName: string }
+  | { kind: "leave"; memberUserId: string; memberName: string }
+  | null;
 
 const ACTIVE_PRESENCE_TTL_MS = 60_000;
 
@@ -57,6 +67,7 @@ function formatTimestamp(value: string | Date) {
 }
 
 export function CollaborationPanel({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
   const project = useProjectStore((state) => state.project);
   const selectedChapterId = useProjectStore((state) => state.selectedChapterId);
   const commentThreadsByChapter = useProjectStore((state) => state.commentThreadsByChapter);
@@ -73,10 +84,13 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
   const [selectedFriendId, setSelectedFriendId] = useState("");
   const [permissionLevel, setPermissionLevel] = useState("2");
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [memberError, setMemberError] = useState<string | null>(null);
   const [isInviteBusy, setIsInviteBusy] = useState(false);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [threadActionId, setThreadActionId] = useState<string | null>(null);
+  const [memberActionUserId, setMemberActionUserId] = useState<string | null>(null);
+  const [membershipDialog, setMembershipDialog] = useState<MembershipDialogState>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [now, setNow] = useState(() => Date.now());
   const [commentFilter, setCommentFilter] = useState<"open" | "resolved" | "all">("open");
@@ -166,6 +180,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
 
   const projectId = project.metadata.id;
   const canManage = project.viewerAccess.canManage;
+  const isOwner = project.currentUser.id === project.metadata.ownerId;
   const activePresence = project.presence.filter((presence) => {
     return now - new Date(presence.lastActiveAt).getTime() < ACTIVE_PRESENCE_TTL_MS;
   });
@@ -228,6 +243,47 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
       setInviteError("Could not cancel this invite.");
     } finally {
       setThreadActionId(null);
+    }
+  }
+
+  function openRemoveMemberDialog(memberUserId: string, memberName: string) {
+    setMemberError(null);
+    setMembershipDialog({ kind: "remove", memberUserId, memberName });
+  }
+
+  function openLeaveProjectDialog(memberUserId: string, memberName: string) {
+    setMemberError(null);
+    setMembershipDialog({ kind: "leave", memberUserId, memberName });
+  }
+
+  async function handleConfirmMembershipChange() {
+    if (!membershipDialog) return;
+
+    setMemberActionUserId(membershipDialog.memberUserId);
+    setMemberError(null);
+
+    try {
+      const result = await removeProjectMember(projectId, {
+        memberUserId: membershipDialog.memberUserId,
+      });
+
+      setMembershipDialog(null);
+
+      if (result.project) {
+        setProject(result.project);
+        return;
+      }
+
+      const nextSearchParams = new URLSearchParams({
+        membership: result.kind,
+        project: result.projectName,
+      });
+      router.replace(`/?${nextSearchParams.toString()}`);
+    } catch (error) {
+      console.error("Failed to change project membership", error);
+      setMemberError(error instanceof Error ? error.message : "Could not update project membership.");
+    } finally {
+      setMemberActionUserId(null);
     }
   }
 
@@ -382,16 +438,48 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                 badge="Owner"
                 accent="bg-slate-900 text-white"
               />
-              {project.collaborators.map((collaborator) => (
-                <MemberCard
-                  key={collaborator.id}
-                  name={collaborator.user.id === project.currentUser.id ? "You" : collaborator.user.name}
-                  subtitle={collaborator.user.email ?? ""}
-                  badge={collaborator.role}
-                  accent="bg-slate-100 text-slate-700"
-                />
-              ))}
+              {project.collaborators.map((collaborator) => {
+                const isSelf = collaborator.userId === project.currentUser.id;
+                const isBusy = memberActionUserId === collaborator.userId;
+                const action = isOwner ? (
+                  <button
+                    type="button"
+                    onClick={() => openRemoveMemberDialog(collaborator.userId, collaborator.user.name)}
+                    disabled={isBusy}
+                    className="rounded-xl border border-rose-200 bg-rose-50 p-2 text-rose-600 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    aria-label={`Remove ${collaborator.user.name}`}
+                  >
+                    {isBusy ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  </button>
+                ) : isSelf ? (
+                  <button
+                    type="button"
+                    onClick={() => openLeaveProjectDialog(collaborator.userId, collaborator.user.name)}
+                    disabled={isBusy}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] font-bold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isBusy ? <Loader2 size={13} className="animate-spin" /> : <LogOut size={13} />}
+                    Leave
+                  </button>
+                ) : null;
+
+                return (
+                  <MemberCard
+                    key={collaborator.id}
+                    name={isSelf ? "You" : collaborator.user.name}
+                    subtitle={collaborator.user.email ?? ""}
+                    badge={collaborator.role}
+                    accent="bg-slate-100 text-slate-700"
+                    action={action}
+                  />
+                );
+              })}
             </div>
+            {memberError && !membershipDialog && (
+              <div className="mt-3 rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+                {memberError}
+              </div>
+            )}
           </section>
 
           <section className="mt-5 rounded-2xl border border-slate-100 bg-white p-4">
@@ -679,6 +767,69 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       )}
+
+      <Dialog.Root
+        open={membershipDialog != null}
+        onOpenChange={(open) => {
+          if (memberActionUserId) return;
+          if (!open) {
+            setMembershipDialog(null);
+            setMemberError(null);
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-sm" />
+          <Dialog.Content className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
+              <div className="flex items-start gap-4">
+                <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-50 text-rose-500">
+                  {membershipDialog?.kind === "leave" ? <LogOut size={18} /> : <Trash2 size={18} />}
+                </div>
+                <div>
+                  <Dialog.Title className="text-xl font-bold text-slate-900">
+                    {membershipDialog?.kind === "leave"
+                      ? `Leave ${project.metadata.name}?`
+                      : `Remove ${membershipDialog?.memberName ?? "member"}?`}
+                  </Dialog.Title>
+                  <Dialog.Description className="mt-2 text-sm leading-relaxed text-slate-500">
+                    {membershipDialog?.kind === "leave"
+                      ? "You will immediately lose access to this project and return to the dashboard."
+                      : `This removes ${membershipDialog?.memberName ?? "this member"} from the workspace immediately. Their existing chapters, comments, and history stay intact.`}
+                  </Dialog.Description>
+                </div>
+              </div>
+
+              {memberError && (
+                <div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+                  {memberError}
+                </div>
+              )}
+
+              <div className="mt-8 flex items-center justify-end gap-3">
+                <Dialog.Close asChild>
+                  <button
+                    type="button"
+                    disabled={memberActionUserId != null}
+                    className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                </Dialog.Close>
+                <button
+                  type="button"
+                  onClick={() => void handleConfirmMembershipChange()}
+                  disabled={memberActionUserId === membershipDialog?.memberUserId}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-rose-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {memberActionUserId === membershipDialog?.memberUserId && <Loader2 size={16} className="animate-spin" />}
+                  {membershipDialog?.kind === "leave" ? "Leave project" : "Remove member"}
+                </button>
+              </div>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </aside>
   );
 }
@@ -688,11 +839,13 @@ function MemberCard({
   subtitle,
   badge,
   accent,
+  action,
 }: {
   name: string;
   subtitle: string;
   badge: string;
   accent: string;
+  action?: ReactNode;
 }) {
   return (
     <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-3">
@@ -700,9 +853,12 @@ function MemberCard({
         <p className="truncate text-sm font-bold text-slate-900">{name}</p>
         <p className="truncate text-xs text-slate-500">{subtitle}</p>
       </div>
-      <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", accent)}>
-        {badge}
-      </span>
+      <div className="flex items-center gap-2">
+        {action}
+        <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider", accent)}>
+          {badge}
+        </span>
+      </div>
     </div>
   );
 }

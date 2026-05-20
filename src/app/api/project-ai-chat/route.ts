@@ -51,7 +51,7 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: customAi.chat("gemma4:31b-cloud"),
-    system: buildChatSystemPrompt(context),
+    system: buildChatSystemPrompt(context, content),
     messages: messages.map(({ role, content: messageContent }) => ({
       role,
       content: messageContent,

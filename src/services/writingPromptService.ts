@@ -1,4 +1,8 @@
 import type { PromptContext } from "@/services/contextService";
+import {
+  buildRecentSummaryLanguageSignal,
+  buildResponseLanguageInstruction,
+} from "@/services/promptLanguageService";
 
 function buildBulletedList(items: string[], emptyMessage: string) {
   return items.length ? items.map((item) => `- ${item}`).join("\n") : `- ${emptyMessage}`;
@@ -51,9 +55,27 @@ ${context.slidingWindowText}
 `.trim();
 }
 
-export function buildChatSystemPrompt(context: PromptContext) {
+function buildStoryLanguageSignals(context: PromptContext) {
+  return [
+    { label: "story bible summary", text: context.projectSummary },
+    { label: "shared notes", text: context.sharedNotes },
+    buildRecentSummaryLanguageSignal(context.recentChapterSummaries),
+    { label: "project title", text: context.projectName },
+    { label: "branch title", text: context.branchName },
+    { label: "character memory", text: context.characterDigest },
+  ];
+}
+
+export function buildChatSystemPrompt(context: PromptContext, latestUserMessage: string) {
+  const languageInstruction = buildResponseLanguageInstruction({
+    taskSignals: [{ label: "latest user message", text: latestUserMessage }],
+    storySignals: buildStoryLanguageSignals(context),
+  });
+
   return `
 You are an expert creative writing assistant helping the user write "${context.projectName}".
+
+${languageInstruction}
 
 ${buildContinuityContextBlock(context)}
 
@@ -70,8 +92,18 @@ export function buildChapterGenerationPrompt(
   input: { title: string; instructions: string },
   context: PromptContext,
 ) {
+  const languageInstruction = buildResponseLanguageInstruction({
+    taskSignals: [
+      { label: "current instructions", text: input.instructions },
+      { label: "requested chapter title", text: input.title },
+    ],
+    storySignals: buildStoryLanguageSignals(context),
+  });
+
   return `
 You are an expert long-form writing assistant.
+
+${languageInstruction}
 
 ${buildContinuityContextBlock(context)}
 
@@ -96,8 +128,18 @@ export function buildRewritePrompt(
   input: { selection: string; instructions: string },
   context: PromptContext,
 ) {
+  const languageInstruction = buildResponseLanguageInstruction({
+    taskSignals: [
+      { label: "selected text", text: input.selection },
+      { label: "rewrite instructions", text: input.instructions },
+    ],
+    storySignals: buildStoryLanguageSignals(context),
+  });
+
   return `
 You are an expert editor.
+
+${languageInstruction}
 
 ${buildContinuityContextBlock(context)}
 
@@ -119,8 +161,18 @@ export function buildDescribePrompt(
   input: { selection: string; sense: string },
   context: PromptContext,
 ) {
+  const languageInstruction = buildResponseLanguageInstruction({
+    taskSignals: [
+      { label: "selected text", text: input.selection },
+      { label: "sense request", text: input.sense },
+    ],
+    storySignals: buildStoryLanguageSignals(context),
+  });
+
   return `
 You are an expert sensory writer.
+
+${languageInstruction}
 
 ${buildContinuityContextBlock(context)}
 

@@ -38,6 +38,7 @@ import { AiGenerated } from "@/lib/tiptap/AiGenerated";
 import { CommentAnchor } from "@/lib/tiptap/CommentAnchor";
 import { cn } from "@/lib/utils";
 import { PublicVoiceReader } from "@/components/PublicVoiceReader";
+import { resolvePromptLanguage, type PromptLanguage } from "@/services/promptLanguageService";
 import { useProjectStore } from "@/store/useProjectStore";
 
 type SaveReason = "manual" | "autosave" | "blur" | "switch" | "unmount";
@@ -112,7 +113,92 @@ function mergeSaveRequests(current: SaveRequest | null, next: SaveRequest): Save
   };
 }
 
-export function MainEditor({ onToggleHistory }: { onToggleHistory?: () => void }) {
+function buildLanguageSignals({
+  projectName,
+  projectSummary,
+  sharedNotes,
+  chapterTitle,
+  primaryText,
+}: {
+  projectName: string;
+  projectSummary: string;
+  sharedNotes: string;
+  chapterTitle: string;
+  primaryText: string;
+}) {
+  return resolvePromptLanguage({
+    taskSignals: [
+      { label: "current chapter text", text: primaryText },
+      { label: "chapter title", text: chapterTitle },
+    ],
+    storySignals: [
+      { label: "project title", text: projectName },
+      { label: "shared notes", text: sharedNotes },
+      { label: "project summary", text: projectSummary },
+    ],
+  });
+}
+
+function buildWriteMessage(language: PromptLanguage, textBefore: string, chapterTitle: string) {
+  const trimmedTextBefore = textBefore.trim();
+  const safeChapterTitle = chapterTitle.trim() || (language === "Vietnamese" ? "chương này" : "this chapter");
+
+  if (!trimmedTextBefore) {
+    return language === "Vietnamese"
+      ? `Hãy viết phần mở đầu cho "${safeChapterTitle}". Giữ đúng giọng văn và ngữ cảnh hiện có. Viết khoảng 2-3 đoạn văn bằng tiếng Việt. Chỉ trả về phần nội dung truyện, không giải thích.`
+      : `Write the opening for "${safeChapterTitle}". Keep the existing tone and context. Write about 2-3 paragraphs in English. Return only the story content with no explanation.`;
+  }
+
+  return language === "Vietnamese"
+    ? `Hãy viết tiếp câu chuyện từ đoạn sau:\n\n${trimmedTextBefore}\n\nTiếp tục mạch truyện thật tự nhiên, giữ đúng giọng văn và phong cách hiện có. Viết khoảng 2-3 đoạn văn bằng tiếng Việt. Chỉ trả về phần nội dung tiếp nối, không giải thích.`
+    : `Please continue the story from this point:\n\n${trimmedTextBefore}\n\nContinue the narrative naturally, maintaining the current tone and style. Provide about 2-3 paragraphs in English. Return only the continuation text with no explanation.`;
+}
+
+function buildBrainstormMessage(language: PromptLanguage) {
+  return language === "Vietnamese"
+    ? "Dựa trên chương hiện tại và toàn bộ ngữ cảnh câu chuyện, hãy đưa ra 5 ý tưởng brainstorm sáng tạo về những gì có thể xảy ra tiếp theo hoặc những chi tiết thú vị về thế giới và nhân vật đáng để khai thác. Trả lời bằng tiếng Việt."
+    : "Based on the current chapter and story context, give me 5 creative brainstorming ideas for what could happen next, or some interesting world or character details to explore. Respond in English.";
+}
+
+function buildRewriteInstruction(language: PromptLanguage) {
+  return language === "Vietnamese"
+    ? "Viết lại đoạn này sao cho giàu hình ảnh và cảm xúc hơn."
+    : "Make it more vivid and emotional.";
+}
+
+function buildLoadingHistoryCardContent(type: string) {
+  switch (type) {
+    case "Write":
+      return "Generating a continuation for your chapter...";
+    case "Rewrite":
+      return "Rewriting the selected text...";
+    case "Brainstorm":
+      return "Generating brainstorming ideas...";
+    default:
+      return "Generating an AI suggestion...";
+  }
+}
+
+function buildErrorHistoryCardContent(type: string) {
+  switch (type) {
+    case "Write":
+      return "Could not generate the continuation. Please try again.";
+    case "Rewrite":
+      return "Could not rewrite the selected text. Please try again.";
+    case "Brainstorm":
+      return "Could not generate brainstorming ideas. Please try again.";
+    default:
+      return "Could not generate the description. Please try again.";
+  }
+}
+
+export function MainEditor({
+  onToggleHistory,
+  onOpenAiHistory,
+}: {
+  onToggleHistory?: () => void;
+  onOpenAiHistory?: () => void;
+}) {
   const project = useProjectStore((state) => state.project);
   const selectedChapterId = useProjectStore((state) => state.selectedChapterId);
   const currentChapter = useProjectStore((state) => {
@@ -120,7 +206,8 @@ export function MainEditor({ onToggleHistory }: { onToggleHistory?: () => void }
     return chapterId ? state.project?.chapters.find((chapter) => chapter.id === chapterId) ?? null : null;
   });
   const activeBranchId = useProjectStore((state) => state.activeBranchId);
-  const addAiCard = useProjectStore((state) => state.addAiCard);
+  const createAiCard = useProjectStore((state) => state.createAiCard);
+  const updateAiCard = useProjectStore((state) => state.updateAiCard);
   const setIsGenerating = useProjectStore((state) => state.setIsGenerating);
   const isGenerating = useProjectStore((state) => state.isGenerating);
   const pendingInsertion = useProjectStore((state) => state.pendingInsertion);
@@ -818,95 +905,152 @@ export function MainEditor({ onToggleHistory }: { onToggleHistory?: () => void }
     }
   };
 
+  const runAiToolbarAction = async ({
+    type,
+    pendingContent,
+    run,
+  }: {
+    type: string;
+    pendingContent: string;
+    run: () => Promise<string>;
+  }) => {
+    onOpenAiHistory?.();
+    const cardId = createAiCard({
+      type,
+      content: pendingContent,
+      status: "loading",
+    });
+
+    setIsGenerating(true);
+    try {
+      const content = await run();
+      updateAiCard(cardId, {
+        content,
+        status: "ready",
+        errorMessage: undefined,
+      });
+    } catch (error) {
+      console.error(error);
+      updateAiCard(cardId, {
+        content: buildErrorHistoryCardContent(type),
+        status: "error",
+        errorMessage: error instanceof Error ? error.message : undefined,
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleWrite = async () => {
-    if (!editor || !project) return;
+    if (!editor || !project || isGenerating) return;
     const { state } = editor;
     const { selection } = state;
     const textBefore = state.doc.textBetween(Math.max(0, selection.from - 2000), selection.from, "\n");
+    const promptLanguage = buildLanguageSignals({
+      projectName: project.metadata.name,
+      projectSummary: project.metadata.summary,
+      sharedNotes: project.contextMemory.sharedNotes,
+      chapterTitle: title || currentChapter?.title || "",
+      primaryText: textBefore,
+    });
+    const message = buildWriteMessage(promptLanguage, textBefore, title || currentChapter?.title || "");
 
-    setIsGenerating(true);
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId: project.metadata.id,
-          branchId: activeBranchId,
-          messages: [{ role: "user", content: `Please continue the story from this point:\n\n${textBefore}\n\nContinue the narrative naturally, maintaining the tone and style. Provide about 2-3 paragraphs.` }],
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const result = await res.text();
-      addAiCard({ type: "Write", content: result });
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsGenerating(false);
-    }
+    await runAiToolbarAction({
+      type: "Write",
+      pendingContent: buildLoadingHistoryCardContent("Write"),
+      run: async () => {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId: project.metadata.id,
+            branchId: activeBranchId,
+            messages: [{ role: "user", content: message }],
+          }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.text();
+      },
+    });
   };
 
   const handleRewrite = async (instructions = "Make it more vivid and emotional.") => {
-    if (!editor || !project) return;
+    if (!editor || !project || isGenerating) return;
     const { from, to } = editor.state.selection;
     const selection = editor.state.doc.textBetween(from, to, " ");
     if (!selection) return;
+    const promptLanguage = buildLanguageSignals({
+      projectName: project.metadata.name,
+      projectSummary: project.metadata.summary,
+      sharedNotes: project.contextMemory.sharedNotes,
+      chapterTitle: title || currentChapter?.title || "",
+      primaryText: selection,
+    });
+    const nextInstructions = instructions === "Make it more vivid and emotional."
+      ? buildRewriteInstruction(promptLanguage)
+      : instructions;
 
-    setIsGenerating(true);
-    try {
-      const { result } = await rewriteAction(project.metadata.id, activeBranchId, {
-        selection,
-        instructions,
-      });
-      addAiCard({ type: "Rewrite", content: result });
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsGenerating(false);
-    }
+    await runAiToolbarAction({
+      type: "Rewrite",
+      pendingContent: buildLoadingHistoryCardContent("Rewrite"),
+      run: async () => {
+        const { result } = await rewriteAction(project.metadata.id, activeBranchId, {
+          selection,
+          instructions: nextInstructions,
+        });
+        return result;
+      },
+    });
   };
 
   const handleDescribe = async (sense = "sight") => {
-    if (!editor || !project) return;
+    if (!editor || !project || isGenerating) return;
     const { from, to } = editor.state.selection;
     const selection = editor.state.doc.textBetween(from, to, " ");
     if (!selection) return;
 
-    setIsGenerating(true);
-    try {
-      const { result } = await describeAction(project.metadata.id, activeBranchId, {
-        selection,
-        sense,
-      });
-      addAiCard({ type: `Describe (${sense})`, content: result });
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsGenerating(false);
-    }
+    await runAiToolbarAction({
+      type: `Describe (${sense})`,
+      pendingContent: buildLoadingHistoryCardContent(`Describe (${sense})`),
+      run: async () => {
+        const { result } = await describeAction(project.metadata.id, activeBranchId, {
+          selection,
+          sense,
+        });
+        return result;
+      },
+    });
   };
 
   const handleBrainstorm = async () => {
-    if (!editor || !project) return;
+    if (!editor || !project || isGenerating) return;
+    const chapterText = editor.state.doc.textBetween(0, editor.state.doc.content.size, "\n").slice(-2000);
+    const promptLanguage = buildLanguageSignals({
+      projectName: project.metadata.name,
+      projectSummary: project.metadata.summary,
+      sharedNotes: project.contextMemory.sharedNotes,
+      chapterTitle: title || currentChapter?.title || "",
+      primaryText: chapterText,
+    });
+    const message = buildBrainstormMessage(promptLanguage);
 
-    setIsGenerating(true);
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId: project.metadata.id,
-          branchId: activeBranchId,
-          messages: [{ role: "user", content: "Based on the current chapter and story context, give me 5 creative brainstorming ideas for what could happen next, or some interesting world/character details to explore." }],
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const result = await res.text();
-      addAiCard({ type: "Brainstorm", content: result });
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsGenerating(false);
-    }
+    await runAiToolbarAction({
+      type: "Brainstorm",
+      pendingContent: buildLoadingHistoryCardContent("Brainstorm"),
+      run: async () => {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId: project.metadata.id,
+            branchId: activeBranchId,
+            messages: [{ role: "user", content: message }],
+          }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.text();
+      },
+    });
   };
 
   const handleKeyboardShortcuts = useEffectEvent((event: KeyboardEvent) => {
@@ -914,7 +1058,7 @@ export function MainEditor({ onToggleHistory }: { onToggleHistory?: () => void }
     const modifier = isMac ? event.metaKey : event.ctrlKey;
     if (!modifier || !editor || !project) return;
 
-    if (!canEdit) return;
+    if (!canEdit || isGenerating) return;
 
     if (event.key === "s") {
       event.preventDefault();
@@ -968,31 +1112,21 @@ export function MainEditor({ onToggleHistory }: { onToggleHistory?: () => void }
 
   if (!canEdit && !canCollaborate) {
     return (
-      <div className="flex flex-col h-full bg-[var(--background)]">
+      <div className="flex flex-col h-full bg-[var(--background)] relative">
         <div className="border-b border-slate-50 bg-[var(--background)] px-6 py-4">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-indigo-600">
-                <Globe size={12} />
-                Reading Mode
-              </div>
-              <div className="h-4 w-px bg-slate-200" />
-              <h2 className="min-w-0 truncate text-sm font-bold text-slate-500">
-                {project?.metadata?.name}
-              </h2>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-indigo-600">
+              <Globe size={12} />
+              Reading Mode
             </div>
-
-            <PublicVoiceReader
-              projectId={project?.metadata.id ?? currentChapter.projectId}
-              chapterId={currentChapter.id}
-              chapterTitle={currentChapter.title || "Untitled Chapter"}
-              chapterContent={currentCachedContent ?? ""}
-              isLoading={isLoadingContent}
-            />
+            <div className="h-4 w-px bg-slate-200" />
+            <h2 className="min-w-0 truncate text-sm font-bold text-slate-500">
+              {project?.metadata?.name}
+            </h2>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-20 py-20 scroll-smooth bg-[var(--background)]">
+        <div className="flex-1 overflow-y-auto px-20 py-20 pb-40 scroll-smooth bg-[var(--background)]">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-5xl font-extrabold text-slate-900 mb-12 tracking-tight leading-tight">
               {currentChapter?.title || "Untitled Chapter"}
@@ -1002,6 +1136,14 @@ export function MainEditor({ onToggleHistory }: { onToggleHistory?: () => void }
             </div>
           </div>
         </div>
+
+        <PublicVoiceReader
+          projectId={project?.metadata.id ?? currentChapter.projectId}
+          chapterId={currentChapter.id}
+          chapterTitle={currentChapter.title || "Untitled Chapter"}
+          chapterContent={currentCachedContent ?? ""}
+          isLoading={isLoadingContent}
+        />
       </div>
     );
   }

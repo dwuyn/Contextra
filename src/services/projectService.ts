@@ -14,6 +14,7 @@ import type {
   ProjectPresence,
   PublicProject,
   PublicProjectPage,
+  RemoveProjectMemberResult,
   RestoreVersionResult,
   UpdateChapterResult,
 } from "@/types/project";
@@ -80,6 +81,10 @@ type AddCollaboratorInput = {
 type CreateProjectInviteInput = {
   receiverUserId: string;
   permissionLevel: number;
+};
+
+type RemoveProjectMemberInput = {
+  memberUserId: string;
 };
 
 type RespondProjectInviteInput = {
@@ -1022,6 +1027,89 @@ export async function cancelProjectInvite(projectId: string, userId: string, inv
   return {
     project: hydratedProject,
     invite: toProjectInvite(updatedInvite),
+  };
+}
+
+export async function removeProjectMember(
+  projectId: string,
+  userId: string,
+  input: RemoveProjectMemberInput,
+): Promise<RemoveProjectMemberResult> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      id: true,
+      name: true,
+      ownerId: true,
+      collaborators: {
+        where: {
+          userId: {
+            in: [...new Set([userId, input.memberUserId])],
+          },
+        },
+        include: {
+          user: {
+            select: PROJECT_USER_SELECT,
+          },
+        },
+      },
+    },
+  });
+
+  if (!project) throw new Error("Project not found");
+
+  const isOwner = project.ownerId === userId;
+  const isSelfLeave = input.memberUserId === userId;
+  const actingCollaborator = project.collaborators.find((collaborator) => collaborator.userId === userId) ?? null;
+  const targetCollaborator = project.collaborators.find((collaborator) => collaborator.userId === input.memberUserId) ?? null;
+
+  if (input.memberUserId === project.ownerId) {
+    throw new Error(isOwner ? "Project owner cannot leave the project" : "Project owner cannot be removed");
+  }
+
+  if (isSelfLeave) {
+    if (!actingCollaborator) {
+      throw new Error("Collaborator not found");
+    }
+  } else {
+    if (!isOwner) {
+      throw new Error("Unauthorized");
+    }
+    if (!targetCollaborator) {
+      throw new Error("Collaborator not found");
+    }
+  }
+
+  const member = (isSelfLeave ? actingCollaborator : targetCollaborator) ?? null;
+  if (!member) {
+    throw new Error("Collaborator not found");
+  }
+
+  await prisma.$transaction([
+    prisma.projectPresence.deleteMany({
+      where: {
+        projectId,
+        userId: input.memberUserId,
+      },
+    }),
+    prisma.collaborator.delete({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId: input.memberUserId,
+        },
+      },
+    }),
+  ]);
+
+  return {
+    project: isSelfLeave ? null : await getProject(projectId, userId),
+    projectId: project.id,
+    projectName: project.name,
+    memberUserId: member.userId,
+    memberName: member.user.name,
+    ownerUserId: project.ownerId,
+    kind: isSelfLeave ? "left" : "removed",
   };
 }
 

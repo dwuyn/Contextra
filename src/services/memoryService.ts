@@ -3,7 +3,10 @@ import { customAi } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 
 function stripReasoning(text: string) {
-  return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  return text
+    .replace(/<think>[\s\S]*?<\/think>/g, "")
+    .replace(/^```(?:\w+)?\s*([\s\S]*?)\s*```$/u, "$1")
+    .trim();
 }
 
 type ChapterSummaryInput = {

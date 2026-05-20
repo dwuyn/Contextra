@@ -79,6 +79,22 @@ function getRecentChapterSummaries(lineage: ContextChapter[]) {
     .slice(-6);
 }
 
+async function loadRagContext(
+  projectId: string,
+  branchId: string,
+  userInstructions: string,
+  fromRagService: (q: string, pId: string, bId: string, l: number) => Promise<string[]>,
+) {
+  if (!userInstructions) return [];
+
+  try {
+    return await fromRagService(userInstructions, projectId, branchId, 4);
+  } catch (error) {
+    console.error("RAG lookup failed; continuing without semantic context.", { projectId, branchId }, error);
+    return [];
+  }
+}
+
 export async function composeContext(
   projectId: string, 
   branchId: string, 
@@ -109,8 +125,7 @@ export async function composeContext(
   const mostRecentChapter = lineage[lineage.length - 1];
   const slidingWindowText = mostRecentChapter ? stripHtml(mostRecentChapter.content).slice(-4000) : "No immediate previous text.";
 
-  // RAG: Query for similar scenes using user instructions if provided
-  const ragContext = userInstructions ? await fromRagService(userInstructions, projectId, branch.id, 4) : [];
+  const ragContext = await loadRagContext(projectId, branch.id, userInstructions, fromRagService);
 
   const characterDigest = project.characters.length
     ? project.characters

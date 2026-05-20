@@ -8,6 +8,17 @@ import type {
   ProjectPresence,
 } from "@/types/project";
 
+export type AiHistoryCardStatus = "loading" | "ready" | "error";
+
+export type AiHistoryCard = {
+  id: string;
+  type: string;
+  content: string;
+  timestamp: number;
+  status: AiHistoryCardStatus;
+  errorMessage?: string;
+};
+
 interface ProjectState {
   project: ProjectData | null;
   selectedProjectId: string | null;
@@ -16,7 +27,7 @@ interface ProjectState {
   isGenerating: boolean;
   isStoryBibleOpen: boolean;
   pendingTitleFocusChapterId: string | null;
-  aiCards: Array<{ id: string; type: string; content: string; timestamp: number }>;
+  aiCards: AiHistoryCard[];
   pendingInsertion: string | null;
   chapterContentCache: Record<string, string>;
   commentThreadsByChapter: Record<string, ProjectCommentThread[]>;
@@ -30,7 +41,13 @@ interface ProjectState {
   setIsStoryBibleOpen: (is: boolean) => void;
   requestTitleFocus: (chapterId: string) => void;
   clearPendingTitleFocus: () => void;
-  addAiCard: (card: { type: string; content: string }) => void;
+  createAiCard: (card: {
+    type: string;
+    content: string;
+    status?: AiHistoryCardStatus;
+    errorMessage?: string;
+  }) => string;
+  updateAiCard: (id: string, data: Partial<Pick<AiHistoryCard, "content" | "status" | "errorMessage">>) => void;
   removeAiCard: (id: string) => void;
   insertContent: (content: string) => void;
   clearPendingInsertion: () => void;
@@ -44,6 +61,7 @@ interface ProjectState {
   setCommentThreads: (chapterId: string, threads: ProjectCommentThread[]) => void;
   upsertCommentThread: (thread: ProjectCommentThread) => void;
   setSelectedCommentThreadId: (threadId: string | null) => void;
+  removeCollaboratorLocally: (userId: string) => void;
 }
 
 function updateChapterCommentCounts(
@@ -91,8 +109,25 @@ export const useProjectStore = create<ProjectState>((set) => ({
   setIsStoryBibleOpen: (isStoryBibleOpen) => set({ isStoryBibleOpen }),
   requestTitleFocus: (pendingTitleFocusChapterId) => set({ pendingTitleFocusChapterId }),
   clearPendingTitleFocus: () => set({ pendingTitleFocusChapterId: null }),
-  addAiCard: (card) => set((state) => ({
-    aiCards: [{ ...card, id: Math.random().toString(36).substring(7), timestamp: Date.now() }, ...state.aiCards]
+  createAiCard: (card) => {
+    const id = crypto.randomUUID();
+    set((state) => ({
+      aiCards: [
+        {
+          ...card,
+          id,
+          timestamp: Date.now(),
+          status: card.status ?? "ready",
+        },
+        ...state.aiCards,
+      ],
+    }));
+    return id;
+  },
+  updateAiCard: (id, data) => set((state) => ({
+    aiCards: state.aiCards.map((card) =>
+      card.id === id ? { ...card, ...data } : card
+    ),
   })),
   removeAiCard: (id) => set((state) => ({
     aiCards: state.aiCards.filter((c) => c.id !== id)
@@ -259,4 +294,15 @@ export const useProjectStore = create<ProjectState>((set) => ({
     };
   }),
   setSelectedCommentThreadId: (selectedCommentThreadId) => set({ selectedCommentThreadId }),
+  removeCollaboratorLocally: (userId) => set((state) => {
+    if (!state.project) return state;
+
+    return {
+      project: {
+        ...state.project,
+        collaborators: state.project.collaborators.filter((collaborator) => collaborator.userId !== userId),
+        presence: state.project.presence.filter((presence) => presence.userId !== userId),
+      },
+    };
+  }),
 }));

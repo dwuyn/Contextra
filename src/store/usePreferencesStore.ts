@@ -1,11 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { ReaderLanguage, ReaderLanguageMode } from "@/lib/voiceReader";
 
 export type ThemeType = "notion" | "mist" | "forest" | "cream" | "graphite" | "rose" | "dark";
 export type FontType = "notion-ui" | "manrope" | "literata" | "space-grotesk" | "georgia" | "verdana" | "trebuchet-ms" | "courier-new";
-export type ReaderLanguage = "en-US" | "vi-VN";
-export type ReaderLanguageMode = "auto" | ReaderLanguage;
-const PREFERENCES_STORE_VERSION = 2;
+export type { ReaderLanguage, ReaderLanguageMode };
+const PREFERENCES_STORE_VERSION = 3;
 
 interface PreferencesState {
   theme: ThemeType;

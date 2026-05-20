@@ -9,9 +9,16 @@ import {
   buildDescribePrompt,
   buildRewritePrompt,
 } from "./writingPromptService";
+import {
+  buildResponseLanguageInstruction,
+  extractLatestUserText,
+} from "./promptLanguageService";
 
 function stripReasoning(text: string) {
-  return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  return text
+    .replace(/<think>[\s\S]*?<\/think>/g, "")
+    .replace(/^```(?:\w+)?\s*([\s\S]*?)\s*```$/u, "$1")
+    .trim();
 }
 
 type StoryBibleGenerationContext = {
@@ -114,7 +121,7 @@ export async function generateOutlineFromStoryBible(context: StoryBibleGeneratio
 export async function chatWithAi(messages: ModelMessage[], context: PromptContext) {
   const { text } = await generateText({
     model: customAi.chat("gemma4:31b-cloud"),
-    system: buildChatSystemPrompt(context),
+    system: buildChatSystemPrompt(context, extractLatestUserText(messages)),
     messages,
   });
 
@@ -131,11 +138,27 @@ function buildSynopsisPrompt(context: StoryBibleGenerationContext) {
         .map((chapter, index) => `- Chapter ${index + 1}: ${chapter.title}${chapter.summary ? ` | ${chapter.summary}` : ""}`)
         .join("\n")
     : "- No chapters yet.";
+  const languageInstruction = buildResponseLanguageInstruction({
+    taskSignals: [],
+    storySignals: [
+      { label: "braindump", text: context.braindump },
+      { label: "existing synopsis", text: context.synopsis },
+      {
+        label: "chapter titles and summaries",
+        text: context.chapters.map((chapter) => `${chapter.title} ${chapter.summary}`.trim()).join("\n"),
+      },
+      { label: "project title", text: context.projectName },
+      {
+        label: "character memory",
+        text: context.characters.map((character) => `${character.name} ${character.role} ${character.memory}`.trim()).join("\n"),
+      },
+    ],
+  });
 
   return `
 You are an expert developmental editor creating a story synopsis for a writing project.
 
-Use the same primary language already present in the project materials. If the materials are mixed, prefer the language used in the braindump and existing synopsis.
+${languageInstruction}
 
 [PROJECT]
 Title: ${context.projectName}
@@ -177,11 +200,27 @@ function buildOutlinePrompt(context: StoryBibleGenerationContext) {
         .map((chapter, index) => `- Chapter ${index + 1}: ${chapter.title}${chapter.summary ? ` | ${chapter.summary}` : ""}`)
         .join("\n")
     : "- No chapters yet.";
+  const languageInstruction = buildResponseLanguageInstruction({
+    taskSignals: [],
+    storySignals: [
+      { label: "braindump", text: context.braindump },
+      { label: "synopsis", text: context.synopsis },
+      {
+        label: "chapter titles and summaries",
+        text: context.chapters.map((chapter) => `${chapter.title} ${chapter.summary}`.trim()).join("\n"),
+      },
+      { label: "project title", text: context.projectName },
+      {
+        label: "character memory",
+        text: context.characters.map((character) => `${character.name} ${character.role} ${character.memory}`.trim()).join("\n"),
+      },
+    ],
+  });
 
   return `
 You are an expert story architect creating a structured novel outline.
 
-Use the same primary language already present in the project materials. If the materials are mixed, prefer the language used in the braindump and synopsis.
+${languageInstruction}
 
 [PROJECT]
 Title: ${context.projectName}

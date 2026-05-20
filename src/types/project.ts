@@ -218,6 +218,18 @@ export interface RestoreVersionResult {
   continuity: ContinuityRefreshStatus;
 }
 
+export type ProjectMembershipChangeKind = "removed" | "left";
+
+export interface RemoveProjectMemberResult {
+  project: ProjectData | null;
+  projectId: string;
+  projectName: string;
+  memberUserId: string;
+  memberName: string;
+  ownerUserId: string;
+  kind: ProjectMembershipChangeKind;
+}
+
 export interface ProjectListItem {
   id: string;
   name: string;

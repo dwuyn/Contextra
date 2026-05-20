@@ -1,19 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CreateProjectModal } from "./CreateProjectModal";
 import Link from "next/link";
 import {
-  Home, 
-  Layers, 
-  Users, 
-  UserPlus, 
-  Settings, 
-  Plus, 
+  Home,
+  Layers,
+  Users,
+  UserPlus,
+  Settings,
+  Plus,
   Clock,
-  MoreHorizontal
+  MoreHorizontal,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getSocialOverview } from "@/actions/auth";
@@ -73,7 +75,15 @@ type SocialOverview = {
   outgoingRequests: unknown[];
 };
 
+type MembershipBanner = {
+  kind: "removed" | "left";
+  projectName: string;
+};
+
 export function DashboardView({ user, overview }: DashboardViewProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [activeView, setActiveView] = useState<ViewType>("home");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAllProjectsModal, setShowAllProjectsModal] = useState(false);
@@ -82,6 +92,19 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
   const [hasRequestedSocialData, setHasRequestedSocialData] = useState(false);
   const [pendingProjectInvites, setPendingProjectInvites] = useState<PendingProjectInviteCard[]>(overview.pendingProjectInvites);
   const [inviteActionId, setInviteActionId] = useState<string | null>(null);
+  const membershipKind = searchParams.get("membership");
+  const membershipProjectName = searchParams.get("project");
+  const [membershipBanner] = useState<MembershipBanner | null>(() => {
+    if (!membershipProjectName || (membershipKind !== "removed" && membershipKind !== "left")) {
+      return null;
+    }
+
+    return {
+      kind: membershipKind,
+      projectName: membershipProjectName,
+    };
+  });
+  const [isMembershipBannerDismissed, setIsMembershipBannerDismissed] = useState(false);
 
   useEffect(() => {
     if (activeView === "home" || hasRequestedSocialData) return;
@@ -150,10 +173,23 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
     }
   });
 
+  useEffect(() => {
+    if (!membershipProjectName || (membershipKind !== "removed" && membershipKind !== "left")) {
+      return;
+    }
+
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.delete("membership");
+    nextSearchParams.delete("project");
+    const nextUrl = nextSearchParams.size > 0 ? `${pathname}?${nextSearchParams.toString()}` : pathname;
+    router.replace(nextUrl);
+  }, [membershipKind, membershipProjectName, pathname, router, searchParams]);
+
   const firstName = user.name.split(" ")[0];
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : hour < 21 ? "Good evening" : "Good night";
+  const visibleMembershipBanner = isMembershipBannerDismissed ? null : membershipBanner;
 
   async function handleProjectInvite(inviteId: string, status: "accepted" | "declined") {
     setInviteActionId(inviteId);
@@ -180,6 +216,31 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
               <p className="text-xs font-medium text-slate-400 mb-2">Workspace overview</p>
               <h2 className="text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight">{greeting}, {firstName}</h2>
             </header>
+
+            {visibleMembershipBanner && (
+              <section
+                role="alert"
+                aria-live="polite"
+                className="mb-8 flex items-start justify-between gap-4 rounded-[24px] border border-amber-200 bg-amber-50 px-5 py-4 text-amber-900"
+              >
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-700">Membership update</p>
+                  <p className="mt-2 text-sm font-semibold">
+                    {visibleMembershipBanner.kind === "removed"
+                      ? `You no longer have access to "${visibleMembershipBanner.projectName}".`
+                      : `You left "${visibleMembershipBanner.projectName}".`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMembershipBannerDismissed(true)}
+                  className="rounded-xl p-2 text-amber-700 transition-colors hover:bg-amber-100"
+                  aria-label="Dismiss membership update"
+                >
+                  <X size={16} />
+                </button>
+              </section>
+            )}
 
             {pendingProjectInvites.length > 0 && (
               <section className="mb-12">

@@ -95,6 +95,10 @@ export const CreateProjectInviteSchema = z.object({
   permissionLevel: z.number().int().min(1).max(3),
 });
 
+export const RemoveProjectMemberSchema = z.object({
+  memberUserId: z.string().min(1),
+});
+
 export const RespondProjectInviteSchema = z.object({
   status: z.enum(["accepted", "declined"]),
 });

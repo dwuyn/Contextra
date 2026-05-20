@@ -6,7 +6,7 @@ import { getSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import * as z from "@/lib/validations";
 import { sendEvent } from "@/lib/realtime";
-import type { CreateChapterResult, RestoreVersionResult, UpdateChapterResult } from "@/types/project";
+import type { CreateChapterResult, RemoveProjectMemberResult, RestoreVersionResult, UpdateChapterResult } from "@/types/project";
 
 async function sendProjectNotice(senderId: string, receiverId: string, content: string) {
   try {
@@ -192,6 +192,48 @@ export async function cancelProjectInvite(projectId: string, inviteId: string) {
     projectId,
     invite: result.invite,
   });
+  revalidatePath(`/project/${projectId}`);
+  revalidatePath("/");
+  return result;
+}
+
+export async function removeProjectMember(projectId: string, input: unknown): Promise<RemoveProjectMemberResult> {
+  const session = await getSession();
+  if (!session) throw new Error("Unauthorized");
+  const parsed = z.RemoveProjectMemberSchema.parse(input);
+  const result = await projectService.removeProjectMember(projectId, session.userId, parsed);
+
+  if (result.kind === "removed") {
+    await sendProjectNotice(
+      session.userId,
+      result.memberUserId,
+      `${session.name} removed you from "${result.projectName}".`,
+    );
+  } else {
+    await sendProjectNotice(
+      session.userId,
+      result.ownerUserId,
+      `${session.name} left "${result.projectName}".`,
+    );
+  }
+
+  await fanOutProjectEvent(
+    projectId,
+    "project_member_removed",
+    {
+      projectId,
+      memberUserId: result.memberUserId,
+      kind: result.kind,
+    },
+    [...new Set([session.userId, result.memberUserId])],
+  );
+
+  sendEvent(result.memberUserId, "project_access_revoked", {
+    projectId,
+    projectName: result.projectName,
+    kind: result.kind,
+  });
+
   revalidatePath(`/project/${projectId}`);
   revalidatePath("/");
   return result;
