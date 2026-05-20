@@ -19,6 +19,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      network: ${DOCKER_BUILD_NETWORK:-host}
       target: migrator
     env_file:
       - .env
@@ -33,6 +34,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      network: ${DOCKER_BUILD_NETWORK:-host}
       target: runner
     env_file:
       - .env
