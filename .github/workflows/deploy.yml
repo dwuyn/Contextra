@@ -53,6 +53,11 @@ jobs:
             ${{ env.MIGRATE_IMAGE }}:latest
             ${{ env.MIGRATE_IMAGE }}:${{ github.sha }}
 
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+
       - name: Deploy on server
         uses: appleboy/ssh-action@v1.2.0
         with:
