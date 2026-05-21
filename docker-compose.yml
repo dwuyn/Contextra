@@ -16,11 +16,7 @@ services:
     restart: unless-stopped
 
   migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      network: ${DOCKER_BUILD_NETWORK:-host}
-      target: migrator
+    image: ghcr.io/dwuyn/contextra-migrate:latest
     env_file:
       - .env
     environment:
@@ -31,11 +27,7 @@ services:
     restart: "no"
 
   next-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      network: ${DOCKER_BUILD_NETWORK:-host}
-      target: runner
+    image: ghcr.io/dwuyn/contextra-app:latest
     env_file:
       - .env
     environment:
@@ -44,8 +36,8 @@ services:
       NODE_ENV: production
       PORT: 3000
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
     ports:
       - "${APP_PORT:-3000}:3000"
     healthcheck:

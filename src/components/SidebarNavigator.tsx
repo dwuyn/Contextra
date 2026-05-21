@@ -239,7 +239,7 @@ export function SidebarNavigator() {
       setSelectedChapterId(result.chapter.id);
       setIsStoryBibleOpen(false);
       requestTitleFocus(result.chapter.id);
-      setCreateChapterWarning(result.continuity.fresh ? null : result.continuity.warning);
+      setCreateChapterWarning(result.continuity.fresh || result.continuity.status === "queued" ? null : result.continuity.warning);
     } catch (error) {
       console.error("Failed to create chapter:", error);
       setCreateChapterError("Could not create a chapter. Try again.");
@@ -282,7 +282,7 @@ export function SidebarNavigator() {
         latestProject = result.project;
         lastImportedChapterId = result.chapter.id;
         setChapterContent(result.chapter.id, result.chapter.content ?? "");
-        if (!result.continuity.fresh) {
+        if (!result.continuity.fresh && result.continuity.status !== "queued") {
           nextImportWarning = "Imported chapter content saved, but continuity memory is stale for one or more imported chapters until a later save succeeds.";
         }
       }

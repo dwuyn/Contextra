@@ -30,6 +30,89 @@ export interface ProjectOutline {
   acts: OutlineAct[];
 }
 
+export type CanonProposalStatus = "pending" | "approved" | "rejected";
+
+export interface CanonProposal {
+  id: string;
+  projectId: string;
+  chapterId: string | null;
+  branchId: string | null;
+  type: string;
+  payload: unknown;
+  rationale: string;
+  status: CanonProposalStatus;
+  createdAt: Date | string;
+  reviewedAt?: Date | string | null;
+  reviewedByUserId?: string | null;
+}
+
+export interface CanonEntity {
+  id: string;
+  projectId: string;
+  type: string;
+  name: string;
+  aliases: unknown;
+  summary: string;
+  status: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface CanonFact {
+  id: string;
+  projectId: string;
+  entityId?: string | null;
+  kind: string;
+  content: string;
+  sourceChapterId?: string | null;
+  branchId?: string | null;
+  confidence: number;
+  importance: number;
+  status: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface CanonRelation {
+  id: string;
+  projectId: string;
+  sourceEntityId?: string | null;
+  targetEntityId?: string | null;
+  relationType: string;
+  summary: string;
+  sourceChapterId?: string | null;
+  confidence: number;
+  status: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface StoryArc {
+  id: string;
+  projectId: string;
+  title: string;
+  summary: string;
+  startChapterIndex?: number | null;
+  endChapterIndex?: number | null;
+  status: string;
+  sortOrder: number;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface OutlineBeat {
+  id: string;
+  projectId: string;
+  arcId?: string | null;
+  chapterIndex?: number | null;
+  title: string;
+  summary: string;
+  status: string;
+  focusEntities: unknown;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
 export interface Character {
   id: string;
   projectId: string;
@@ -187,6 +270,9 @@ export interface ProjectData {
   metadata: ProjectMetadata;
   chapters: ChapterMeta[];
   characters: Character[];
+  canonProposals: CanonProposal[];
+  storyArcs: StoryArc[];
+  outlineBeats: OutlineBeat[];
   branches: Branch[];
   collaborators: Collaborator[];
   pendingInvites: ProjectInvite[];
@@ -201,7 +287,7 @@ export interface ProjectData {
 
 export type ContinuityRefreshStatus =
   | { fresh: true }
-  | { fresh: false; warning: string };
+  | { fresh: false; status?: "queued" | "stale"; warning: string };
 
 export interface CreateChapterResult {
   project: ProjectData;

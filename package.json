@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "backfill:continuity": "node --import tsx scripts/backfill-continuity.ts"
+    "backfill:continuity": "node --import tsx scripts/backfill-continuity.ts",
+    "worker:continuity": "node --import tsx scripts/continuity-worker.ts",
+    "worker:continuity:once": "CONTINUITY_WORKER_ONCE=1 node --import tsx scripts/continuity-worker.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.55",

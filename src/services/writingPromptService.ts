@@ -16,11 +16,18 @@ function buildRecentSummaryBlock(context: PromptContext) {
     : "- No recent summarized chapters yet.";
 }
 
+function buildCanonList(items: string[], emptyMessage: string) {
+  return items.length ? items.map((item) => `- ${item}`).join("\n") : `- ${emptyMessage}`;
+}
+
 function buildContinuityContextBlock(context: PromptContext) {
   const sharedNotes = context.sharedNotes.trim() || "No shared notes yet.";
   const worldRules = buildBulletedList(context.worldRules, "No world rules yet.");
   const branchHighlights = buildBulletedList(context.branchHighlights, "No branch highlights yet.");
   const ragContext = context.ragContext.length ? context.ragContext.join("\n\n") : "No relevant past scenes found.";
+  const canonEntities = buildCanonList(context.canonContext.entities, "No approved canon entities yet.");
+  const canonFacts = buildCanonList(context.canonContext.facts, "No approved canon facts yet.");
+  const canonRelations = buildCanonList(context.canonContext.relations, "No approved canon relations yet.");
 
   return `
 [STORY BIBLE]
@@ -33,8 +40,22 @@ Audience: ${context.audience}
 [WORLD RULES]
 ${worldRules}
 
+[LONG-FORM PLAN]
+Current Arc: ${context.canonContext.currentArc}
+Current Beat: ${context.canonContext.currentBeat}
+Legacy Outline: ${context.outlineContext}
+
 [CHARACTERS]
 ${context.characterDigest}
+
+[APPROVED CANON ENTITIES]
+${canonEntities}
+
+[APPROVED CANON FACTS]
+${canonFacts}
+
+[APPROVED CANON RELATIONS]
+${canonRelations}
 
 [BRANCH CONTEXT]
 Current Branch: ${context.branchName}
@@ -63,6 +84,7 @@ function buildStoryLanguageSignals(context: PromptContext) {
     { label: "project title", text: context.projectName },
     { label: "branch title", text: context.branchName },
     { label: "character memory", text: context.characterDigest },
+    { label: "approved canon facts", text: context.canonContext.facts.join("\n") },
   ];
 }
 
@@ -81,6 +103,7 @@ ${buildContinuityContextBlock(context)}
 
 Guidelines:
 - Treat the supplied Story Bible, character memory, recent summaries, and prose as canon unless the user explicitly changes them.
+- Treat approved canon facts and relations as higher priority than retrieved scenes or brainstorming.
 - Be helpful, creative, and continuity-aware.
 - If asked to brainstorm, provide vivid and specific options grounded in the supplied context.
 - If asked about the world or characters, answer from the provided context before inventing new facts.
@@ -119,6 +142,7 @@ Return only valid JSON with:
 
 Requirements:
 - Keep continuity strictly aligned with the supplied context.
+- Treat approved canon facts and relations as hard constraints.
 - Use the shared notes, world rules, characters, and recent summaries when resolving long-form continuity.
 - content must be clean HTML using paragraphs and simple inline tags when needed.
 `.trim();

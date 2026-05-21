@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import {
   ChevronDown,
   ChevronRight,
+  Check,
   FileText,
   Globe,
   ListOrdered,
@@ -21,12 +22,15 @@ import {
 import { useProjectStore } from "@/store/useProjectStore";
 import {
   deleteCharacter as deleteCharacterAction,
+  approveCanonProposal,
+  refreshProjectMemoryAction,
   updateContext,
   updateOutline as updateOutlineAction,
   updateSettings,
+  rejectCanonProposal,
   upsertCharacter,
 } from "@/actions/projects";
-import { generateOutlineAction, generateSynopsisAction } from "@/actions/ai";
+import { generateLongOutlineAction, generateOutlineAction, generateSynopsisAction } from "@/actions/ai";
 import { cn } from "@/lib/utils";
 import type {
   Character as ProjectCharacter,
@@ -46,6 +50,10 @@ type BusyAction =
   | "worldRule"
   | "outline"
   | "generateOutline"
+  | "generateLongOutline"
+  | "approveCanonProposal"
+  | "rejectCanonProposal"
+  | "refreshProjectMemory"
   | null;
 
 type CharacterDialogState =
@@ -71,6 +79,7 @@ type ChapterDialogState =
 type ConfirmDialogState =
   | { kind: "replaceSynopsis" }
   | { kind: "replaceOutline" }
+  | { kind: "replaceLongOutline" }
   | { kind: "deleteCharacter"; character: ProjectCharacter }
   | { kind: "deleteWorldRule"; index: number; label: string }
   | { kind: "deleteAct"; actId: string; title: string }
@@ -104,6 +113,27 @@ function createClientId(prefix: string) {
 
 function getWorldRules(worldRules: unknown): string[] {
   return Array.isArray(worldRules) ? worldRules.filter((rule): rule is string => typeof rule === "string") : [];
+}
+
+function readPayloadString(payload: unknown, key: string) {
+  if (!payload || typeof payload !== "object" || !(key in payload)) return "";
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function formatCanonProposalPayload(payload: unknown) {
+  const type = readPayloadString(payload, "type");
+  const name = readPayloadString(payload, "name");
+  const entityName = readPayloadString(payload, "entityName");
+  const sourceName = readPayloadString(payload, "sourceName");
+  const targetName = readPayloadString(payload, "targetName");
+  const content = readPayloadString(payload, "content");
+  const summary = readPayloadString(payload, "summary");
+
+  if (name) return `${name}${type ? ` (${type})` : ""}${summary ? `: ${summary}` : ""}`;
+  if (sourceName || targetName) return `${sourceName || "Unknown"} -> ${targetName || "Unknown"}: ${summary || content}`;
+  if (entityName) return `${entityName}: ${content || summary}`;
+  return content || summary || "No proposal details.";
 }
 
 function hasOutlineContent(outline: ProjectOutline) {
@@ -158,6 +188,7 @@ export function StoryBibleView() {
   const currentProject = project;
   const outline = currentProject.outline ?? EMPTY_OUTLINE;
   const worldRules = getWorldRules(currentProject.contextMemory.worldRules);
+  const canonProposals = currentProject.canonProposals ?? [];
   const canEdit = currentProject.viewerAccess.canEdit;
   const canManage = currentProject.viewerAccess.canManage;
 
@@ -446,6 +477,33 @@ export function StoryBibleView() {
     await syncProjectUpdate("generateOutline", () => generateOutlineAction(currentProject.metadata.id));
   }
 
+  async function handleGenerateLongOutline(forceReplace: boolean = false) {
+    if (!canEdit) return;
+    if (hasOutlineContent(outline) && !forceReplace) {
+      setConfirmDialog({ kind: "replaceLongOutline" });
+      return;
+    }
+
+    await syncProjectUpdate("generateLongOutline", () =>
+      generateLongOutlineAction(currentProject.metadata.id, { targetChapterCount: 200 })
+    );
+  }
+
+  async function handleApproveCanonProposal(proposalId: string) {
+    if (!canEdit) return;
+    await syncProjectUpdate("approveCanonProposal", () => approveCanonProposal(currentProject.metadata.id, proposalId));
+  }
+
+  async function handleRejectCanonProposal(proposalId: string) {
+    if (!canEdit) return;
+    await syncProjectUpdate("rejectCanonProposal", () => rejectCanonProposal(currentProject.metadata.id, proposalId));
+  }
+
+  async function handleRefreshProjectMemory() {
+    if (!canEdit) return;
+    await syncProjectUpdate("refreshProjectMemory", () => refreshProjectMemoryAction(currentProject.metadata.id));
+  }
+
   async function handleConfirmDialog() {
     if (!confirmDialog) return;
 
@@ -457,6 +515,10 @@ export function StoryBibleView() {
       case "replaceOutline":
         setConfirmDialog(null);
         await handleGenerateOutline(true);
+        return;
+      case "replaceLongOutline":
+        setConfirmDialog(null);
+        await handleGenerateLongOutline(true);
         return;
       case "deleteCharacter": {
         const updated = await syncProjectUpdate("deleteCharacter", () =>
@@ -664,6 +726,66 @@ export function StoryBibleView() {
           </BibleSection>
 
           <BibleSection
+            icon={<Sparkles size={18} />}
+            title="Canon Review"
+            actions={
+              canEdit ? (
+                <SectionActionButton
+                  onClick={() => void handleRefreshProjectMemory()}
+                  disabled={busyAction === "refreshProjectMemory"}
+                >
+                  {busyAction === "refreshProjectMemory" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  Scan Chapters
+                </SectionActionButton>
+              ) : undefined
+            }
+          >
+            {canonProposals.length === 0 ? (
+              <EmptyState
+                title="No pending canon updates"
+                description="Saved chapters that introduce durable story facts will appear here for review."
+              />
+            ) : (
+              <div className="space-y-3">
+                {canonProposals.map((proposal) => (
+                  <div key={proposal.id} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-500">
+                          {proposal.type.replace(/_/g, " ")}
+                        </p>
+                        <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-800">
+                          {formatCanonProposalPayload(proposal.payload)}
+                        </p>
+                        {proposal.rationale && (
+                          <p className="mt-2 text-xs leading-relaxed text-slate-400">{proposal.rationale}</p>
+                        )}
+                      </div>
+                      {canEdit && (
+                        <div className="flex shrink-0 items-center gap-2">
+                          <IconActionButton
+                            label="Approve canon update"
+                            onClick={() => void handleApproveCanonProposal(proposal.id)}
+                          >
+                            {busyAction === "approveCanonProposal" ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                          </IconActionButton>
+                          <IconActionButton
+                            label="Reject canon update"
+                            variant="danger"
+                            onClick={() => void handleRejectCanonProposal(proposal.id)}
+                          >
+                            {busyAction === "rejectCanonProposal" ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+                          </IconActionButton>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </BibleSection>
+
+          <BibleSection
             icon={<ListOrdered size={18} />}
             title="Outline"
             actions={
@@ -692,6 +814,14 @@ export function StoryBibleView() {
                   {busyAction === "generateOutline" ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
                   Generate Novel Outline
                 </button>
+                <button
+                  onClick={() => void handleGenerateLongOutline()}
+                  disabled={!canEdit || busyAction === "generateLongOutline"}
+                  className="mt-3 flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-lg hover:bg-slate-800 transition-all disabled:opacity-50"
+                >
+                  {busyAction === "generateLongOutline" ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                  Generate 200-Chapter Map
+                </button>
                 {canEdit && (
                   <button
                     onClick={openActCreate}
@@ -705,14 +835,24 @@ export function StoryBibleView() {
               <div className="space-y-4">
                 <div className="flex justify-end">
                   {canEdit && (
-                    <button
-                      onClick={() => void handleGenerateOutline()}
-                      disabled={busyAction === "generateOutline"}
-                      className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors disabled:opacity-50"
-                    >
-                      {busyAction === "generateOutline" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                      Regenerate Outline
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => void handleGenerateOutline()}
+                        disabled={busyAction === "generateOutline"}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors disabled:opacity-50"
+                      >
+                        {busyAction === "generateOutline" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                        Regenerate Outline
+                      </button>
+                      <button
+                        onClick={() => void handleGenerateLongOutline()}
+                        disabled={busyAction === "generateLongOutline"}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors disabled:opacity-50"
+                      >
+                        {busyAction === "generateLongOutline" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                        200-Chapter Map
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -936,7 +1076,7 @@ export function StoryBibleView() {
         description={getConfirmDescription(confirmDialog)}
         confirmLabel={getConfirmLabel(confirmDialog)}
         confirmTone={getConfirmTone(confirmDialog)}
-        busy={busyAction === "generateSynopsis" || busyAction === "generateOutline" || busyAction === "deleteCharacter" || busyAction === "worldRule" || busyAction === "outline"}
+        busy={busyAction === "generateSynopsis" || busyAction === "generateOutline" || busyAction === "generateLongOutline" || busyAction === "deleteCharacter" || busyAction === "worldRule" || busyAction === "outline"}
         onConfirm={() => void handleConfirmDialog()}
       />
     </div>
@@ -951,6 +1091,8 @@ function getConfirmTitle(confirmDialog: ConfirmDialogState) {
       return "Replace existing synopsis?";
     case "replaceOutline":
       return "Replace existing outline?";
+    case "replaceLongOutline":
+      return "Replace existing outline with a 200-chapter map?";
     case "deleteCharacter":
       return `Delete ${confirmDialog.character.name}?`;
     case "deleteWorldRule":
@@ -970,6 +1112,8 @@ function getConfirmDescription(confirmDialog: ConfirmDialogState) {
       return "Generating a new synopsis will overwrite the text currently in the Synopsis section.";
     case "replaceOutline":
       return "Generating a new outline will replace the acts and outline chapters you already have.";
+    case "replaceLongOutline":
+      return "Generating a long-form map will replace the current outline and create arc-level memory for future chapters.";
     case "deleteCharacter":
       return "This removes the character from the Story Bible. It does not rewrite existing chapters.";
     case "deleteWorldRule":
@@ -983,12 +1127,12 @@ function getConfirmDescription(confirmDialog: ConfirmDialogState) {
 
 function getConfirmLabel(confirmDialog: ConfirmDialogState) {
   if (!confirmDialog) return "Confirm";
-  return confirmDialog.kind === "replaceSynopsis" || confirmDialog.kind === "replaceOutline" ? "Replace" : "Delete";
+  return confirmDialog.kind === "replaceSynopsis" || confirmDialog.kind === "replaceOutline" || confirmDialog.kind === "replaceLongOutline" ? "Replace" : "Delete";
 }
 
 function getConfirmTone(confirmDialog: ConfirmDialogState) {
   if (!confirmDialog) return "primary" as const;
-  return confirmDialog.kind === "replaceSynopsis" || confirmDialog.kind === "replaceOutline" ? ("primary" as const) : ("danger" as const);
+  return confirmDialog.kind === "replaceSynopsis" || confirmDialog.kind === "replaceOutline" || confirmDialog.kind === "replaceLongOutline" ? ("primary" as const) : ("danger" as const);
 }
 
 function BibleSection({

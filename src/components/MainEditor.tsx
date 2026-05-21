@@ -344,7 +344,7 @@ export function MainEditor({
       syncSaveState(draft.chapterId, latestDraft.title, latestDraft.content);
 
       if (isMountedRef.current && shouldSurfaceStatus && activeChapterIdRef.current === draft.chapterId) {
-        setSaveWarning(result.continuity.fresh ? null : result.continuity.warning);
+        setSaveWarning(result.continuity.fresh || result.continuity.status === "queued" ? null : result.continuity.warning);
       }
     } catch (error) {
       if (

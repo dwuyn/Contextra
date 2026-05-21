@@ -57,6 +57,13 @@ model Project {
   owner           User           @relation("ProjectOwner", fields: [ownerId], references: [id])
   collaborators   Collaborator[]
   characters      Character[]
+  canonEntities   CanonEntity[]
+  canonFacts      CanonFact[]
+  canonRelations  CanonRelation[]
+  storyArcs       StoryArc[]
+  outlineBeats    OutlineBeat[]
+  canonProposals  CanonProposal[]
+  continuityJobs  ContinuityJob[]
   chapters        Chapter[]
   chapterVersions ChapterVersion[]
   branches        Branch[]
@@ -150,6 +157,8 @@ model Character {
   updatedAt DateTime @updatedAt
 
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, name])
 }
 
 model Branch {
@@ -184,8 +193,170 @@ model Chapter {
   branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
   sceneChunks SceneChunk[]
   summaryObj  ChapterSummary?
+  canonProposals CanonProposal[]
+  canonFacts CanonFact[]
+  canonRelations CanonRelation[]
+  continuityJobs ContinuityJob[]
   presenceEntries ProjectPresence[]
   commentThreads CommentThread[]
+
+  @@index([projectId, branchId, index])
+  @@index([projectId, index])
+}
+
+model CanonEntity {
+  id        String   @id @default(uuid())
+  projectId String
+  type      String
+  name      String
+  aliases   Json     @default("[]")
+  summary   String   @default("")
+  status    String   @default("active")
+  vector    Unsupported("vector(768)")?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  facts         CanonFact[]
+  sourceLinks   CanonRelation[] @relation("CanonRelationSource")
+  targetLinks   CanonRelation[] @relation("CanonRelationTarget")
+
+  @@index([projectId, type])
+  @@index([projectId, name])
+}
+
+model CanonFact {
+  id              String   @id @default(uuid())
+  projectId       String
+  entityId        String?
+  kind            String
+  content         String
+  sourceChapterId String?
+  branchId        String?
+  confidence      Float    @default(1)
+  importance      Int      @default(1)
+  status          String   @default("approved")
+  vector          Unsupported("vector(768)")?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  entity        CanonEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  sourceChapter Chapter?     @relation(fields: [sourceChapterId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([projectId, status, importance, updatedAt])
+  @@index([projectId, kind])
+  @@index([entityId])
+  @@index([sourceChapterId])
+}
+
+model CanonRelation {
+  id              String   @id @default(uuid())
+  projectId       String
+  sourceEntityId  String?
+  targetEntityId  String?
+  relationType    String
+  summary         String
+  sourceChapterId String?
+  confidence      Float    @default(1)
+  status          String   @default("approved")
+  vector          Unsupported("vector(768)")?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceEntity  CanonEntity? @relation("CanonRelationSource", fields: [sourceEntityId], references: [id], onDelete: SetNull)
+  targetEntity  CanonEntity? @relation("CanonRelationTarget", fields: [targetEntityId], references: [id], onDelete: SetNull)
+  sourceChapter Chapter?     @relation(fields: [sourceChapterId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([projectId, status, updatedAt])
+  @@index([projectId, relationType])
+  @@index([sourceEntityId])
+  @@index([targetEntityId])
+}
+
+model StoryArc {
+  id                String   @id @default(uuid())
+  projectId         String
+  title             String
+  summary           String   @default("")
+  startChapterIndex Int?
+  endChapterIndex   Int?
+  status            String   @default("planned")
+  sortOrder         Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  beats   OutlineBeat[]
+
+  @@index([projectId, sortOrder])
+  @@index([projectId, startChapterIndex, endChapterIndex])
+}
+
+model OutlineBeat {
+  id            String   @id @default(uuid())
+  projectId     String
+  arcId         String?
+  chapterIndex  Int?
+  title         String
+  summary       String   @default("")
+  status        String   @default("planned")
+  focusEntities Json     @default("[]")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  arc     StoryArc? @relation(fields: [arcId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, chapterIndex])
+  @@index([arcId])
+}
+
+model CanonProposal {
+  id              String    @id @default(uuid())
+  projectId       String
+  chapterId       String?
+  branchId        String?
+  type            String
+  payload         Json
+  rationale       String    @default("")
+  status          String    @default("pending")
+  createdAt       DateTime  @default(now())
+  reviewedAt      DateTime?
+  reviewedByUserId String?
+
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chapter Chapter? @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@index([chapterId])
+}
+
+model ContinuityJob {
+  id          String   @id @default(uuid())
+  projectId   String
+  chapterId   String
+  branchId    String
+  type        String   @default("chapter_continuity")
+  status      String   @default("queued")
+  attempts    Int      @default(0)
+  contentHash String?
+  runAfter    DateTime @default(now())
+  lockedAt    DateTime?
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@index([status, runAfter])
+  @@index([type, status, runAfter])
+  @@index([chapterId, type, status])
+  @@index([projectId, status])
 }
 
 model SceneChunk {
@@ -197,6 +368,8 @@ model SceneChunk {
   createdAt DateTime @default(now())
 
   chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@index([chapterId, index])
 }
 
 model ChapterSummary {

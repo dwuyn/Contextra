@@ -21,7 +21,7 @@ function stripReasoning(text: string) {
     .trim();
 }
 
-type StoryBibleGenerationContext = {
+export type StoryBibleGenerationContext = {
   projectName: string;
   braindump: string;
   genre: string;
@@ -32,6 +32,10 @@ type StoryBibleGenerationContext = {
   characters: Array<{ name: string; role: string; memory: string }>;
   chapters: Array<{ title: string; summary: string }>;
 };
+
+const LONG_OUTLINE_SEGMENT_SIZE = 200;
+type GeneratedLongOutline = ReturnType<typeof z.GeneratedLongOutlineSchema.parse>;
+type GeneratedLongOutlineArc = GeneratedLongOutline["arcs"][number];
 
 export async function generateChapter(input: { title: string; instructions: string }, context: PromptContext) {
   const prompt = buildChapterGenerationPrompt(input, context);
@@ -116,6 +120,72 @@ export async function generateOutlineFromStoryBible(context: StoryBibleGeneratio
     console.error("Failed to parse outline JSON:", cleanText, err);
     throw new Error("AI returned an invalid outline. Please try again.");
   }
+}
+
+export async function generateLongOutlineFromStoryBible(context: StoryBibleGenerationContext, targetChapterCount: number) {
+  const arcs: GeneratedLongOutlineArc[] = [];
+
+  for (let start = 1; start <= targetChapterCount; start += LONG_OUTLINE_SEGMENT_SIZE) {
+    const end = Math.min(start + LONG_OUTLINE_SEGMENT_SIZE - 1, targetChapterCount);
+    const previousArcDigest = arcs
+      .slice(-5)
+      .map((arc) => `${arc.title} (${arc.startChapterIndex}-${arc.endChapterIndex}): ${arc.summary}`)
+      .join("\n");
+
+    const segment = await generateLongOutlineSegment(context, targetChapterCount, start, end, previousArcDigest);
+    arcs.push(...segment.arcs);
+  }
+
+  return {
+    outline: { arcs },
+    tokens: 0,
+    costUsd: 0,
+    model: "custom-ai",
+  };
+}
+
+async function generateLongOutlineSegment(
+  context: StoryBibleGenerationContext,
+  targetChapterCount: number,
+  segmentStart: number,
+  segmentEnd: number,
+  previousArcDigest: string,
+) {
+  const { text } = await generateText({
+    model: customAi.chat("gemma4:31b-cloud"),
+    prompt: buildLongOutlinePrompt(context, targetChapterCount, segmentStart, segmentEnd, previousArcDigest),
+    temperature: 0.6,
+  });
+
+  const cleanText = stripReasoning(text);
+
+  try {
+    const json = JSON.parse(cleanText);
+    const outline = z.GeneratedLongOutlineSchema.parse(json);
+    return normalizeLongOutlineSegment(outline, segmentStart, segmentEnd);
+  } catch (err) {
+    console.error("Failed to parse long outline JSON:", cleanText, err);
+    throw new Error("AI returned an invalid long outline. Please try again.");
+  }
+}
+
+function normalizeLongOutlineSegment(
+  outline: GeneratedLongOutline,
+  segmentStart: number,
+  segmentEnd: number,
+): GeneratedLongOutline {
+  return {
+    arcs: outline.arcs
+      .map((arc) => ({
+        ...arc,
+        startChapterIndex: Math.max(segmentStart, arc.startChapterIndex),
+        endChapterIndex: Math.min(segmentEnd, arc.endChapterIndex),
+        beats: arc.beats.filter(
+          (beat) => beat.chapterIndex >= segmentStart && beat.chapterIndex <= segmentEnd,
+        ),
+      }))
+      .filter((arc) => arc.startChapterIndex <= arc.endChapterIndex),
+  };
 }
 
 export async function chatWithAi(messages: ModelMessage[], context: PromptContext) {
@@ -264,6 +334,82 @@ Requirements:
 - Each act should contain 2 to 5 chapters.
 - Keep the outline aligned with the supplied project details.
 - Keep chapter summaries concise and actionable.
+- Do not include any text outside the JSON.
+`.trim();
+}
+
+function buildLongOutlinePrompt(
+  context: StoryBibleGenerationContext,
+  targetChapterCount: number,
+  segmentStart: number,
+  segmentEnd: number,
+  previousArcDigest: string,
+) {
+  const worldRules = context.worldRules.length ? context.worldRules.map((rule) => `- ${rule}`).join("\n") : "- No world rules yet.";
+  const characters = context.characters.length
+    ? context.characters.map((character) => `- ${character.name} (${character.role}): ${character.memory}`).join("\n")
+    : "- No characters defined yet.";
+  const chapterDigest = context.chapters.length
+    ? context.chapters
+        .map((chapter, index) => `- Chapter ${index + 1}: ${chapter.title}${chapter.summary ? ` | ${chapter.summary}` : ""}`)
+        .join("\n")
+    : "- No chapters yet.";
+
+  return `
+You are an expert long-form story architect designing a scalable outline for a large serialized novel.
+
+[PROJECT]
+Title: ${context.projectName}
+Genre: ${context.genre}
+Tone: ${context.tone}
+Audience: ${context.audience}
+Target chapter count: ${targetChapterCount}
+Segment to generate now: chapters ${segmentStart}-${segmentEnd}
+
+[BRAINDUMP]
+${context.braindump || "No braindump yet."}
+
+[SYNOPSIS]
+${context.synopsis || "No synopsis yet."}
+
+[CHARACTERS]
+${characters}
+
+[WORLD RULES]
+${worldRules}
+
+[REAL CHAPTERS]
+${chapterDigest}
+
+[RECENT PRIOR OUTLINE CONTINUITY]
+${previousArcDigest || "No prior generated segments yet."}
+
+Return only valid JSON:
+{
+  "arcs": [
+    {
+      "title": "Arc title",
+      "summary": "What changes across this arc",
+      "startChapterIndex": 1,
+      "endChapterIndex": 10,
+      "beats": [
+        {
+          "chapterIndex": 1,
+          "title": "Chapter title",
+          "summary": "Specific planned beat for this chapter",
+          "focusEntities": ["character or place names"]
+        }
+      ]
+    }
+  ]
+}
+
+Requirements:
+- Generate only chapters ${segmentStart} through ${segmentEnd}; do not include chapters outside this segment.
+- Cover chapters ${segmentStart} through ${segmentEnd} without gaps.
+- Use arcs of roughly 8 to 15 chapters.
+- Each chapter beat must have a concrete plot function, not a vague placeholder.
+- Keep existing real chapters consistent with their current titles and summaries.
 - Do not include any text outside the JSON.
 `.trim();
 }

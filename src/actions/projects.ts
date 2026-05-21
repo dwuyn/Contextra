@@ -2,7 +2,13 @@
 
 import * as projectService from "@/services/projectService";
 import * as chatService from "@/services/chatService";
+import {
+  approveCanonProposal as approveCanonProposalService,
+  rejectCanonProposal as rejectCanonProposalService,
+} from "@/services/canonService";
+import { enqueueProjectContinuityJobs } from "@/services/continuityJobService";
 import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import * as z from "@/lib/validations";
 import { sendEvent } from "@/lib/realtime";
@@ -128,6 +134,44 @@ export async function updateOutline(projectId: string, input: unknown) {
   if (!session) throw new Error("Unauthorized");
   const parsed = z.UpdateOutlineSchema.parse(input);
   const result = await projectService.updateOutline(projectId, session.userId, parsed);
+  revalidatePath(`/project/${projectId}`);
+  return result;
+}
+
+export async function approveCanonProposal(projectId: string, proposalId: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Unauthorized");
+  await projectService.requireProjectPermission(projectId, session.userId, "edit");
+  await approveCanonProposalService(projectId, proposalId, session.userId);
+  const result = await projectService.getProject(projectId, session.userId);
+  revalidatePath(`/project/${projectId}`);
+  return result;
+}
+
+export async function rejectCanonProposal(projectId: string, proposalId: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Unauthorized");
+  await projectService.requireProjectPermission(projectId, session.userId, "edit");
+  await rejectCanonProposalService(projectId, proposalId, session.userId);
+  const result = await projectService.getProject(projectId, session.userId);
+  revalidatePath(`/project/${projectId}`);
+  return result;
+}
+
+export async function refreshProjectMemoryAction(projectId: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Unauthorized");
+  await projectService.requireProjectPermission(projectId, session.userId, "edit");
+
+  const chapters = await prisma.chapter.findMany({
+    where: { projectId },
+    orderBy: [{ index: "asc" }, { createdAt: "asc" }],
+    select: { id: true, branchId: true },
+  });
+
+  await enqueueProjectContinuityJobs({ projectId, chapters });
+
+  const result = await projectService.getProject(projectId, session.userId);
   revalidatePath(`/project/${projectId}`);
   return result;
 }

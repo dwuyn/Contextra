@@ -8,13 +8,16 @@ import {
   describeSelection,
   generateSynopsisFromStoryBible,
   generateOutlineFromStoryBible,
+  generateLongOutlineFromStoryBible,
 } from "@/services/aiService";
+import type { StoryBibleGenerationContext } from "@/services/aiService";
+import * as z from "@/lib/validations";
 import { semanticSearch } from "@/services/ragService";
 import { refreshChapterContinuityStatus } from "@/services/continuityService";
 import { prisma } from "@/lib/prisma";
 import {
   requireBranchInProject,
-  requireHydratedProjectAccess,
+  getProject,
   requireProjectPermission,
   updateContext,
   updateOutline,
@@ -22,26 +25,106 @@ import {
 import type { Prisma } from "@prisma/client";
 import type { ProjectOutline } from "@/types/project";
 
-function buildStoryBibleContext(project: Awaited<ReturnType<typeof requireHydratedProjectAccess>>) {
+const STORY_BIBLE_CONTEXT_BUDGETS = {
+  characters: 10_000,
+  chapters: 16_000,
+  worldRules: 4_000,
+};
+
+function normalizeStringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function takeStringsByBudget(values: string[], budget: number) {
+  const selected: string[] = [];
+  let used = 0;
+
+  for (const value of values) {
+    const cleanValue = value.trim();
+    if (!cleanValue) continue;
+    const remaining = budget - used;
+    if (remaining <= 0) break;
+    const clipped = cleanValue.length > remaining ? `${cleanValue.slice(0, Math.max(0, remaining - 3))}...` : cleanValue;
+    selected.push(clipped);
+    used += clipped.length + 1;
+  }
+
+  return selected;
+}
+
+function takeCharactersByBudget(
+  characters: Array<{ name: string; role: string; memory: string }>,
+  budget: number,
+) {
+  const selected: Array<{ name: string; role: string; memory: string }> = [];
+  let used = 0;
+
+  for (const character of characters) {
+    const header = `${character.name} (${character.role}): `;
+    const remaining = budget - used - header.length;
+    if (remaining <= 0) break;
+    const memory = character.memory.length > remaining ? `${character.memory.slice(0, Math.max(0, remaining - 3))}...` : character.memory;
+    selected.push({ ...character, memory });
+    used += header.length + memory.length + 1;
+  }
+
+  return selected;
+}
+
+function takeChaptersByBudget(
+  chapters: Array<{ title: string; summary: string }>,
+  budget: number,
+) {
+  const selected: Array<{ title: string; summary: string }> = [];
+  let used = 0;
+
+  for (const [index, chapter] of chapters.entries()) {
+    const header = `Chapter ${index + 1}: ${chapter.title} | `;
+    const remaining = budget - used - header.length;
+    if (remaining <= 0) break;
+    const summary = chapter.summary.length > remaining ? `${chapter.summary.slice(0, Math.max(0, remaining - 3))}...` : chapter.summary;
+    selected.push({ ...chapter, summary });
+    used += header.length + summary.length + 1;
+  }
+
+  return selected;
+}
+
+async function buildStoryBibleContext(projectId: string): Promise<StoryBibleGenerationContext> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      name: true,
+      summary: true,
+      genre: true,
+      tone: true,
+      audience: true,
+      sharedNotes: true,
+      worldRules: true,
+      characters: {
+        orderBy: { updatedAt: "desc" },
+        take: 200,
+        select: { name: true, role: true, memory: true },
+      },
+      chapters: {
+        orderBy: [{ index: "asc" }, { createdAt: "asc" }],
+        select: { title: true, summary: true },
+      },
+    },
+  });
+
+  if (!project) throw new Error("Project not found");
+
   return {
-    projectName: project.metadata.name,
-    braindump: project.metadata.summary,
-    genre: project.metadata.genre,
-    tone: project.contextMemory.tone,
-    audience: project.contextMemory.audience,
-    synopsis: project.contextMemory.sharedNotes,
-    worldRules: Array.isArray(project.contextMemory.worldRules)
-      ? project.contextMemory.worldRules.filter((rule): rule is string => typeof rule === "string")
-      : [],
-    characters: project.characters.map((character) => ({
-      name: character.name,
-      role: character.role,
-      memory: character.memory,
-    })),
-    chapters: project.chapters.map((chapter) => ({
-      title: chapter.title,
-      summary: chapter.summary,
-    })),
+    projectName: project.name,
+    braindump: project.summary,
+    genre: project.genre,
+    tone: project.tone,
+    audience: project.audience,
+    synopsis: project.sharedNotes,
+    worldRules: takeStringsByBudget(normalizeStringList(project.worldRules), STORY_BIBLE_CONTEXT_BUDGETS.worldRules),
+    characters: takeCharactersByBudget(project.characters, STORY_BIBLE_CONTEXT_BUDGETS.characters),
+    chapters: takeChaptersByBudget(project.chapters, STORY_BIBLE_CONTEXT_BUDGETS.chapters),
   };
 }
 
@@ -59,6 +142,21 @@ function attachOutlineIds(outline: Awaited<ReturnType<typeof generateOutlineFrom
         id: createOutlineId("chapter"),
         title: chapter.title,
         summary: chapter.summary,
+      })),
+    })),
+  };
+}
+
+function attachLongOutlineIds(outline: Awaited<ReturnType<typeof generateLongOutlineFromStoryBible>>["outline"]): ProjectOutline {
+  return {
+    acts: outline.arcs.map((arc) => ({
+      id: createOutlineId("act"),
+      title: arc.title,
+      summary: arc.summary,
+      chapters: arc.beats.map((beat) => ({
+        id: createOutlineId("chapter"),
+        title: beat.title,
+        summary: beat.summary,
       })),
     })),
   };
@@ -90,6 +188,8 @@ export async function generateChapterAction(projectId: string, branchId: string,
 
   const continuity = await refreshChapterContinuityStatus({
     chapterId: newChapter.id,
+    projectId,
+    branchId,
     title: newChapter.title,
     content: newChapter.content,
   });
@@ -111,9 +211,9 @@ export async function generateChapterAction(projectId: string, branchId: string,
 export async function generateSynopsisAction(projectId: string) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
-  const project = await requireHydratedProjectAccess(projectId, session.userId, "edit");
+  await requireProjectPermission(projectId, session.userId, "edit");
 
-  const result = await generateSynopsisFromStoryBible(buildStoryBibleContext(project));
+  const result = await generateSynopsisFromStoryBible(await buildStoryBibleContext(projectId));
   const updatedProject = await updateContext(projectId, session.userId, {
     sharedNotes: result.synopsis,
   });
@@ -135,9 +235,9 @@ export async function generateSynopsisAction(projectId: string) {
 export async function generateOutlineAction(projectId: string) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
-  const project = await requireHydratedProjectAccess(projectId, session.userId, "edit");
+  await requireProjectPermission(projectId, session.userId, "edit");
 
-  const result = await generateOutlineFromStoryBible(buildStoryBibleContext(project));
+  const result = await generateOutlineFromStoryBible(await buildStoryBibleContext(projectId));
   const updatedProject = await updateOutline(projectId, session.userId, attachOutlineIds(result.outline));
 
   await prisma.usage.create({
@@ -152,6 +252,65 @@ export async function generateOutlineAction(projectId: string) {
   });
 
   return updatedProject;
+}
+
+export async function generateLongOutlineAction(projectId: string, input: unknown = {}) {
+  const session = await getSession();
+  if (!session) throw new Error("Unauthorized");
+  const parsed = z.LongOutlineRequestSchema.parse(input);
+  await requireProjectPermission(projectId, session.userId, "edit");
+
+  const result = await generateLongOutlineFromStoryBible(await buildStoryBibleContext(projectId), parsed.targetChapterCount);
+  const legacyOutline = attachLongOutlineIds(result.outline);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.outlineBeat.deleteMany({ where: { projectId } });
+    await tx.storyArc.deleteMany({ where: { projectId } });
+
+    for (const [index, arc] of result.outline.arcs.entries()) {
+      const createdArc = await tx.storyArc.create({
+        data: {
+          projectId,
+          title: arc.title,
+          summary: arc.summary,
+          startChapterIndex: arc.startChapterIndex,
+          endChapterIndex: arc.endChapterIndex,
+          sortOrder: index + 1,
+        },
+      });
+
+      if (arc.beats.length > 0) {
+        await tx.outlineBeat.createMany({
+          data: arc.beats.map((beat) => ({
+            projectId,
+            arcId: createdArc.id,
+            chapterIndex: beat.chapterIndex,
+            title: beat.title,
+            summary: beat.summary,
+            focusEntities: beat.focusEntities as Prisma.InputJsonValue,
+          })),
+        });
+      }
+    }
+
+    await tx.project.update({
+      where: { id: projectId },
+      data: { outline: legacyOutline as unknown as Prisma.InputJsonValue },
+    });
+  });
+
+  await prisma.usage.create({
+    data: {
+      projectId,
+      action: "long_outline_generation",
+      tokens: result.tokens,
+      costUsd: result.costUsd,
+      model: result.model,
+      actor: session.email,
+    },
+  });
+
+  return getProject(projectId, session.userId);
 }
 
 

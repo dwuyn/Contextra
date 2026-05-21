@@ -1,107 +1,160 @@
 "use client";
 
 import Link from "next/link";
-import { Brain, Layers, Sparkles, ChevronRight, BookOpen, Database } from "lucide-react";
+import type { ReactNode } from "react";
+import {
+  BookOpen,
+  Bot,
+  ChevronRight,
+  FileText,
+  NotebookPen,
+  PanelLeft,
+  ScrollText,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function LandingView() {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-indigo-500/30 font-manrope overflow-x-hidden relative">
-      {/* Background Gradients */}
-      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-600/20 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-fuchsia-600/20 blur-[120px] pointer-events-none" />
-
-      {/* Header */}
-      <header className="fixed top-0 inset-x-0 z-50 border-b border-slate-800/50 bg-slate-950/50 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+    <div className="min-h-screen bg-[#f7f7f5] text-slate-900">
+      <header className="sticky top-0 z-50 border-b border-slate-100 bg-[#f7f7f5]/95 backdrop-blur">
+        <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-6">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
-              <BookOpen size={16} className="text-white" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white">
+              <BookOpen size={18} />
             </div>
-            <span className="text-xl font-extrabold text-white tracking-tight">Contextra</span>
+            <div>
+              <p className="text-sm font-bold text-slate-900">Contextra</p>
+              <p className="text-xs text-slate-500">Writing workspace</p>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <Link 
               href="/login" 
-              className="text-sm font-bold text-slate-300 hover:text-white transition-colors"
+              className="text-sm font-bold text-slate-600 transition-colors hover:text-slate-900"
             >
               Sign In
             </Link>
             <Link 
               href="/register" 
-              className="px-5 py-2.5 rounded-full bg-white text-slate-950 text-sm font-extrabold hover:bg-slate-200 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+              className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-slate-800"
             >
-              Start Writing
+              Create account
             </Link>
           </div>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="relative pt-48 pb-32 px-6">
-        <div className="max-w-5xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[11px] font-bold uppercase tracking-widest mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <Sparkles size={14} />
-            The ultimate storyteller&apos;s workspace
-          </div>
-          
-          <h1 className="text-6xl md:text-8xl font-extrabold text-white tracking-tighter leading-[1.1] mb-8 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
-            Solve the <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-fuchsia-400">infinite context</span> problem.
-          </h1>
-          
-          <p className="text-xl md:text-2xl text-slate-400 mb-12 max-w-3xl mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
-            Contextra dynamically assembles your Story Bible, character states, and recent prose so your AI co-writer maintains flawless continuity across hundreds of thousands of words.
-          </p>
-          
-          <div className="flex items-center justify-center gap-6 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-300">
-            <Link 
-              href="/register" 
-              className="group flex items-center gap-2 px-8 py-4 rounded-full bg-indigo-600 text-white text-lg font-extrabold hover:bg-indigo-500 transition-all hover:shadow-[0_0_40px_rgba(79,70,229,0.4)]"
-            >
-              Start Writing for Free
-              <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
-            </Link>
-          </div>
-        </div>
-      </section>
+      <main>
+        <section className="border-b border-slate-100 px-6 py-12 lg:py-16">
+          <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center xl:gap-14">
+            <div className="max-w-xl">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">For fiction writers</p>
+              <h1 className="mt-4 text-5xl font-extrabold tracking-tight text-slate-900 sm:text-6xl">
+                Contextra
+              </h1>
+              <p className="mt-5 text-lg leading-relaxed text-slate-600 sm:text-xl">
+                A calmer writing workspace for chapters, notes, and character details that belong in one place.
+              </p>
+              <p className="mt-4 text-base leading-relaxed text-slate-500">
+                Return to a draft, see the parts of your story that matter, and keep moving without rebuilding everything from scratch.
+              </p>
 
-      {/* Feature Grid */}
-      <section className="py-24 px-6 relative z-10 border-t border-slate-800/50 bg-slate-900/20">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-16 text-center">
-            <h2 className="text-3xl md:text-5xl font-extrabold text-white mb-4 tracking-tight">A 3-Tier Memory Architecture</h2>
-            <p className="text-slate-400 text-lg max-w-2xl mx-auto">Contextra automatically manages what the AI needs to know, exactly when it needs to know it.</p>
-          </div>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Link 
+                  href="/register" 
+                  className="group inline-flex items-center justify-center gap-2 rounded-full bg-slate-900 px-6 py-3.5 text-sm font-bold text-white transition-colors hover:bg-slate-800"
+                >
+                  Create account
+                  <ChevronRight size={18} className="transition-transform group-hover:translate-x-0.5" />
+                </Link>
+                <Link 
+                  href="/login" 
+                  className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  Sign in
+                </Link>
+              </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <FeatureCard 
-              icon={<Database size={24} className="text-blue-400" />}
-              title="Core Story Bible"
-              description="Your world rules, project tone, and active characters are always injected into the context window, establishing the absolute truth of your universe."
-              delay={100}
-            />
-            <FeatureCard 
-              icon={<Brain size={24} className="text-fuchsia-400" />}
-              title="Semantic RAG Memory"
-              description="Contextra uses pgvector to automatically retrieve highly relevant past scenes and character moments based on your current writing instructions."
-              delay={200}
-            />
-            <FeatureCard 
-              icon={<Layers size={24} className="text-emerald-400" />}
-              title="Dynamic Character State"
-              description="Characters evolve. Contextra tracks character motivations and memories chapter-by-chapter so they never feel out of character."
-              delay={300}
-            />
-          </div>
-        </div>
-      </section>
+              <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                <HeroPoint icon={<NotebookPen size={16} />} label="Draft scenes" />
+                <HeroPoint icon={<ScrollText size={16} />} label="Keep notes close" />
+                <HeroPoint icon={<Users size={16} />} label="Share projects" />
+              </div>
+            </div>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-800/50 py-12 px-6">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between text-sm text-slate-500">
-          <div className="flex items-center gap-2 mb-4 md:mb-0">
+            <WorkspacePreview />
+          </div>
+        </section>
+
+        <section className="px-6 py-16 lg:py-20">
+          <div className="mx-auto max-w-7xl">
+            <div className="max-w-2xl">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Why it feels easier</p>
+              <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+                The main parts of your story stay close at hand.
+              </h2>
+              <p className="mt-4 text-base leading-relaxed text-slate-500">
+                Contextra keeps the writing space simple: your draft in front, your notes nearby, and room to work with other people when you need to.
+              </p>
+            </div>
+
+            <div className="mt-10 grid gap-4 md:grid-cols-3">
+              <BenefitCard
+                icon={<FileText size={20} />}
+                title="Keep story details straight"
+                description="Chapters, notes, and character reminders stay in the same workspace, so you spend less time hunting through tabs."
+              />
+              <BenefitCard
+                icon={<Sparkles size={20} />}
+                title="Pick up the thread faster"
+                description="Open a project and get back to the scene with the important context already nearby."
+              />
+              <BenefitCard
+                icon={<Users size={20} />}
+                title="Collaborate when needed"
+                description="Invite people into the same project when you want a second set of eyes, shared notes, or a co-writing pass."
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="border-t border-slate-100 px-6 py-16">
+          <div className="mx-auto flex max-w-7xl flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Start with your next story</p>
+              <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+                Set up a workspace and start writing.
+              </h2>
+              <p className="mt-4 text-base leading-relaxed text-slate-500">
+                Begin with a blank project, build your notes as you go, and come back to a cleaner writing desk every time.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Link 
+                href="/register" 
+                className="inline-flex items-center justify-center rounded-full bg-slate-900 px-6 py-3.5 text-sm font-bold text-white transition-colors hover:bg-slate-800"
+              >
+                Create account
+              </Link>
+              <Link 
+                href="/login" 
+                className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                Sign in
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="border-t border-slate-100 px-6 py-8">
+        <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-3 text-sm text-slate-500 md:flex-row md:items-center">
+          <div className="flex items-center gap-2">
             <BookOpen size={16} />
-            <span className="font-bold text-slate-300">Contextra</span>
+            <span className="font-bold text-slate-700">Contextra</span>
           </div>
           <p>© 2026 Contextra. All rights reserved.</p>
         </div>
@@ -110,22 +163,143 @@ export function LandingView() {
   );
 }
 
-function FeatureCard({ icon, title, description, delay }: { icon: React.ReactNode, title: string, description: string, delay: number }) {
+function HeroPoint({ icon, label }: { icon: ReactNode; label: string }) {
   return (
-    <div 
-      className={cn(
-        "p-8 rounded-[32px] bg-slate-900/50 border border-slate-800 backdrop-blur-sm hover:bg-slate-800/50 transition-colors group",
-        `animate-in fade-in slide-in-from-bottom-8 duration-700`
-      )}
-      style={{ animationDelay: `${delay}ms`, animationFillMode: 'both' }}
-    >
-      <div className="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-600 shadow-sm">
+      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
         {icon}
       </div>
-      <h3 className="text-xl font-bold text-white mb-3">{title}</h3>
-      <p className="text-slate-400 leading-relaxed">
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function WorkspacePreview() {
+  return (
+    <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Current project</p>
+          <h2 className="truncate text-base font-bold text-slate-900">The Hollow Orchard</h2>
+        </div>
+        <div className="hidden items-center gap-2 sm:flex">
+          <PreviewPill icon={<ScrollText size={14} />} label="Story notes" />
+          <PreviewPill icon={<Bot size={14} />} label="Ask AI" />
+        </div>
+      </div>
+
+      <div className="grid aspect-[16/10] min-h-[280px] grid-cols-[132px_minmax(0,1fr)] sm:min-h-[340px] sm:aspect-[4/3]">
+        <aside className="border-r border-slate-100 bg-slate-50/80 px-3 py-4">
+          <div className="mb-4 flex items-center gap-2 px-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
+            <PanelLeft size={14} />
+            Library
+          </div>
+
+          <div className="space-y-1">
+            <PreviewSidebarItem active label="Chapter 12" />
+            <PreviewSidebarItem label="Chapter 13" />
+            <PreviewSidebarItem label="Story bible" />
+            <PreviewSidebarItem label="Characters" />
+          </div>
+        </aside>
+
+        <div className="flex min-w-0 flex-col">
+          <div className="border-b border-slate-100 px-5 py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-600">
+                Drafting
+              </div>
+              <div className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                Character notes nearby
+              </div>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-slate-500">
+              Mara stepped into the orchard and counted the trees she had marked before winter.
+            </p>
+          </div>
+
+          <div className="flex-1 px-5 py-5">
+            <div className="space-y-3">
+              <PreviewLine width="w-full" />
+              <PreviewLine width="w-[92%]" />
+              <PreviewLine width="w-[96%]" />
+              <PreviewLine width="w-[82%]" />
+              <PreviewLine width="w-[88%]" />
+              <PreviewLine width="w-[68%]" />
+            </div>
+          </div>
+
+          <div className="grid gap-3 border-t border-slate-100 px-5 py-4 sm:grid-cols-3">
+            <PreviewPanel
+              icon={<NotebookPen size={16} />}
+              title="Scene notes"
+              detail="Where the scene is headed"
+            />
+            <PreviewPanel
+              icon={<Users size={16} />}
+              title="Characters"
+              detail="Motives and recent changes"
+            />
+            <PreviewPanel
+              icon={<Sparkles size={16} />}
+              title="Writing help"
+              detail="A nudge when you need it"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BenefitCard({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+  return (
+    <div className="rounded-[28px] border border-slate-100 bg-white p-6 shadow-sm">
+      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+        {icon}
+      </div>
+      <h3 className="mt-5 text-xl font-bold text-slate-900">{title}</h3>
+      <p className="mt-3 text-sm leading-relaxed text-slate-500">
         {description}
       </p>
+    </div>
+  );
+}
+
+function PreviewPill({ icon, label }: { icon: ReactNode; label: string }) {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600">
+      {icon}
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function PreviewSidebarItem({ active, label }: { active?: boolean; label: string }) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl px-2 py-2 text-sm font-medium",
+        active ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+      )}
+    >
+      {label}
+    </div>
+  );
+}
+
+function PreviewLine({ width }: { width: string }) {
+  return <div className={cn("h-2.5 rounded-full bg-slate-100", width)} />;
+}
+
+function PreviewPanel({ icon, title, detail }: { icon: ReactNode; title: string; detail: string }) {
+  return (
+    <div className="min-w-0 rounded-2xl bg-slate-50 px-3 py-3">
+      <div className="flex items-center gap-2 text-slate-700">
+        {icon}
+        <span className="truncate text-sm font-bold">{title}</span>
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-slate-500">{detail}</p>
     </div>
   );
 }

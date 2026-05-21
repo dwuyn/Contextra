@@ -502,6 +502,17 @@ export async function getProject(projectId: string, userId: string) {
         orderBy: [{ permissionLevel: "desc" }, { createdAt: "asc" }],
       },
       characters: true,
+      canonProposals: {
+        where: { status: "pending" },
+        orderBy: { createdAt: "desc" },
+        take: 40,
+      },
+      storyArcs: {
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      },
+      outlineBeats: {
+        orderBy: [{ chapterIndex: "asc" }, { createdAt: "asc" }],
+      },
       chapters: {
         select: {
           id: true,
@@ -517,9 +528,9 @@ export async function getProject(projectId: string, userId: string) {
         orderBy: { index: "asc" },
       },
       branches: true,
-      usage: { orderBy: { createdAt: "desc" } },
-      versions: { orderBy: { createdAt: "desc" } },
-      chatMessages: { take: 60, orderBy: { createdAt: "asc" } },
+      usage: { take: 100, orderBy: { createdAt: "desc" } },
+      versions: { take: 100, orderBy: { createdAt: "desc" } },
+      chatMessages: { take: 60, orderBy: { createdAt: "desc" } },
       invites: {
         where: { status: "pending" },
         orderBy: { createdAt: "desc" },
@@ -610,6 +621,22 @@ export async function getProject(projectId: string, userId: string) {
       };
     }),
     characters: project.characters,
+    canonProposals: project.canonProposals.map((proposal) => ({
+      ...proposal,
+      status: proposal.status as "pending" | "approved" | "rejected",
+      createdAt: proposal.createdAt.toISOString(),
+      reviewedAt: proposal.reviewedAt ? proposal.reviewedAt.toISOString() : null,
+    })),
+    storyArcs: project.storyArcs.map((arc) => ({
+      ...arc,
+      createdAt: arc.createdAt.toISOString(),
+      updatedAt: arc.updatedAt.toISOString(),
+    })),
+    outlineBeats: project.outlineBeats.map((beat) => ({
+      ...beat,
+      createdAt: beat.createdAt.toISOString(),
+      updatedAt: beat.updatedAt.toISOString(),
+    })),
     chapters: project.chapters,
     branches: project.branches,
     contextMemory: {
@@ -624,7 +651,7 @@ export async function getProject(projectId: string, userId: string) {
     versions: project.versions.map((v) => ({ id: v.id, label: v.label, createdAt: v.createdAt.toISOString() })),
     viewerAccess,
     aiMessages: orderProjectAiMessagesAscending(project.aiMessages).map(toProjectAiMessage),
-    chatMessages: project.chatMessages.map((message) => ({
+    chatMessages: [...project.chatMessages].reverse().map((message) => ({
       ...message,
       createdAt: message.createdAt.toISOString(),
     })),
@@ -718,6 +745,8 @@ export async function createChapter(projectId: string, userId: string, input: Cr
   const continuity = hasMeaningfulChapterContent(chapter.content)
     ? await refreshChapterContinuityStatus({
         chapterId: chapter.id,
+        projectId,
+        branchId: chapter.branchId,
         title: chapter.title,
         content: chapter.content,
       })
@@ -739,7 +768,7 @@ export async function updateChapter(
 
   const existing = await prisma.chapter.findFirst({
     where: { id: chapterId, projectId },
-    select: { id: true, title: true, summary: true, content: true },
+    select: { id: true, branchId: true, title: true, summary: true, content: true },
   });
   if (!existing) throw new Error("Chapter not found");
 
@@ -791,6 +820,8 @@ export async function updateChapter(
   const continuity = hasStoryContentChange
     ? await refreshChapterContinuityStatus({
         chapterId: existing.id,
+        projectId,
+        branchId: existing.branchId,
         title: nextTitle,
         content: nextContent,
       })
@@ -1447,11 +1478,12 @@ export async function sendProjectChat(projectId: string, userId: string, input: 
     },
   });
 
-  return prisma.chatMessage.findMany({
+  const messages = await prisma.chatMessage.findMany({
     where: { projectId },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     take: 60,
   });
+  return messages.reverse();
 }
 
 export async function createProjectAiMessage(input: {
@@ -1642,7 +1674,7 @@ export async function restoreVersion(
   // Snapshot the current content first
   const current = await prisma.chapter.findFirst({
     where: { id: chapterId, projectId },
-    select: { id: true, title: true, content: true },
+    select: { id: true, branchId: true, title: true, content: true },
   });
   if (!current) throw new Error("Chapter not found");
   if (current.content && current.content !== version.content) {
@@ -1657,6 +1689,8 @@ export async function restoreVersion(
 
   const continuity = await refreshChapterContinuityStatus({
     chapterId: current.id,
+    projectId,
+    branchId: current.branchId,
     title: current.title,
     content: version.content,
   });

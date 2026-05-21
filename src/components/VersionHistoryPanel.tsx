@@ -55,7 +55,7 @@ export function VersionHistoryPanel({ onClose }: { onClose: () => void }) {
     try {
       const result = await restoreVersion(projectId, selectedChapterId, versionId);
       setChapterContent(selectedChapterId, result.content ?? "");
-      if (result.continuity.fresh) {
+      if (result.continuity.fresh || result.continuity.status === "queued") {
         onClose();
       } else {
         setRestoreWarning(result.continuity.warning);

@@ -1,4 +1,5 @@
 import { embed } from "ai";
+import { Prisma } from "@prisma/client";
 import { customAi } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 
@@ -9,7 +10,7 @@ function stripHtmlToPlainText(content: string) {
   return content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function toPgVectorLiteral(values: number[]) {
+export function toPgVectorLiteral(values: number[]) {
   return `[${values.join(",")}]`;
 }
 
@@ -73,9 +74,18 @@ export async function processAndSaveChapterChunks(chapterId: string, content: st
 /**
  * Searches the vector database for chunks semantically similar to the query.
  */
-export async function semanticSearch(query: string, projectId: string, branchId: string, limit: number = 3) {
+export async function semanticSearch(
+  query: string,
+  projectId: string,
+  branchId: string,
+  limit: number = 3,
+  chapterIds?: string[],
+) {
   const queryEmbedding = await generateEmbedding(query);
   const queryVector = toPgVectorLiteral(queryEmbedding);
+  const chapterFilter = chapterIds?.length
+    ? Prisma.sql`c."id" IN (${Prisma.join(chapterIds)})`
+    : Prisma.sql`c."branchId" = ${branchId}`;
   
   // Use raw SQL for nearest neighbor search using the <-> operator (cosine distance)
   // We join with Chapter to ensure we only retrieve chunks from the current project/branch context.
@@ -86,7 +96,7 @@ export async function semanticSearch(query: string, projectId: string, branchId:
       sc.vector <-> ${queryVector}::vector as distance
     FROM "SceneChunk" sc
     JOIN "Chapter" c ON sc."chapterId" = c.id
-    WHERE c."projectId" = ${projectId} AND c."branchId" = ${branchId}
+    WHERE c."projectId" = ${projectId} AND ${chapterFilter}
     ORDER BY distance ASC
     LIMIT ${limit}
   `;

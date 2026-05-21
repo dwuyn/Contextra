@@ -61,6 +61,10 @@ export const ProjectOutlineSchema = z.object({
   acts: z.array(OutlineActSchema).default([]),
 });
 
+export const LongOutlineRequestSchema = z.object({
+  targetChapterCount: z.number().int().min(20).max(1000).default(200),
+});
+
 export const GeneratedOutlineChapterSchema = z.object({
   title: z.string().trim().min(1).max(200),
   summary: z.string().max(5000).default(""),
@@ -74,6 +78,25 @@ export const GeneratedOutlineActSchema = z.object({
 
 export const GeneratedOutlineSchema = z.object({
   acts: z.array(GeneratedOutlineActSchema).min(1),
+});
+
+export const GeneratedLongOutlineBeatSchema = z.object({
+  chapterIndex: z.number().int().min(1),
+  title: z.string().trim().min(1).max(200),
+  summary: z.string().max(5000).default(""),
+  focusEntities: z.array(z.string()).default([]),
+});
+
+export const GeneratedLongOutlineArcSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  summary: z.string().max(5000).default(""),
+  startChapterIndex: z.number().int().min(1),
+  endChapterIndex: z.number().int().min(1),
+  beats: z.array(GeneratedLongOutlineBeatSchema).default([]),
+});
+
+export const GeneratedLongOutlineSchema = z.object({
+  arcs: z.array(GeneratedLongOutlineArcSchema).min(1),
 });
 
 export const UpdateContextSchema = z.object({
