@@ -6,9 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { BookOpen } from "lucide-react";
 
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Unable to sign in. Please try again.";
-}
+const UNEXPECTED_LOGIN_MESSAGE = "Unable to sign in. Please try again.";
 
 export function LoginView() {
   const [error, setError] = useState("");
@@ -16,15 +14,21 @@ export function LoginView() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setError("");
     const formData = new FormData(e.currentTarget);
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
     try {
-      await login(email, password);
+      const result = await login(email, password);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+
       router.push("/");
-    } catch (err) {
-      setError(getErrorMessage(err));
+    } catch {
+      setError(UNEXPECTED_LOGIN_MESSAGE);
     }
   };
 

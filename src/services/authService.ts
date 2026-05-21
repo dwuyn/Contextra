@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import * as peopleService from "./peopleService";
 import * as friendsService from "./friendsService";
 
+export const INVALID_LOGIN_MESSAGE = "Invalid email or password";
+
 export async function register(name: string, email: string, password: string) {
   const normalizedEmail = email.trim().toLowerCase();
   const existing = await prisma.user.findUnique({
@@ -33,7 +35,7 @@ export async function login(email: string, password: string) {
   });
 
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
-    throw new Error("Invalid email or password");
+    throw new Error(INVALID_LOGIN_MESSAGE);
   }
 
   return createSession(user);
