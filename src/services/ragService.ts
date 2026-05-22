@@ -1,10 +1,11 @@
 import { embed } from "ai";
 import { Prisma } from "@prisma/client";
-import { customAi } from "@/lib/ai";
+import { embeddingModel } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 
 const CHUNK_SIZE = 500;
 const OVERLAP = 50;
+const EMBEDDING_DIMENSIONS = 768;
 
 function stripHtmlToPlainText(content: string) {
   return content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -35,12 +36,24 @@ function chunkText(text: string, maxWords: number = CHUNK_SIZE, overlapWords: nu
 }
 
 /**
- * Generates an embedding for a piece of text using the local Ollama instance via Vercel AI SDK.
+ * Generates an embedding for a piece of text using Google Cloud Vertex AI Gemini embeddings.
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(
+  text: string,
+  taskType?: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY",
+): Promise<number[]> {
   const { embedding } = await embed({
-    model: customAi.embedding("nomic-embed-text"),
+    model: embeddingModel(),
     value: text,
+    ...(taskType
+      ? {
+          providerOptions: {
+            vertex: {
+              taskType: taskType === "RETRIEVAL_DOCUMENT" ? "RETRIEVAL_DOCUMENT" : "RETRIEVAL_QUERY",
+            },
+          },
+        }
+      : {}),
   });
   return embedding;
 }
@@ -49,26 +62,39 @@ export async function generateEmbedding(text: string): Promise<number[]> {
  * Chunks a chapter's content, generates embeddings for each chunk, and saves them to the database.
  */
 export async function processAndSaveChapterChunks(chapterId: string, content: string) {
-  // Clear existing chunks for this chapter
-  await prisma.sceneChunk.deleteMany({ where: { chapterId } });
-
   const cleanContent = stripHtmlToPlainText(content);
-  if (!cleanContent) return;
+  if (!cleanContent) {
+    await prisma.$transaction(async tx => {
+      await tx.sceneChunk.deleteMany({ where: { chapterId } });
+    });
+    return;
+  }
 
   const chunks = chunkText(cleanContent);
+  const embeddedChunks: Array<{ chunkContent: string; vectorLiteral: string; index: number }> = [];
 
   for (let i = 0; i < chunks.length; i++) {
     const chunkContent = chunks[i];
-    const embedding = await generateEmbedding(chunkContent);
-    const vectorLiteral = toPgVectorLiteral(embedding);
-    
-    // Store in Prisma using raw SQL because Prisma doesn't natively support creating vectors with the ORM client methods yet,
-    // though the Unsupported("vector") type is there, inserting usually requires string casting.
-    await prisma.$executeRaw`
-      INSERT INTO "SceneChunk" ("id", "chapterId", "content", "vector", "index", "createdAt")
-      VALUES (gen_random_uuid(), ${chapterId}, ${chunkContent}, ${vectorLiteral}::vector, ${i}, NOW())
-    `;
+    const embedding = await generateEmbedding(chunkContent, "RETRIEVAL_DOCUMENT");
+    if (embedding.length !== EMBEDDING_DIMENSIONS) {
+      throw new Error(`Expected 768 dimensions, got ${embedding.length}`);
+    }
+
+    embeddedChunks.push({ chunkContent, vectorLiteral: toPgVectorLiteral(embedding), index: i });
   }
+
+  await prisma.$transaction(async tx => {
+    await tx.sceneChunk.deleteMany({ where: { chapterId } });
+
+    for (const { chunkContent, vectorLiteral, index } of embeddedChunks) {
+      // Store in Prisma using raw SQL because Prisma doesn't natively support creating vectors with the ORM client methods yet,
+      // though the Unsupported("vector") type is there, inserting usually requires string casting.
+      await tx.$executeRaw`
+      INSERT INTO "SceneChunk" ("id", "chapterId", "content", "vector", "index", "createdAt")
+      VALUES (gen_random_uuid(), ${chapterId}, ${chunkContent}, ${vectorLiteral}::vector, ${index}, NOW())
+    `;
+    }
+  });
 }
 
 /**
@@ -81,7 +107,7 @@ export async function semanticSearch(
   limit: number = 3,
   chapterIds?: string[],
 ) {
-  const queryEmbedding = await generateEmbedding(query);
+  const queryEmbedding = await generateEmbedding(query, "RETRIEVAL_QUERY");
   const queryVector = toPgVectorLiteral(queryEmbedding);
   const chapterFilter = chapterIds?.length
     ? Prisma.sql`c."id" IN (${Prisma.join(chapterIds)})`

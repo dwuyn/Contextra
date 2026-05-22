@@ -4,31 +4,40 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  --font-manrope: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-literata: Georgia, "Times New Roman", serif;
-  --font-grotesk: "Trebuchet MS", ui-sans-serif, system-ui, sans-serif;
+  --font-be-vietnam-pro: "Be Vietnam Pro", "Noto Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-inter: "Inter Variable", "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-manrope: "Manrope Variable", "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-noto-sans: "Noto Sans Variable", "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-ibm-plex-sans: "IBM Plex Sans Variable", "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-source-serif-4: "Source Serif 4 Variable", "Noto Serif Variable", ui-serif, Georgia, serif;
+  --font-noto-serif: "Noto Serif Variable", "Source Serif 4 Variable", ui-serif, Georgia, serif;
+  --font-space-grotesk: "Space Grotesk Variable", "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --font-family: var(--font-manrope);
+  --font-family: var(--font-be-vietnam-pro);
 }
 
 /* Themes */
-.theme-notion { --background: #f4f4f5; --foreground: #171717; }
-.theme-mist { --background: #f0f9ff; --foreground: #0c4a6e; }
-.theme-forest { --background: #f0fdf4; --foreground: #064e3b; }
-.theme-cream { --background: #fffbeb; --foreground: #451a03; }
-.theme-graphite { --background: #f8fafc; --foreground: #0f172a; }
-.theme-rose { --background: #fff1f2; --foreground: #4c0519; }
-.theme-dark { --background: #0f172a; --foreground: #e2e8f0; }
+.theme-notion { --background: #f7f7f5; --foreground: #171717; color-scheme: light; }
+.theme-mist { --background: #eaf6fb; --foreground: #113442; color-scheme: light; }
+.theme-forest { --background: #eaf8ef; --foreground: #10291c; color-scheme: light; }
+.theme-cream { --background: #fff8e6; --foreground: #3b2b12; color-scheme: light; }
+.theme-graphite { --background: #f3f5f7; --foreground: #111827; color-scheme: light; }
+.theme-rose { --background: #fff1f3; --foreground: #3b1220; color-scheme: light; }
+.theme-midnight,
+.theme-dark { --background: #f7f7f5; --foreground: #171717; color-scheme: light; }
+.theme-sage { --background: #eef7f2; --foreground: #153227; color-scheme: light; }
+.theme-harbor { --background: #e9f7f8; --foreground: #11363d; color-scheme: light; }
+.theme-plum { --background: #f7edf8; --foreground: #2f183d; color-scheme: light; }
 
 /* Fonts */
-.font-notion-ui { --font-family: ui-sans-serif, system-ui, sans-serif; }
+.font-be-vietnam-pro { --font-family: var(--font-be-vietnam-pro); }
+.font-inter { --font-family: var(--font-inter); }
 .font-manrope { --font-family: var(--font-manrope); }
-.font-literata { --font-family: var(--font-literata), serif; }
-.font-space-grotesk { --font-family: var(--font-grotesk), sans-serif; }
-.font-georgia { --font-family: Georgia, serif; }
-.font-verdana { --font-family: Verdana, sans-serif; }
-.font-trebuchet-ms { --font-family: "Trebuchet MS", sans-serif; }
-.font-courier-new { --font-family: "Courier New", monospace; }
+.font-noto-sans { --font-family: var(--font-noto-sans); }
+.font-ibm-plex-sans { --font-family: var(--font-ibm-plex-sans); }
+.font-source-serif-4 { --font-family: var(--font-source-serif-4); }
+.font-noto-serif { --font-family: var(--font-noto-serif); }
+.font-space-grotesk { --font-family: var(--font-space-grotesk); }
 
 body {
   color: var(--foreground);

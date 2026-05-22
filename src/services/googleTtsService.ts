@@ -73,8 +73,6 @@ function getConfig() {
     return cachedConfig;
   }
 
-  requireEnv("GOOGLE_APPLICATION_CREDENTIALS");
-
   cachedConfig = {
     bucketName: requireEnv("GOOGLE_TTS_CACHE_BUCKET"),
     curatedVoices: {

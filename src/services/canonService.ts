@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 import type { Prisma } from "@prisma/client";
-import { customAi } from "@/lib/ai";
+import { chatModel } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 import { generateEmbedding, toPgVectorLiteral } from "@/services/ragService";
 
@@ -209,7 +209,7 @@ Return JSON with:
 `.trim();
 
   const { text } = await generateText({
-    model: customAi.chat("gemma4:31b-cloud"),
+    model: chatModel(),
     prompt,
     temperature: 0.2,
   });

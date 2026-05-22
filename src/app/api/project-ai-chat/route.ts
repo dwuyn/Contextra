@@ -1,5 +1,5 @@
 import { streamText } from "ai";
-import { customAi } from "@/lib/ai";
+import { chatModel } from "@/lib/ai";
 import { getSession } from "@/lib/auth";
 import { ProjectAiChatRequestSchema } from "@/lib/validations";
 import { composeContext } from "@/services/contextService";
@@ -12,6 +12,7 @@ import {
 } from "@/services/projectService";
 import { buildChatSystemPrompt } from "@/services/writingPromptService";
 
+export const runtime = "nodejs";
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
   ]);
 
   const result = streamText({
-    model: customAi.chat("gemma4:31b-cloud"),
+    model: chatModel(),
     system: buildChatSystemPrompt(context, content),
     messages: messages.map(({ role, content: messageContent }) => ({
       role,

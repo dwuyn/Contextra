@@ -1,11 +1,18 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import {
+  DEFAULT_FONT,
+  DEFAULT_THEME,
+  normalizeFont,
+  normalizeTheme,
+  type FontType,
+  type ThemeType,
+} from "@/lib/appearance";
 import type { ReaderLanguage, ReaderLanguageMode } from "@/lib/voiceReader";
 
-export type ThemeType = "notion" | "mist" | "forest" | "cream" | "graphite" | "rose" | "dark";
-export type FontType = "notion-ui" | "manrope" | "literata" | "space-grotesk" | "georgia" | "verdana" | "trebuchet-ms" | "courier-new";
+export type { FontType, ThemeType };
 export type { ReaderLanguage, ReaderLanguageMode };
-const PREFERENCES_STORE_VERSION = 3;
+const PREFERENCES_STORE_VERSION = 5;
 
 interface PreferencesState {
   theme: ThemeType;
@@ -22,8 +29,8 @@ interface PreferencesState {
 }
 
 type PersistedPreferencesState = {
-  theme?: ThemeType;
-  font?: FontType;
+  theme?: unknown;
+  font?: unknown;
   readerLanguageMode?: ReaderLanguageMode;
   readerRate?: number;
   readerVoiceEn?: string;
@@ -33,8 +40,8 @@ type PersistedPreferencesState = {
 export const usePreferencesStore = create<PreferencesState>()(
   persist(
     (set) => ({
-      theme: "notion",
-      font: "notion-ui",
+      theme: DEFAULT_THEME,
+      font: DEFAULT_FONT,
       readerLanguageMode: "auto",
       readerRate: 1,
       readerVoiceEn: "",
@@ -55,12 +62,16 @@ export const usePreferencesStore = create<PreferencesState>()(
             ? { ...(persistedState as PersistedPreferencesState) }
             : {};
 
-        if (version < PREFERENCES_STORE_VERSION) {
+        if (version < 3) {
           state.readerVoiceEn = "";
           state.readerVoiceVi = "";
         }
 
-        return state;
+        return {
+          ...state,
+          theme: normalizeTheme(state.theme),
+          font: normalizeFont(state.font),
+        };
       },
     }
   )

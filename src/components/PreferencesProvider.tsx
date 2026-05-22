@@ -20,6 +20,8 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     // Add current classes
     root.classList.add(`theme-${theme}`);
     root.classList.add(`font-${font}`);
+    root.dataset.theme = theme;
+    root.dataset.font = font;
   }, [theme, font]);
 
   return <>{children}</>;

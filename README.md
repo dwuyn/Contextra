@@ -20,7 +20,7 @@ Contextra is a collaborative, AI-assisted writing workspace for long-form fictio
 - Tailwind CSS 4
 - Prisma 7 with PostgreSQL
 - `pgvector` for semantic retrieval
-- Vercel AI SDK with an OpenAI-compatible API endpoint
+- Vercel AI SDK with Google Cloud Vertex AI (`gemini-2.5-flash` for chat, `gemini-embedding-001` for embeddings)
 - Zustand for client state
 - Tiptap for the editor
 
@@ -41,7 +41,7 @@ This logic lives primarily in `src/services/contextService.ts`, `src/services/me
 
 - Node.js 20+
 - PostgreSQL 16+ with the `vector` extension available
-- An OpenAI-compatible chat + embedding endpoint reachable from the app
+- Google Cloud project with Vertex AI API enabled
 - Optional: Redis if you want distributed realtime events
 
 ### Setup
@@ -66,7 +66,15 @@ This logic lives primarily in `src/services/contextService.ts`, `src/services/me
    npx prisma migrate dev
    ```
 
-5. Start the dev server:
+5. Configure your Google Cloud project and location in `.env`.
+
+6. After deploying the AI provider migration, re-embed all existing vectors:
+
+   ```bash
+   npm run reembed:ai
+   ```
+
+7. Start the dev server:
 
    ```bash
    npm run dev
@@ -114,7 +122,7 @@ If port `3000` is already in use on your machine, set `APP_PORT` in `.env` to an
 
 ### Notes
 
-- `OPENAI_BASE_URL` must be reachable from inside the container. If your AI service runs on the host machine, `localhost` from inside the container will not reach it.
+- Google Cloud auth works automatically via ADC when deployed on Google Cloud. For local Docker development, mount your service account key and set `GOOGLE_APPLICATION_CREDENTIALS` to the in-container path.
 - Google TTS remains optional. If you want voice-reader features in Docker, mount the service-account key into the app container and set `GOOGLE_APPLICATION_CREDENTIALS` to the in-container path.
 
 ## Project structure

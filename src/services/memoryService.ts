@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import { customAi } from "@/lib/ai";
+import { chatModel } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 
 function stripReasoning(text: string) {
@@ -39,7 +39,7 @@ Return ONLY valid JSON in the following format:
 `.trim();
 
   const { text } = await generateText({
-    model: customAi.chat("gemma4:31b-cloud"),
+    model: chatModel(),
     prompt,
     temperature: 0.3,
   });

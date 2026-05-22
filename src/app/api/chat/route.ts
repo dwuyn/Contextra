@@ -1,11 +1,12 @@
 import { streamText } from 'ai';
-import { customAi } from '@/lib/ai';
+import { chatModel } from '@/lib/ai';
 import { getSession } from '@/lib/auth';
 import { composeContext } from '@/services/contextService';
 import { semanticSearch } from '@/services/ragService';
 import { requireBranchInProject, requireProjectPermission } from '@/services/projectService';
 import { buildChatSystemPrompt } from '@/services/writingPromptService';
 
+export const runtime = "nodejs";
 export const maxDuration = 300;
 
 type ChatMessage = {
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
   const context = await composeContext(projectId, branchId, lastMessage, semanticSearch);
 
   const result = streamText({
-    model: customAi.chat("gemma4:31b-cloud"),
+    model: chatModel(),
     system: buildChatSystemPrompt(context, lastMessage),
     messages,
   });

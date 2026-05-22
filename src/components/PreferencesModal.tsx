@@ -4,7 +4,8 @@ import Image from "next/image";
 import { useState } from "react";
 import { User, Palette, Camera, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { usePreferencesStore, ThemeType, FontType } from "@/store/usePreferencesStore";
+import { FONT_OPTIONS, THEME_OPTIONS } from "@/lib/appearance";
+import { usePreferencesStore } from "@/store/usePreferencesStore";
 import { updateProfile, changePassword, logout } from "@/actions/auth";
 import { useRouter } from "next/navigation";
 
@@ -18,27 +19,6 @@ interface PreferencesModalProps {
     dob?: string;
   };
 }
-
-const THEMES: { id: ThemeType; name: string; color: string; bgColor: string }[] = [
-  { id: "notion", name: "Notion", color: "bg-blue-600", bgColor: "bg-[#f4f4f5]" },
-  { id: "mist", name: "Mist", color: "bg-cyan-500", bgColor: "bg-[#f0f9ff]" },
-  { id: "forest", name: "Forest", color: "bg-emerald-700", bgColor: "bg-[#f0fdf4]" },
-  { id: "cream", name: "Cream", color: "bg-orange-700", bgColor: "bg-[#fffbeb]" },
-  { id: "graphite", name: "Graphite", color: "bg-slate-700", bgColor: "bg-[#f8fafc]" },
-  { id: "rose", name: "Rose", color: "bg-rose-500", bgColor: "bg-[#fff1f2]" },
-  { id: "dark", name: "Dark", color: "bg-slate-900", bgColor: "bg-[#0f172a]" },
-];
-
-const FONTS: { id: FontType; name: string }[] = [
-  { id: "notion-ui", name: "Notion UI" },
-  { id: "manrope", name: "Manrope" },
-  { id: "literata", name: "Literata" },
-  { id: "space-grotesk", name: "Space Grotesk" },
-  { id: "georgia", name: "Georgia" },
-  { id: "verdana", name: "Verdana" },
-  { id: "trebuchet-ms", name: "Trebuchet MS" },
-  { id: "courier-new", name: "Courier New" },
-];
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -155,21 +135,30 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
                 <section>
                   <h3 className="text-lg font-bold text-slate-900 mb-6">Theme</h3>
                   <div className="grid grid-cols-2 gap-4">
-                    {THEMES.map((t) => (
+                    {THEME_OPTIONS.map((t) => (
                       <button
                         key={t.id}
                         onClick={() => setTheme(t.id)}
                         className={cn(
-                          "flex flex-col items-start p-6 rounded-[24px] border-2 transition-all text-left",
-                          theme === t.id ? "border-indigo-600 shadow-sm" : "border-slate-100 hover:border-slate-200",
-                          t.bgColor
+                          "flex min-h-28 flex-col items-start rounded-2xl border-2 p-6 text-left transition-all",
+                          theme === t.id ? "shadow-sm" : "hover:shadow-sm"
                         )}
+                        style={{
+                          backgroundColor: t.previewBg,
+                          borderColor: theme === t.id ? t.previewAccent : "rgba(148, 163, 184, 0.26)",
+                          color: t.previewText,
+                        }}
                       >
                         <div className="flex gap-2 mb-4">
-                          <div className={cn("w-4 h-4 rounded-full", t.color)} />
-                          <div className="w-4 h-4 rounded-full bg-white border border-slate-200" />
+                          {t.swatches.map((swatch) => (
+                            <div
+                              key={swatch}
+                              className="h-4 w-4 rounded-full border border-black/10"
+                              style={{ backgroundColor: swatch }}
+                            />
+                          ))}
                         </div>
-                        <span className="font-bold text-slate-900">{t.name}</span>
+                        <span className="font-bold">{t.name}</span>
                       </button>
                     ))}
                   </div>
@@ -178,16 +167,17 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
                 <section>
                   <h3 className="text-lg font-bold text-slate-900 mb-6">Font</h3>
                   <div className="grid grid-cols-2 gap-3">
-                    {FONTS.map((f) => (
+                    {FONT_OPTIONS.map((f) => (
                       <button
                         key={f.id}
                         onClick={() => setFont(f.id)}
                         className={cn(
-                          "px-6 py-4 rounded-2xl border-2 text-left font-bold transition-all",
-                          font === f.id ? "border-slate-900 bg-white" : "border-slate-100 hover:border-slate-200 text-slate-600"
+                          "rounded-2xl border-2 px-6 py-4 text-left transition-all",
+                          font === f.id ? "border-slate-900 bg-white text-slate-900" : "border-slate-100 text-slate-600 hover:border-slate-200"
                         )}
+                        style={{ fontFamily: f.stack }}
                       >
-                        {f.name}
+                        <span className="block font-bold">{f.name}</span>
                       </button>
                     ))}
                   </div>

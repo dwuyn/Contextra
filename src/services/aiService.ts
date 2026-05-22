@@ -1,4 +1,4 @@
-import { customAi } from "@/lib/ai";
+import { chatModel } from "@/lib/ai";
 import * as z from "@/lib/validations";
 import { generateText } from "ai";
 import type { ModelMessage } from "ai";
@@ -41,8 +41,7 @@ export async function generateChapter(input: { title: string; instructions: stri
   const prompt = buildChapterGenerationPrompt(input, context);
 
   const { text } = await generateText({
-    model: customAi.chat("gemma4:31b-cloud"),
- // The model name depends on the custom endpoint, often ignored or mapped
+    model: chatModel(),
     prompt,
     temperature: 0.8,
   });
@@ -67,7 +66,7 @@ export async function generateChapter(input: { title: string; instructions: stri
 
 export async function rewriteSelection(input: { selection: string; instructions: string }, context: PromptContext) {
   const { text } = await generateText({
-    model: customAi.chat("gemma4:31b-cloud"),
+    model: chatModel(),
     prompt: buildRewritePrompt(input, context),
   });
 
@@ -76,7 +75,7 @@ export async function rewriteSelection(input: { selection: string; instructions:
 
 export async function describeSelection(input: { selection: string; sense: string }, context: PromptContext) {
   const { text } = await generateText({
-    model: customAi.chat("gemma4:31b-cloud"),
+    model: chatModel(),
     prompt: buildDescribePrompt(input, context),
   });
 
@@ -85,7 +84,7 @@ export async function describeSelection(input: { selection: string; sense: strin
 
 export async function generateSynopsisFromStoryBible(context: StoryBibleGenerationContext) {
   const { text } = await generateText({
-    model: customAi.chat("gemma4:31b-cloud"),
+    model: chatModel(),
     prompt: buildSynopsisPrompt(context),
     temperature: 0.6,
   });
@@ -100,7 +99,7 @@ export async function generateSynopsisFromStoryBible(context: StoryBibleGenerati
 
 export async function generateOutlineFromStoryBible(context: StoryBibleGenerationContext) {
   const { text } = await generateText({
-    model: customAi.chat("gemma4:31b-cloud"),
+    model: chatModel(),
     prompt: buildOutlinePrompt(context),
     temperature: 0.7,
   });
@@ -152,7 +151,7 @@ async function generateLongOutlineSegment(
   previousArcDigest: string,
 ) {
   const { text } = await generateText({
-    model: customAi.chat("gemma4:31b-cloud"),
+    model: chatModel(),
     prompt: buildLongOutlinePrompt(context, targetChapterCount, segmentStart, segmentEnd, previousArcDigest),
     temperature: 0.6,
   });
@@ -190,7 +189,7 @@ function normalizeLongOutlineSegment(
 
 export async function chatWithAi(messages: ModelMessage[], context: PromptContext) {
   const { text } = await generateText({
-    model: customAi.chat("gemma4:31b-cloud"),
+    model: chatModel(),
     system: buildChatSystemPrompt(context, extractLatestUserText(messages)),
     messages,
   });
