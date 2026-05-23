@@ -1362,7 +1362,7 @@ export function MainEditor({
         </button>
       </BubbleMenu>
 
-      <div className="flex-1 overflow-y-auto px-20 py-16 scroll-smooth">
+      <div className="flex-1 overflow-y-auto px-20 py-16 scroll-smooth bg-white">
         <div className="max-w-3xl mx-auto">
           <input
             ref={titleInputRef}

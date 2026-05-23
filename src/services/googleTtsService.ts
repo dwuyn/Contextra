@@ -9,6 +9,12 @@ import {
   type ReaderLanguage,
   type VoiceOption,
 } from "@/lib/voiceReader";
+import {
+  processSegmentForTTS,
+  normalizeText,
+  type PronunciationEntryData,
+} from "@/services/pronunciationService";
+import { prisma } from "@/lib/prisma";
 
 type GoogleTtsConfig = {
   bucketName: string;
@@ -41,7 +47,7 @@ function getStorageClient() {
   return cachedStorage;
 }
 
-function getTextToSpeechClient() {
+export function getTextToSpeechClient() {
   cachedTtsClient ??= new TextToSpeechClient(getGoogleClientOptions());
   return cachedTtsClient;
 }
@@ -108,6 +114,8 @@ function buildCacheObjectPath(input: {
   voiceId: string;
   rate: number;
   segmentText: string;
+  normalizerVersion?: string;
+  pronunciationProfileHash?: string;
 }) {
   const hash = createHash("sha256")
     .update(input.chapterId)
@@ -116,6 +124,8 @@ function buildCacheObjectPath(input: {
     .update(input.voiceId)
     .update(String(input.rate))
     .update(input.segmentText)
+    .update(input.normalizerVersion ?? "")
+    .update(input.pronunciationProfileHash ?? "")
     .digest("hex");
 
   return [
@@ -142,6 +152,79 @@ export function isConfiguredVoice(language: ReaderLanguage, voiceId: string) {
   return listCuratedVoices(language).some((voice) => voice.id === voiceId);
 }
 
+async function loadPronunciationEntries(
+  projectId: string,
+  language: string,
+): Promise<PronunciationEntryData[]> {
+  const entries = await prisma.pronunciationEntry.findMany({
+    where: { projectId, language, enabled: true },
+    orderBy: [{ priority: "desc" }, { term: "asc" }],
+    select: {
+      term: true,
+      replacement: true,
+      renderMode: true,
+      matchMode: true,
+      caseSensitive: true,
+      priority: true,
+      enabled: true,
+    },
+  });
+  // Prisma widens enum fields to string; cast is safe given schema constraints
+  return entries as PronunciationEntryData[];
+}
+
+export async function synthesizeWithSsml(
+  client: TextToSpeechClient,
+  ssml: string,
+  language: ReaderLanguage,
+  voiceId: string,
+  rate: number,
+) {
+  const [response] = await client.synthesizeSpeech({
+    input: { ssml },
+    voice: {
+      languageCode: language,
+      name: voiceId,
+    },
+    audioConfig: {
+      audioEncoding: protos.google.cloud.texttospeech.v1.AudioEncoding.MP3,
+      speakingRate: rate,
+    },
+  });
+  return toAudioBuffer(response.audioContent);
+}
+
+export async function synthesizeWithText(
+  client: TextToSpeechClient,
+  text: string,
+  language: ReaderLanguage,
+  voiceId: string,
+  rate: number,
+) {
+  const [response] = await client.synthesizeSpeech({
+    input: { text },
+    voice: {
+      languageCode: language,
+      name: voiceId,
+    },
+    audioConfig: {
+      audioEncoding: protos.google.cloud.texttospeech.v1.AudioEncoding.MP3,
+      speakingRate: rate,
+    },
+  });
+  return toAudioBuffer(response.audioContent);
+}
+
+async function uploadToCache(file: ReturnType<ReturnType<Storage["bucket"]>["file"]>, audioBuffer: Buffer) {
+  await file.save(audioBuffer, {
+    resumable: false,
+    contentType: "audio/mpeg",
+    metadata: {
+      cacheControl: "private, max-age=31536000, immutable",
+    },
+  });
+}
+
 export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
   if (!isReaderLanguage(input.language)) {
     throw new Error("Unsupported reader language.");
@@ -162,6 +245,89 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
     throw new Error("Segment not found.");
   }
 
+  const client = getTextToSpeechClient();
+
+  // vi-VN: SSML path with pronunciation processing
+  if (input.language === "vi-VN") {
+    const entries = await loadPronunciationEntries(input.projectId, input.language);
+    const { ssml, pronunciationProfileHash } = processSegmentForTTS({
+      projectId: input.projectId,
+      text: segmentText,
+      entries,
+      language: input.language,
+    });
+
+    const cachePath = buildCacheObjectPath({
+      projectId: input.projectId,
+      chapterId: input.chapterId,
+      chapterUpdatedAt: input.chapterUpdatedAt,
+      language: input.language,
+      voiceId: input.voiceId,
+      rate: input.rate,
+      segmentText: ssml,
+      pronunciationProfileHash,
+    });
+
+    const file = getCachedBucket().file(cachePath);
+    const [exists] = await file.exists();
+    if (exists) {
+      const [audioBuffer] = await file.download();
+      return {
+        audioBuffer,
+        contentType: "audio/mpeg",
+        segmentCount: speechSegments.length,
+        cacheHit: true,
+      };
+    }
+
+    // Try SSML synthesis
+    try {
+      const audioBuffer = await synthesizeWithSsml(
+        client,
+        ssml,
+        input.language,
+        input.voiceId,
+        input.rate,
+      );
+
+      await uploadToCache(file, audioBuffer);
+
+      return {
+        audioBuffer,
+        contentType: "audio/mpeg",
+        segmentCount: speechSegments.length,
+        cacheHit: false,
+      };
+    } catch (error) {
+      // SSML failed — log and fallback to plain text
+      console.error("SSML synthesis failed, falling back to plain text:", {
+        projectId: input.projectId,
+        chapterId: input.chapterId,
+        voiceId: input.voiceId,
+        segmentIndex: input.segmentIndex,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      const normalizedText = normalizeText(segmentText);
+      const fallbackBuffer = await synthesizeWithText(
+        client,
+        normalizedText,
+        input.language,
+        input.voiceId,
+        input.rate,
+      );
+
+      // Do NOT cache fallback under SSML key
+      return {
+        audioBuffer: fallbackBuffer,
+        contentType: "audio/mpeg",
+        segmentCount: speechSegments.length,
+        cacheHit: false,
+      };
+    }
+  }
+
+  // en-US: preserve current behavior (plain text)
   const cachePath = buildCacheObjectPath({
     projectId: input.projectId,
     chapterId: input.chapterId,
@@ -184,7 +350,6 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
     };
   }
 
-  const client = getTextToSpeechClient();
   const [response] = await client.synthesizeSpeech({
     input: { text: segmentText },
     voice: {
@@ -199,13 +364,7 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
 
   const audioBuffer = toAudioBuffer(response.audioContent);
 
-  await file.save(audioBuffer, {
-    resumable: false,
-    contentType: "audio/mpeg",
-    metadata: {
-      cacheControl: "private, max-age=31536000, immutable",
-    },
-  });
+  await uploadToCache(file, audioBuffer);
 
   return {
     audioBuffer,

@@ -158,3 +158,31 @@ export const ProjectAiChatRequestSchema = z.object({
   branchId: z.string().min(1),
   content: z.string().trim().min(1),
 });
+
+export const CreatePronunciationEntrySchema = z.object({
+  projectId: z.string().uuid(),
+  language: z.enum(["en-US", "vi-VN"]),
+  term: z.string().min(1).max(200),
+  replacement: z.string().min(1).max(500),
+  renderMode: z.enum(["sub", "phoneme", "say_as", "plain"]),
+  matchMode: z.enum(["whole_word", "literal"]),
+  caseSensitive: z.boolean().optional().default(false),
+  priority: z.number().int().optional().default(0),
+  notes: z.string().max(1000).optional().default(""),
+});
+
+export const UpdatePronunciationEntrySchema = z.object({
+  id: z.string().uuid(),
+  term: z.string().min(1).max(200).optional(),
+  replacement: z.string().min(1).max(500).optional(),
+  renderMode: z.enum(["sub", "phoneme", "say_as", "plain"]).optional(),
+  matchMode: z.enum(["whole_word", "literal"]).optional(),
+  caseSensitive: z.boolean().optional(),
+  priority: z.number().int().optional(),
+  notes: z.string().max(1000).optional(),
+});
+
+export const ImportPronunciationSuggestionsSchema = z.object({
+  projectId: z.string().uuid(),
+  language: z.enum(["en-US", "vi-VN"]),
+});

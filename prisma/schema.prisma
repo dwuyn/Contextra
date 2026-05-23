@@ -74,6 +74,7 @@ model Project {
   invites         ProjectInvite[]
   presence        ProjectPresence[]
   commentThreads  CommentThread[]
+  pronunciationEntries PronunciationEntry[]
 }
 
 model Collaborator {
@@ -498,4 +499,26 @@ model ProjectAiMessage {
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt])
+}
+
+model PronunciationEntry {
+  id            String   @id @default(uuid())
+  projectId     String
+  language      String
+  term          String
+  replacement   String
+  renderMode    String
+  matchMode     String
+  caseSensitive Boolean  @default(false)
+  priority      Int      @default(0)
+  enabled       Boolean  @default(true)
+  source        String
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, language, term, matchMode])
+  @@index([projectId, language, enabled, priority])
 }
