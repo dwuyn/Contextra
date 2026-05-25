@@ -318,7 +318,6 @@ body {
   color: var(--color-text);
   background: var(--color-canvas);
   font-family: var(--font-family);
-  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* ===== Smooth theme toggle ===== */
@@ -382,6 +381,10 @@ body, body * {
 .editor-surface td {
   border: 1px solid var(--color-editor-table-border);
   padding: 0.5em 0.75em;
+  min-width: 120px;
+  min-height: 56px;
+  overflow: hidden;
+  vertical-align: top;
 }
 
 .editor-surface hr {
@@ -391,18 +394,41 @@ body, body * {
 }
 
 .editor-image-wrap {
+  width: min(100%, 420px);
+  min-width: 120px;
+  min-height: 110px;
   position: relative;
   resize: both;
   overflow: hidden;
   border-radius: 0.375rem;
+  margin: 1rem 0;
   background: var(--color-editor-bg);
 }
-.editor-image-wrap > img { display: block; }
+.editor-image-wrap img {
+  display: block;
+}
+
+.editor-table-wrap {
+  width: min(100%, 100%);
+  min-width: 360px;
+  min-height: 140px;
+  resize: both;
+  overflow: hidden;
+  border-radius: 0.375rem;
+  margin: 1rem 0;
+  background: var(--color-editor-bg);
+}
 
 /* Comment thread highlight */
 [data-comment-thread-id] {
   background-color: rgba(251, 191, 36, 0.3);
   border-radius: 2px;
+  scroll-margin-top: 8rem;
+}
+
+[data-comment-thread-active="true"] {
+  background-color: rgba(251, 191, 36, 0.45);
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.35);
 }
 
 /* AI-generated highlight */
