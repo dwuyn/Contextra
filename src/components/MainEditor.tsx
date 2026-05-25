@@ -1290,7 +1290,7 @@ export function MainEditor({
         </div>
       </div>
 
-      <div className="flex items-center gap-4 px-6 py-1.5 border-b border-slate-100 bg-[var(--background)]">
+      <div className="flex items-center gap-4 px-6 py-1.5 border-b border-slate-100 bg-white">
         <div className="flex items-center gap-1">
           <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} disabled={!canEdit}>
             <Bold size={16} />
