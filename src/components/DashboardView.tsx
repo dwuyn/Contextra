@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
+import { useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CreateProjectModal } from "./CreateProjectModal";
 import Link from "next/link";
@@ -92,6 +93,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
   const [hasRequestedSocialData, setHasRequestedSocialData] = useState(false);
   const [pendingProjectInvites, setPendingProjectInvites] = useState<PendingProjectInviteCard[]>(overview.pendingProjectInvites);
   const [inviteActionId, setInviteActionId] = useState<string | null>(null);
+  const t = useTranslations();
   const membershipKind = searchParams.get("membership");
   const membershipProjectName = searchParams.get("project");
   const [membershipBanner] = useState<MembershipBanner | null>(() => {
@@ -213,15 +215,15 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
         return (
           <>
             <header className="mb-12">
-              <p className="text-xs font-medium text-slate-400 mb-2">Workspace overview</p>
-              <h2 className="text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight">{greeting}, {firstName}</h2>
+              <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2">Workspace overview</p>
+              <h2 className="text-4xl lg:text-5xl font-extrabold text-[var(--color-text)] tracking-tight">{greeting}, {firstName}</h2>
             </header>
 
             {visibleMembershipBanner && (
               <section
                 role="alert"
                 aria-live="polite"
-                className="mb-8 flex items-start justify-between gap-4 rounded-[24px] border border-amber-200 bg-amber-50 px-5 py-4 text-amber-900"
+                className="mb-8 flex items-start justify-between gap-4 rounded-[24px] border border-[var(--color-accent-muted)] bg-[var(--color-accent-muted)] px-5 py-4 text-amber-900"
               >
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-700">Membership update</p>
@@ -245,17 +247,17 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
             {pendingProjectInvites.length > 0 && (
               <section className="mb-12">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Collaboration requests</h3>
-                  <p className="text-xs text-slate-400">{pendingProjectInvites.length} waiting for your response</p>
+                  <h3 className="text-sm font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">Collaboration requests</h3>
+                  <p className="text-xs text-[var(--color-text-muted)]">{pendingProjectInvites.length} waiting for your response</p>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {pendingProjectInvites.map((invite) => (
-                    <div key={invite.id} className="rounded-[28px] border border-slate-100 bg-white p-6 shadow-sm">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Invite from {invite.sender.name}</p>
-                      <h3 className="mt-3 text-xl font-bold text-slate-900">{invite.projectName}</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-slate-500">{invite.projectSummary || "No summary yet."}</p>
-                      <div className="mt-4 inline-flex rounded-full bg-slate-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    <div key={invite.id} className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Invite from {invite.sender.name}</p>
+                      <h3 className="mt-3 text-xl font-bold text-[var(--color-text)]">{invite.projectName}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">{invite.projectSummary || "No summary yet."}</p>
+                      <div className="mt-4 inline-flex rounded-full bg-[var(--color-canvas)] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
                         Permission level {invite.permissionLevel}
                       </div>
                       <div className="mt-5 flex gap-3">
@@ -263,7 +265,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
                           type="button"
                           onClick={() => void handleProjectInvite(invite.id, "accepted")}
                           disabled={inviteActionId === invite.id}
-                          className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="rounded-2xl bg-[var(--color-text)] px-4 py-2 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {inviteActionId === invite.id ? "Working..." : "Accept"}
                         </button>
@@ -271,7 +273,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
                           type="button"
                           onClick={() => void handleProjectInvite(invite.id, "declined")}
                           disabled={inviteActionId === invite.id}
-                          className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-alt)] disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Decline
                         </button>
@@ -284,12 +286,12 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
 
             <section className="mb-16">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Recently visited</h3>
+                <h3 className="text-sm font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">{t("project.recent")}</h3>
                 <button 
                   onClick={() => setShowCreateModal(true)}
-                  className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-900 hover:bg-slate-50 transition-colors shadow-sm"
+                  className="flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-2.5 text-sm font-bold text-[var(--color-text)] hover:bg-[var(--color-surface-alt)] transition-colors shadow-sm"
                 >
-                  Create project
+                  {t("project.new")}
                 </button>
               </div>
 
@@ -297,32 +299,32 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
                 {/* New Project Card */}
                 <button 
                   onClick={() => setShowCreateModal(true)}
-                  className="group relative flex aspect-[4/3] flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-slate-200 bg-transparent transition-all hover:border-slate-400 hover:bg-slate-50"
+                  className="group relative flex aspect-[4/3] flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-[var(--color-border)] bg-transparent transition-all hover:border-slate-400 hover:bg-[var(--color-surface-alt)]"
                 >
-                  <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 group-hover:bg-white group-hover:text-slate-600 transition-colors">
+                  <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--color-canvas)] text-[var(--color-text-muted)] group-hover:bg-[var(--color-surface)] group-hover:text-[var(--color-text-secondary)] transition-colors">
                     <Plus size={24} />
                   </div>
                   <div className="text-center px-8">
-                    <h4 className="text-lg font-bold text-slate-900 mb-2">New project</h4>
-                    <p className="text-sm text-slate-400 leading-relaxed">Create your first workspace and start writing with context-aware AI.</p>
+                    <h4 className="text-lg font-bold text-[var(--color-text)] mb-2">{t("project.new")}</h4>
+                    <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">{t("project.createFirst")}</p>
                   </div>
                 </button>
 
                 {overview.recentProjects.map((project) => (
                   <Link key={project.id} href={`/project/${project.id}`}>
-                    <div className="group relative flex aspect-[4/3] flex-col rounded-[32px] border border-slate-100 bg-white p-8 shadow-sm transition-all hover:shadow-md hover:-translate-y-1">
+                    <div className="group relative flex aspect-[4/3] flex-col rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-sm transition-all hover:shadow-md hover:-translate-y-1">
                       <div className="mb-auto flex items-start justify-between">
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 font-bold text-lg">
                           {project.name[0].toUpperCase()}
                         </div>
-                        <button title="Coming soon" disabled className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-white/50 transition-colors disabled:opacity-50">
+                        <button title="Coming soon" disabled className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] p-1 rounded-md hover:bg-[var(--color-surface)]/50 transition-colors disabled:opacity-50">
                           <MoreHorizontal size={20} />
                         </button>
                       </div>
                       <div>
-                        <h4 className="text-xl font-bold text-slate-900 mb-2 truncate">{project.name}</h4>
-                        <p className="text-sm text-slate-400 line-clamp-2 leading-relaxed">{project.summary}</p>
-                        <div className="mt-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-300">
+                        <h4 className="text-xl font-bold text-[var(--color-text)] mb-2 truncate">{project.name}</h4>
+                        <p className="text-sm text-[var(--color-text-muted)] line-clamp-2 leading-relaxed">{project.summary}</p>
+                        <div className="mt-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
                           <Clock size={12} />
                           {new Date(project.updatedAt).toLocaleDateString()}
                         </div>
@@ -335,20 +337,20 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
 
             <section>
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Public projects</h3>
-                <p className="text-xs text-slate-400">Projects shared by other members</p>
+                <h3 className="text-sm font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">{t("project.publicProjects")}</h3>
+                <p className="text-xs text-[var(--color-text-muted)]">Projects shared by other members</p>
               </div>
 
               {overview.publicProjects.length === 0 ? (
-                <div className="flex h-32 items-center justify-center rounded-[32px] border border-dashed border-slate-200 bg-slate-50 px-8 text-center text-sm text-slate-400">
+                <div className="flex h-32 items-center justify-center rounded-[32px] border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)] px-8 text-center text-sm text-[var(--color-text-muted)]">
                   No public projects yet. Publish one from the Projects panel to share it.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   {overview.publicProjects.map((project) => (
                     <Link key={project.id} href={`/project/${project.id}`}>
-                      <div className="group flex flex-col rounded-[24px] bg-white border border-slate-100 p-5 transition-all hover:shadow-sm">
-                        <div className="aspect-video w-full rounded-xl bg-slate-100 mb-4 overflow-hidden">
+                      <div className="group flex flex-col rounded-[24px] bg-[var(--color-surface)] border border-[var(--color-border)] p-5 transition-all hover:shadow-sm">
+                        <div className="aspect-video w-full rounded-xl bg-[var(--color-surface-alt)] mb-4 overflow-hidden">
                           {project.coverImageUrl ? (
                             <Image
                               src={project.coverImageUrl}
@@ -359,11 +361,11 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
                               className="h-full w-full object-cover"
                             />
                           ) : (
-                            <div className="h-full w-full flex items-center justify-center text-slate-200 font-bold">IMAGE</div>
+                            <div className="h-full w-full flex items-center justify-center text-[var(--color-border)] font-bold">IMAGE</div>
                           )}
                         </div>
-                        <h5 className="font-bold text-slate-900 truncate">{project.name}</h5>
-                        <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">by {project.ownerName}</p>
+                        <h5 className="font-bold text-[var(--color-text)] truncate">{project.name}</h5>
+                        <p className="text-[10px] text-[var(--color-text-muted)] mt-1 uppercase tracking-wider">by {project.ownerName}</p>
                       </div>
                     </Link>
                   ))}
@@ -378,40 +380,40 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
   return (
     <div className="flex min-h-screen w-full flex-col bg-[var(--background)] lg:h-screen lg:flex-row">
       {/* Sidebar */}
-      <aside className="flex w-full shrink-0 flex-col border-b border-slate-100 px-4 py-4 lg:h-full lg:w-64 lg:border-b-0 lg:border-r lg:py-6">
+      <aside className="flex w-full shrink-0 flex-col border-b border-[var(--color-border)] px-4 py-4 lg:h-full lg:w-64 lg:border-b-0 lg:border-r lg:py-6">
         <div className="flex items-center gap-3 px-2 mb-4 lg:mb-8">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white font-bold text-xs">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-text)] text-white font-bold text-xs">
             {user.name[0].toUpperCase()}
           </div>
           <div>
-            <h1 className="text-sm font-bold text-slate-900 leading-none">Contextra</h1>
-            <p className="text-[10px] text-slate-400 mt-1">AI writing space</p>
+            <h1 className="text-sm font-bold text-[var(--color-text)] leading-none">Contextra</h1>
+            <p className="text-[10px] text-[var(--color-text-muted)] mt-1">AI writing space</p>
           </div>
         </div>
 
         <nav className="flex gap-1 overflow-x-auto pb-1 lg:block lg:flex-1 lg:space-y-1 lg:overflow-visible lg:pb-0">
           <NavItem 
             icon={<Home size={18} />} 
-            label="Home" 
+            label={t("nav.dashboard")} 
             active={activeView === "home"} 
             onClick={() => setActiveView("home")}
           />
           <NavItem 
             icon={<Layers size={18} />} 
-            label="Projects" 
+            label={t("nav.projects")} 
             badge={overview.recentProjects.length} 
             onClick={() => setShowAllProjectsModal(true)}
           />
           <NavItem 
             icon={<Users size={18} />} 
-            label="People" 
+            label={t("nav.people")} 
             active={activeView === "people"}
             badge={socialData ? socialData.users.length : undefined}
             onClick={() => setActiveView("people")}
           />
           <NavItem 
             icon={<UserPlus size={18} />} 
-            label="Friends" 
+            label={t("nav.friends")} 
             active={activeView === "friends"}
             badge={socialData ? socialData.friends.length : undefined}
             onClick={() => setActiveView("friends")}
@@ -419,13 +421,13 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
           
           <NavItem 
             icon={<Settings size={18} />} 
-            label="Settings" 
+            label={t("nav.settings")} 
             onClick={() => setShowPreferencesModal(true)} 
           />
         </nav>
 
         <div className="mt-auto hidden lg:block">
-          <div className="px-2 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Projects</div>
+          <div className="px-2 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">{t("nav.projects")}</div>
 
         </div>
       </aside>
@@ -460,7 +462,7 @@ function NavItem({ icon, label, active, badge, disabled, onClick }: { icon: Reac
       onClick={onClick}
       className={cn(
         "flex min-w-fit items-center justify-between rounded-xl px-3 py-2.5 text-sm font-bold transition-all lg:w-full",
-        active ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700",
+        active ? "bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text)]",
         disabled && "opacity-40 cursor-not-allowed"
       )}
     >
@@ -471,7 +473,7 @@ function NavItem({ icon, label, active, badge, disabled, onClick }: { icon: Reac
       {badge !== undefined && (
         <span className={cn(
           "text-[10px] px-1.5 py-0.5 rounded-md",
-          active ? "bg-slate-100 text-slate-600" : "bg-slate-50 text-slate-400"
+          active ? "bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)]" : "bg-[var(--color-canvas)] text-[var(--color-text-muted)]"
         )}>
           {badge}
         </span>
@@ -483,8 +485,8 @@ function NavItem({ icon, label, active, badge, disabled, onClick }: { icon: Reac
 function DashboardSurfaceLoading({ label }: { label: string }) {
   return (
     <div className="flex min-h-[50vh] items-center justify-center">
-      <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-500 shadow-sm">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+      <div className="flex items-center gap-3 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-3 text-sm font-medium text-[var(--color-text-secondary)] shadow-sm">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-slate-700" />
         <span>{label}</span>
       </div>
     </div>
@@ -493,9 +495,9 @@ function DashboardSurfaceLoading({ label }: { label: string }) {
 
 function DashboardModalLoading({ label }: { label: string }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm p-4">
-      <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-500 shadow-sm">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-text)]/20 backdrop-blur-sm p-4">
+      <div className="flex items-center gap-3 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-3 text-sm font-medium text-[var(--color-text-secondary)] shadow-sm">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-slate-700" />
         <span>{label}</span>
       </div>
     </div>
