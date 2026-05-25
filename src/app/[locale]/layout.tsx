@@ -20,8 +20,25 @@ import { PreferencesProvider } from "@/components/PreferencesProvider";
 import "@/app/globals.css";
 
 export const metadata: Metadata = {
-  title: "Contextra - Collaborative AI Writing Workspace",
-  description: "A monolithic AI writing workspace inspired by Contextra.",
+  title: {
+    default: "Contextra — AI-Powered Collaborative Writing",
+    template: "%s | Contextra",
+  },
+  description:
+    "Write your next story with context-aware AI. Contextra remembers your characters, plot threads, and world-building as you write.",
+  openGraph: {
+    title: "Contextra — AI-Powered Collaborative Writing",
+    description:
+      "Write your next story with context-aware AI. Contextra remembers your characters, plot threads, and world-building as you write.",
+    type: "website",
+    siteName: "Contextra",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Contextra — AI-Powered Collaborative Writing",
+    description:
+      "Write your next story with context-aware AI.",
+  },
 };
 
 export default async function LocaleLayout({
