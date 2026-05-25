@@ -31,6 +31,11 @@ export const THEME_OPTIONS: {
   previewText: string;
   previewMuted: string;
   previewAccent: string;
+  darkPreviewBg: string;
+  darkPreviewCard: string;
+  darkPreviewText: string;
+  darkPreviewMuted: string;
+  darkPreviewAccent: string;
 }[] = [
   {
     id: "notion",
@@ -41,6 +46,11 @@ export const THEME_OPTIONS: {
     previewText: "#111827",
     previewMuted: "#64748b",
     previewAccent: "#2563eb",
+    darkPreviewBg: "#1a1a1f",
+    darkPreviewCard: "#25252d",
+    darkPreviewText: "#e4e4e7",
+    darkPreviewMuted: "#52525b",
+    darkPreviewAccent: "#60a5fa",
   },
   {
     id: "mist",
@@ -51,6 +61,11 @@ export const THEME_OPTIONS: {
     previewText: "#113442",
     previewMuted: "#54717d",
     previewAccent: "#06b6d4",
+    darkPreviewBg: "#0d1f26",
+    darkPreviewCard: "#1a2d35",
+    darkPreviewText: "#d1e4ec",
+    darkPreviewMuted: "#4e707e",
+    darkPreviewAccent: "#22d3ee",
   },
   {
     id: "forest",
@@ -61,6 +76,11 @@ export const THEME_OPTIONS: {
     previewText: "#10291c",
     previewMuted: "#547363",
     previewAccent: "#059669",
+    darkPreviewBg: "#0d1f18",
+    darkPreviewCard: "#1a2d25",
+    darkPreviewText: "#cfe4d8",
+    darkPreviewMuted: "#4d7a60",
+    darkPreviewAccent: "#34d399",
   },
   {
     id: "cream",
@@ -71,6 +91,11 @@ export const THEME_OPTIONS: {
     previewText: "#3b2b12",
     previewMuted: "#826b43",
     previewAccent: "#d97706",
+    darkPreviewBg: "#1f1a10",
+    darkPreviewCard: "#2d2618",
+    darkPreviewText: "#e8dcc8",
+    darkPreviewMuted: "#6b5d42",
+    darkPreviewAccent: "#fbbf24",
   },
   {
     id: "graphite",
@@ -81,6 +106,11 @@ export const THEME_OPTIONS: {
     previewText: "#111827",
     previewMuted: "#64748b",
     previewAccent: "#334155",
+    darkPreviewBg: "#171a1f",
+    darkPreviewCard: "#242730",
+    darkPreviewText: "#d1d5db",
+    darkPreviewMuted: "#6b7280",
+    darkPreviewAccent: "#94a3b8",
   },
   {
     id: "rose",
@@ -91,6 +121,11 @@ export const THEME_OPTIONS: {
     previewText: "#3b1220",
     previewMuted: "#8a5363",
     previewAccent: "#e11d48",
+    darkPreviewBg: "#1f1418",
+    darkPreviewCard: "#2d1f23",
+    darkPreviewText: "#e8cfd6",
+    darkPreviewMuted: "#7a5565",
+    darkPreviewAccent: "#fb7185",
   },
   {
     id: "sage",
@@ -101,6 +136,11 @@ export const THEME_OPTIONS: {
     previewText: "#153227",
     previewMuted: "#607466",
     previewAccent: "#16a34a",
+    darkPreviewBg: "#111e18",
+    darkPreviewCard: "#1e2a23",
+    darkPreviewText: "#d0e4d5",
+    darkPreviewMuted: "#5c7862",
+    darkPreviewAccent: "#4ade80",
   },
   {
     id: "harbor",
@@ -111,6 +151,11 @@ export const THEME_OPTIONS: {
     previewText: "#11363d",
     previewMuted: "#5c7780",
     previewAccent: "#0e7490",
+    darkPreviewBg: "#0d1f22",
+    darkPreviewCard: "#1a2c30",
+    darkPreviewText: "#d0e5e8",
+    darkPreviewMuted: "#52727e",
+    darkPreviewAccent: "#22d3ee",
   },
   {
     id: "plum",
@@ -121,6 +166,11 @@ export const THEME_OPTIONS: {
     previewText: "#2f183d",
     previewMuted: "#745b7e",
     previewAccent: "#9333ea",
+    darkPreviewBg: "#1c1520",
+    darkPreviewCard: "#2a2130",
+    darkPreviewText: "#e0d1e8",
+    darkPreviewMuted: "#705e80",
+    darkPreviewAccent: "#c084fc",
   },
 ];
 
@@ -175,13 +225,18 @@ const THEME_IDS = new Set(THEME_OPTIONS.map((theme) => theme.id));
 const FONT_IDS = new Set(FONT_OPTIONS.map((font) => font.id));
 
 export function normalizeTheme(value: unknown): ThemeType {
-  if (value === "dark" || value === "midnight") {
-    return "notion";
+  if (typeof value === "string") {
+    if (value === "dark" || value === "midnight") {
+      return "notion";
+    }
+
+    const base = value.endsWith("-dark") ? value.slice(0, -5) : value;
+    if (THEME_IDS.has(base as ThemeType)) {
+      return base as ThemeType;
+    }
   }
 
-  return typeof value === "string" && THEME_IDS.has(value as ThemeType)
-    ? (value as ThemeType)
-    : DEFAULT_THEME;
+  return DEFAULT_THEME;
 }
 
 export function normalizeFont(value: unknown): FontType {
