@@ -9,6 +9,7 @@ import { MainEditor } from "@/components/MainEditor";
 import { CollaborationPanel } from "@/components/CollaborationPanel";
 import type { AiCardsPaneTab } from "@/components/AiCardsPane";
 import { useSSE } from "@/lib/hooks/useSSE";
+import { useTranslations } from "next-intl";
 import { Menu, Bot, History, Users } from "lucide-react";
 import type { ProjectCommentThread, ProjectData, ProjectInvite, ProjectPresence } from "@/types/project";
 
@@ -59,6 +60,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isCollabOpen, setIsCollabOpen] = useState(false);
   const [presenceNow, setPresenceNow] = useState(() => Date.now());
+  const t = useTranslations();
 
   useEffect(() => {
     if (!project) return;
@@ -162,11 +164,11 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[#f7f7f5] relative">
+    <div className="flex h-screen w-full overflow-hidden bg-[var(--color-canvas)] relative">
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-slate-900/30 lg:hidden"
+          className="fixed inset-0 z-30 bg-[var(--color-canvas)]/50 lg:hidden"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
@@ -182,10 +184,10 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
       {/* Main Content */}
       <main className="flex-1 overflow-hidden flex flex-col">
         {/* Desktop Top Bar */}
-        <div className="hidden lg:flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white">
+        <div className="hidden lg:flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Project</p>
-            <h1 className="text-lg font-bold text-slate-900 truncate">{project.metadata.name}</h1>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Project</p>
+            <h1 className="text-lg font-bold text-[var(--color-text)] truncate">{project.metadata.name}</h1>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -193,7 +195,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
               onClick={() => setIsCollabOpen((value) => !value)}
               className={[
                 "flex items-center gap-3 rounded-2xl border px-3 py-2 transition-colors",
-                isCollabOpen ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                isCollabOpen ? "border-[var(--color-text)] bg-[var(--color-text)] text-white" : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]",
               ].join(" ")}
             >
               <PresenceStack count={activePresence.length} />
@@ -215,15 +217,15 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
         </div>
 
         {/* Mobile Top Bar */}
-        <div className="flex lg:hidden items-center justify-between px-4 py-3 border-b border-slate-100 bg-white">
+        <div className="flex lg:hidden items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors"
+            className="p-2 rounded-xl text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
             aria-label="Open sidebar"
           >
             <Menu size={20} />
           </button>
-          <span className="text-sm font-bold text-slate-700 truncate max-w-[160px]">
+          <span className="text-sm font-bold text-[var(--color-text)] truncate max-w-[160px]">
             {project.metadata.name}
           </span>
           <div className="flex items-center gap-1">
@@ -231,7 +233,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
               onClick={() => setIsCollabOpen((value) => !value)}
               className={[
                 "p-2 rounded-xl transition-colors",
-                isCollabOpen ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"
+                isCollabOpen ? "bg-[var(--color-text)] text-white" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
               ].join(" ")}
               aria-label="Toggle collaboration panel"
             >
@@ -241,7 +243,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
               onClick={() => setIsHistoryOpen((value) => !value)}
               className={[
                 "p-2 rounded-xl transition-colors",
-                isHistoryOpen ? "bg-indigo-100 text-indigo-600" : "text-slate-500 hover:bg-slate-100"
+                isHistoryOpen ? "bg-[var(--color-accent-muted)] text-[var(--color-accent)]" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
               ].join(" ")}
               aria-label="Toggle version history"
             >
@@ -251,7 +253,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
               onClick={handleAiPaneToggle}
               className={[
                 "p-2 rounded-xl transition-colors",
-                isAiPaneOpen ? "bg-indigo-100 text-indigo-600" : "text-slate-500 hover:bg-slate-100"
+                isAiPaneOpen ? "bg-[var(--color-accent-muted)] text-[var(--color-accent)]" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
               ].join(" ")}
               aria-label="Toggle AI assistant"
             >
@@ -319,7 +321,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
       {/* Mobile AI Pane Overlay */}
       {isAiPaneOpen && (
         <div
-          className="fixed inset-0 z-30 bg-slate-900/30 lg:hidden"
+          className="fixed inset-0 z-30 bg-[var(--color-canvas)]/50 lg:hidden"
           onClick={() => setIsAiPaneOpen(false)}
         />
       )}
@@ -344,8 +346,8 @@ function WorkspaceToggleButton({
       className={[
         "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold transition-colors",
         active
-          ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+          ? "border-[var(--color-accent-muted)] bg-[var(--color-accent-muted)] text-[var(--color-accent)]"
+          : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]",
       ].join(" ")}
     >
       {icon}
@@ -358,9 +360,9 @@ function PresenceStack({ count }: { count: number }) {
   return (
     <div className="flex items-center gap-2">
       <div className="flex -space-x-2">
-        <div className="h-7 w-7 rounded-full border-2 border-white bg-slate-900" />
-        {count > 1 && <div className="h-7 w-7 rounded-full border-2 border-white bg-amber-400" />}
-        {count > 2 && <div className="h-7 w-7 rounded-full border-2 border-white bg-sky-400" />}
+        <div className="h-7 w-7 rounded-full border-2 border-[var(--color-surface)] bg-[var(--color-text)]" />
+        {count > 1 && <div className="h-7 w-7 rounded-full border-2 border-[var(--color-surface)] bg-amber-400" />}
+        {count > 2 && <div className="h-7 w-7 rounded-full border-2 border-[var(--color-surface)] bg-sky-400" />}
       </div>
       <span className="text-xs font-bold uppercase tracking-wider">
         {count === 0 ? "Quiet" : `${count} live`}
@@ -371,9 +373,9 @@ function PresenceStack({ count }: { count: number }) {
 
 function WorkspaceCanvasLoading({ label }: { label: string }) {
   return (
-    <div className="flex h-full items-center justify-center bg-[#f7f7f5]">
-      <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-500 shadow-sm">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+    <div className="flex h-full items-center justify-center bg-[var(--color-canvas)]">
+      <div className="flex items-center gap-3 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-3 text-sm font-medium text-[var(--color-text-secondary)] shadow-sm">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-text-muted)] border-t-[var(--color-text)]" />
         <span>{label}</span>
       </div>
     </div>
@@ -382,9 +384,9 @@ function WorkspaceCanvasLoading({ label }: { label: string }) {
 
 function WorkspaceSidePanelLoading({ label }: { label: string }) {
   return (
-    <div className="flex h-full w-96 items-center justify-center border-l border-slate-200 bg-[var(--background)] px-6">
-      <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-500 shadow-sm">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+    <div className="flex h-full w-96 items-center justify-center border-l border-[var(--color-border)] bg-[var(--background)] px-6">
+      <div className="flex items-center gap-3 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text-secondary)] shadow-sm">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-text-muted)] border-t-[var(--color-text)]" />
         <span>{label}</span>
       </div>
     </div>
