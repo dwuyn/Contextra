@@ -29,6 +29,7 @@ import {
   History,
   Save,
   X,
+  Maximize2,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { rewriteAction, describeAction } from "@/actions/ai";
@@ -40,6 +41,7 @@ import { cn } from "@/lib/utils";
 import { PublicVoiceReader } from "@/components/PublicVoiceReader";
 import { resolvePromptLanguage, type PromptLanguage } from "@/services/promptLanguageService";
 import { useProjectStore } from "@/store/useProjectStore";
+import { useZenStore } from "@/store/useZenStore";
 
 type SaveReason = "manual" | "autosave" | "blur" | "switch" | "unmount";
 
@@ -225,6 +227,7 @@ export function MainEditor({
   const clearPendingTitleFocus = useProjectStore((state) => state.clearPendingTitleFocus);
   const canEdit = !!project?.viewerAccess?.canEdit;
   const canCollaborate = !!project && !project.viewerAccess?.isPublicViewer;
+  const { toggleZen } = useZenStore();
   const t = useTranslations();
 
   const [title, setTitle] = useState(currentChapter?.title || "");
@@ -1329,6 +1332,28 @@ export function MainEditor({
           >
             <Download size={16} />
           </button>
+          <Tooltip.Provider delayDuration={300}>
+            <Tooltip.Root>
+              <Tooltip.Trigger asChild>
+                <button
+                  onClick={toggleZen}
+                  className="cursor-pointer p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors"
+                  aria-label="Enter zen mode"
+                >
+                  <Maximize2 size={16} />
+                </button>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content
+                  className="rounded-lg bg-[var(--color-text)] px-3 py-2 text-xs text-[var(--color-canvas)] shadow-lg"
+                  sideOffset={5}
+                >
+                  Enter zen mode
+                  <Tooltip.Arrow className="fill-[var(--color-text)]" />
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+          </Tooltip.Provider>
         </div>
       </div>
 
