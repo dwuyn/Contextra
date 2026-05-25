@@ -8,7 +8,8 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
 import Underline from "@tiptap/extension-underline";
 import CharacterCount from "@tiptap/extension-character-count";
-import * as Dialog from "@radix-ui/react-dialog";
+import * as Dialog from "@radix-ui/react-dialog"
+import * as Tooltip from "@radix-ui/react-tooltip";
 import {
   Wand2,
   Sparkles,
@@ -21,7 +22,7 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
-  ChevronDown,
+  
   Maximize2,
   Zap,
   Globe,
@@ -31,6 +32,7 @@ import {
   Save,
   X,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { rewriteAction, describeAction } from "@/actions/ai";
 import { exportProjectAction } from "@/actions/export";
 import { createCommentThread, getChapterContent, updateChapter } from "@/actions/projects";
@@ -225,6 +227,7 @@ export function MainEditor({
   const clearPendingTitleFocus = useProjectStore((state) => state.clearPendingTitleFocus);
   const canEdit = !!project?.viewerAccess?.canEdit;
   const canCollaborate = !!project && !project.viewerAccess?.isPublicViewer;
+  const t = useTranslations();
 
   const [title, setTitle] = useState(currentChapter?.title || "");
   const [isSaving, setIsSaving] = useState(false);
@@ -484,14 +487,14 @@ export function MainEditor({
         types: ["heading", "paragraph"],
       }),
       Placeholder.configure({
-        placeholder: canEdit ? "Start writing your story here..." : "Empty chapter.",
+        placeholder: canEdit ? t("editor.placeholder") : t("editor.emptyChapter"),
       }),
       CharacterCount.configure({ mode: "nodeSize" }),
     ],
     content: "",
     editorProps: {
       attributes: {
-        class: "prose prose-slate max-w-none focus:outline-none min-h-[500px] text-lg leading-relaxed text-slate-800",
+        class: "prose prose-slate max-w-none focus:outline-none min-h-[500px] text-lg leading-relaxed text-[var(--color-text)]",
       },
       handleClick: (_view, _pos, event) => {
         const target = event.target;
@@ -732,7 +735,7 @@ export function MainEditor({
         setSaveError(null);
         setSaveWarning(null);
       });
-      editor.commands.setContent("<p class='text-slate-400 italic'>Loading...</p>", { emitUpdate: false });
+      editor.commands.setContent(`<p class='text-[var(--color-text-muted)] italic'>${t("editor.loading")}</p>`, { emitUpdate: false });
 
       getChapterContent(projectId, selectedChapterId)
         .then((content) => {
@@ -798,6 +801,7 @@ export function MainEditor({
     currentChapter?.title,
     currentCachedContent,
     setChapterContent,
+    t,
   ]);
 
   useEffect(() => {
@@ -1098,10 +1102,10 @@ export function MainEditor({
       <div className="flex h-full flex-col bg-[var(--background)]">
         <div className="flex-1 px-20 py-20">
           <div className="mx-auto flex h-full max-w-3xl items-center justify-center">
-            <div className="rounded-3xl border border-dashed border-slate-200 bg-white/70 px-10 py-12 text-center shadow-sm">
-              <h2 className="text-2xl font-bold text-slate-900">No chapter selected</h2>
-              <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-500">
-                Create a new chapter or choose one from the sidebar to keep writing.
+            <div className="rounded-3xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/70 px-10 py-12 text-center shadow-sm">
+              <h2 className="text-2xl font-bold text-[var(--color-text)]">{t("editor.noChapter.title")}</h2>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-[var(--color-text-secondary)]">
+                {t("editor.noChapter.description")}
               </p>
             </div>
           </div>
@@ -1115,12 +1119,12 @@ export function MainEditor({
       <div className="flex flex-col h-full bg-[var(--background)] relative">
         <div className="border-b border-slate-50 bg-[var(--background)] px-6 py-4">
           <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-indigo-600">
+            <div className="flex items-center gap-2 rounded-full bg-[var(--color-accent-muted)] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-accent)]">
               <Globe size={12} />
-              Reading Mode
+              {t("editor.readingMode")}
             </div>
-            <div className="h-4 w-px bg-slate-200" />
-            <h2 className="min-w-0 truncate text-sm font-bold text-slate-500">
+            <div className="h-4 w-px bg-[var(--color-border)]" />
+            <h2 className="min-w-0 truncate text-sm font-bold text-[var(--color-text-secondary)]">
               {project?.metadata?.name}
             </h2>
           </div>
@@ -1128,10 +1132,10 @@ export function MainEditor({
 
         <div className="flex-1 overflow-y-auto px-20 py-20 pb-40 scroll-smooth bg-[var(--background)]">
           <div className="max-w-3xl mx-auto">
-            <h1 className="text-5xl font-extrabold text-slate-900 mb-12 tracking-tight leading-tight">
-              {currentChapter?.title || "Untitled Chapter"}
+            <h1 className="text-5xl font-extrabold text-[var(--color-text)] mb-12 tracking-tight leading-tight">
+              {currentChapter?.title || t("editor.untitledChapter")}
             </h1>
-            <div className="prose prose-slate max-w-none text-xl leading-relaxed text-slate-800">
+            <div className="prose prose-slate max-w-none text-xl leading-relaxed text-[var(--color-text)]">
               <EditorContent editor={editor} />
             </div>
           </div>
@@ -1140,7 +1144,7 @@ export function MainEditor({
         <PublicVoiceReader
           projectId={project?.metadata.id ?? currentChapter.projectId}
           chapterId={currentChapter.id}
-          chapterTitle={currentChapter.title || "Untitled Chapter"}
+          chapterTitle={currentChapter.title || t("editor.untitledChapter")}
           chapterContent={currentCachedContent ?? ""}
           isLoading={isLoadingContent}
         />
@@ -1154,106 +1158,149 @@ export function MainEditor({
   return (
     <div className="flex flex-col h-full bg-[var(--background)]">
       <div className="flex items-center gap-2 px-6 py-2 border-b border-slate-50 bg-[var(--background)]">
-        <div className="flex items-center gap-1 bg-slate-50 rounded-xl p-1">
-          <ToolbarTooltip text="Place your cursor at the end of some text and click Write. Contextra will continue it! (The more text in your doc, the better.)">
-            <button
-              type="button"
-              onClick={() => void handleWrite()}
-              disabled={isGenerating || !canEdit}
-              className="flex cursor-pointer items-center gap-2 px-4 py-1.5 bg-white text-slate-900 rounded-lg text-sm font-bold shadow-sm border border-slate-100 hover:bg-slate-50 transition-all disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Wand2 size={16} className="text-indigo-600" />
-              Write
-              <ChevronDown size={14} className="text-slate-400" />
-            </button>
-          </ToolbarTooltip>
+        <div className="flex items-center gap-1 bg-[var(--color-canvas)] rounded-xl p-1">
+          <Tooltip.Provider delayDuration={300}>
+            <Tooltip.Root>
+              <Tooltip.Trigger asChild>
+                <button
+                  type="button"
+                  onClick={() => void handleWrite()}
+                  disabled={isGenerating || !canEdit}
+                  className="flex cursor-pointer items-center gap-2 px-4 py-1.5 bg-[var(--color-surface)] text-[var(--color-text)] rounded-lg text-sm font-bold shadow-sm border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Wand2 size={16} className="text-[var(--color-accent)]" />
+                  {t("editor.ai.write")}
+                </button>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content
+                  className="rounded-lg bg-[var(--color-text)] px-3 py-2 text-xs text-[var(--color-canvas)] shadow-lg"
+                  sideOffset={5}
+                >
+                  {t("editor.ai.writeShortcut")}
+                  <Tooltip.Arrow className="fill-[var(--color-text)]" />
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
 
-          <ToolbarTooltip text="Select a sentence, paragraph, or more then click Rewrite to rephrase, add description, mimic a famous style, or transform your text in other ways.">
-            <button
-              type="button"
-              onClick={() => void handleRewrite()}
-              disabled={isGenerating || !hasSelection || !canEdit}
-              className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-slate-600 rounded-lg text-sm font-bold hover:bg-white hover:text-slate-900 transition-all disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Sparkles size={16} className="text-indigo-600" />
-              Rewrite
-              <ChevronDown size={14} className="text-slate-400" />
-            </button>
-          </ToolbarTooltip>
+            <Tooltip.Root>
+              <Tooltip.Trigger asChild>
+                <button
+                  type="button"
+                  onClick={() => void handleRewrite()}
+                  disabled={isGenerating || !hasSelection || !canEdit}
+                  className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-[var(--color-text-secondary)] rounded-lg text-sm font-bold hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Sparkles size={16} className="text-[var(--color-accent)]" />
+                  {t("editor.ai.rewrite")}
+                </button>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content
+                  className="rounded-lg bg-[var(--color-text)] px-3 py-2 text-xs text-[var(--color-canvas)] shadow-lg"
+                  sideOffset={5}
+                >
+                  {t("editor.ai.rewriteShortcut")}
+                  <Tooltip.Arrow className="fill-[var(--color-text)]" />
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
 
-          <ToolbarTooltip text="Select a word or phrase and click Describe for suggestions using all five senses and even metaphors!">
-            <button
-              type="button"
-              onClick={() => void handleDescribe()}
-              disabled={isGenerating || !hasSelection || !canEdit}
-              className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-slate-600 rounded-lg text-sm font-bold hover:bg-white hover:text-slate-900 transition-all disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <MessageSquare size={16} className="text-indigo-600" />
-              Describe
-              <ChevronDown size={14} className="text-slate-400" />
-            </button>
-          </ToolbarTooltip>
+            <Tooltip.Root>
+              <Tooltip.Trigger asChild>
+                <button
+                  type="button"
+                  onClick={() => void handleDescribe()}
+                  disabled={isGenerating || !hasSelection || !canEdit}
+                  className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-[var(--color-text-secondary)] rounded-lg text-sm font-bold hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <MessageSquare size={16} className="text-[var(--color-accent)]" />
+                  {t("editor.ai.describe")}
+                </button>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content
+                  className="rounded-lg bg-[var(--color-text)] px-3 py-2 text-xs text-[var(--color-canvas)] shadow-lg"
+                  sideOffset={5}
+                >
+                  {t("editor.ai.describeShortcut")}
+                  <Tooltip.Arrow className="fill-[var(--color-text)]" />
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
 
-          <ToolbarTooltip text="Use Brainstorm for help with ideas for character names, dialogue, world details, descriptions, plot points, or anything else!">
-            <button
-              type="button"
-              onClick={() => void handleBrainstorm()}
-              disabled={isGenerating || !canEdit}
-              className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-slate-600 rounded-lg text-sm font-bold hover:bg-white hover:text-slate-900 transition-all disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Zap size={16} className="text-indigo-600" />
-              Brainstorm
-            </button>
-          </ToolbarTooltip>
+            <Tooltip.Root>
+              <Tooltip.Trigger asChild>
+                <button
+                  type="button"
+                  onClick={() => void handleBrainstorm()}
+                  disabled={isGenerating || !canEdit}
+                  className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-[var(--color-text-secondary)] rounded-lg text-sm font-bold hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Zap size={16} className="text-[var(--color-accent)]" />
+                  {t("editor.ai.brainstorm")}
+                </button>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content
+                  className="rounded-lg bg-[var(--color-text)] px-3 py-2 text-xs text-[var(--color-canvas)] shadow-lg"
+                  sideOffset={5}
+                >
+                  {t("editor.ai.brainstormShortcut")}
+                  <Tooltip.Arrow className="fill-[var(--color-text)]" />
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+          </Tooltip.Provider>
         </div>
 
         <div className="ml-auto flex items-center gap-3">
           {isCommentOnly && (
             <div className="rounded-full bg-sky-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-sky-700">
-              Commenting mode
+              {t("editor.comment.commentingMode")}
             </div>
           )}
-          <div className="flex items-center gap-1 text-[10px] font-bold text-slate-300 uppercase tracking-widest">
+          <div className="flex items-center gap-1 text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest">
             <div
               className={cn(
                 "w-2 h-2 rounded-full transition-colors",
                 saveError
-                  ? "bg-rose-500"
+                  ? "bg-[var(--color-destructive)]"
                   : isSaving
-                    ? "bg-amber-400 animate-pulse"
+                    ? "bg-[var(--color-accent)]/60 animate-pulse"
                     : saveWarning
-                      ? "bg-amber-500"
+                      ? "bg-[var(--color-accent)]"
                       : hasUnsavedChanges || hasCheckpointChanges
-                        ? "bg-slate-300"
-                        : "bg-green-500",
+                        ? "bg-[var(--color-text-muted)]"
+                        : "bg-[var(--color-success)]",
               )}
             />
             {saveError
-              ? "Save failed"
+              ? t("editor.status.saveFailed")
               : isSaving
-                ? "Saving..."
+                ? t("editor.status.saving")
                 : saveWarning
-                  ? "Memory stale"
+                  ? t("editor.status.memoryStale")
                   : hasUnsavedChanges || hasCheckpointChanges
-                    ? "Unsaved Changes"
-                    : "Saved"}
+                    ? t("editor.status.unsavedChanges")
+                    : t("editor.status.saved")}
           </div>
           <button
             type="button"
             onMouseDown={(event) => event.preventDefault()}
             onClick={handleManualSave}
             disabled={!canManualSave || isSaving}
-            className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm font-bold text-[var(--color-text)] shadow-sm transition-all hover:bg-[var(--color-surface-alt)] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Save size={15} className="text-indigo-600" />
-            {isSaving ? "Saving..." : "Save"}
+            <Save size={15} className="text-[var(--color-accent)]" />
+            {isSaving ? t("editor.status.saving") : t("editor.save")}
           </button>
           {onToggleHistory && (
             <button
               type="button"
               onClick={onToggleHistory}
               title="Version History"
-              className="cursor-pointer p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              className="cursor-pointer p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors"
             >
               <History size={16} />
             </button>
@@ -1280,17 +1327,17 @@ export function MainEditor({
             }}
             title="Export project as Markdown"
             disabled={isExporting}
-            className="cursor-pointer p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            className="cursor-pointer p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Download size={16} />
           </button>
-        <button type="button" title="Coming soon" disabled className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50">
+        <button type="button" title="Coming soon" disabled className="p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50">
           <Maximize2 size={16} />
         </button>
         </div>
       </div>
 
-      <div className="flex items-center gap-4 px-6 py-1.5 border-b border-slate-100 bg-white">
+      <div className="flex items-center gap-4 px-6 py-1.5 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
         <div className="flex items-center gap-1">
           <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} disabled={!canEdit}>
             <Bold size={16} />
@@ -1302,7 +1349,7 @@ export function MainEditor({
             <UnderlineIcon size={16} />
           </ToolbarButton>
         </div>
-        <div className="w-px h-4 bg-slate-200" />
+        <div className="w-px h-4 bg-[var(--color-border)]" />
         <div className="flex items-center gap-1">
           <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive("bulletList")} disabled={!canEdit}>
             <List size={16} />
@@ -1311,7 +1358,7 @@ export function MainEditor({
             <ListOrdered size={16} />
           </ToolbarButton>
         </div>
-        <div className="w-px h-4 bg-slate-200" />
+        <div className="w-px h-4 bg-[var(--color-border)]" />
         <div className="flex items-center gap-1">
           <ToolbarButton onClick={() => editor.chain().focus().setTextAlign("left").run()} active={editor.isActive({ textAlign: "left" })} disabled={!canEdit}>
             <AlignLeft size={16} />
@@ -1327,42 +1374,42 @@ export function MainEditor({
 
       <BubbleMenu
         editor={editor}
-        className="flex items-center bg-slate-900 text-white rounded-xl shadow-2xl overflow-hidden divide-x divide-slate-800 border border-slate-800"
+        className="flex items-center bg-[var(--color-text)] text-white rounded-xl shadow-2xl overflow-hidden divide-x divide-slate-800 border border-slate-800"
       >
         <button
           type="button"
           onClick={() => handleOpenCommentComposer()}
           disabled={!hasSelection || hasUnsavedChanges || hasCheckpointChanges || isSaving || isCreatingComment}
-          className="cursor-pointer px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="cursor-pointer px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:opacity-90 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <MessageSquare size={12} />
-          Comment
+          {t("editor.comment.comment")}
         </button>
         <button
           type="button"
           onClick={() => void handleRewrite()}
           disabled={!hasSelection}
-          className="cursor-pointer px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="cursor-pointer px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:opacity-90 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Sparkles size={12} />
-          Rewrite
+          {t("editor.ai.rewrite")}
         </button>
         <button
           type="button"
           onClick={() => void handleDescribe("sight")}
           disabled={!hasSelection}
-          className="cursor-pointer px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="cursor-pointer px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:opacity-90 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Search size={12} />
-          Describe
+          {t("editor.ai.describe")}
         </button>
-        <button type="button" title="Coming soon" disabled className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 transition-colors flex items-center gap-2 text-indigo-400 disabled:cursor-not-allowed disabled:opacity-50">
+        <button type="button" title="Coming soon" disabled className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:opacity-90 transition-colors flex items-center gap-2 text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50">
           <Zap size={12} />
           Expand
         </button>
       </BubbleMenu>
 
-      <div className="flex-1 overflow-y-auto px-20 py-16 scroll-smooth bg-white">
+      <div className="flex-1 overflow-y-auto px-20 py-16 scroll-smooth bg-[var(--color-surface)]">
         <div className="max-w-3xl mx-auto">
           <input
             ref={titleInputRef}
@@ -1385,39 +1432,39 @@ export function MainEditor({
               const { hasUnsaved } = syncSaveState(chapterId, nextTitle, lastEditorContentRef.current);
               scheduleAutosave(nextDraft, hasUnsaved);
             }}
-            placeholder="Chapter Title"
-            aria-label="Chapter Title"
+            placeholder={t("editor.chapterTitle")}
+            aria-label={t("editor.chapterTitle")}
             className={cn(
-              "w-full text-4xl font-extrabold text-slate-900 bg-transparent border-b border-slate-200 outline-none mb-10 pb-4 placeholder:text-slate-200 tracking-tight transition-colors focus:border-slate-400",
+              "w-full text-4xl font-extrabold text-[var(--color-text)] bg-transparent border-b border-[var(--color-border)] outline-none mb-10 pb-4 placeholder:text-[var(--color-border)] tracking-tight transition-colors focus:border-[var(--color-text-muted)]",
               !canEdit && "cursor-default border-transparent pb-2 focus:border-transparent",
             )}
           />
           <EditorContent editor={editor} />
           {saveError && (
-            <div className="mt-6 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+            <div className="mt-6 rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-4 py-3 text-sm font-medium text-[var(--color-destructive)]">
               {saveError}
             </div>
           )}
           {commentError && !pendingCommentDraft && (
-            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+            <div className="mt-6 rounded-2xl border border-[var(--color-accent-muted)] bg-[var(--color-accent-muted)] px-4 py-3 text-sm font-medium text-[var(--color-accent)]">
               {commentError}
             </div>
           )}
           {saveWarning && (
-            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+            <div className="mt-6 rounded-2xl border border-[var(--color-accent-muted)] bg-[var(--color-accent-muted)] px-4 py-3 text-sm font-medium text-[var(--color-accent)]">
               {saveWarning}
             </div>
           )}
         </div>
       </div>
 
-      <div className="flex items-center gap-4 px-20 py-2 border-t border-slate-100 bg-[var(--background)]">
-        <span className="text-[11px] text-slate-400">
-          {editor.storage.characterCount?.words?.() ?? 0} words
+      <div className="flex items-center gap-4 px-20 py-2 border-t border-[var(--color-border)] bg-[var(--background)]">
+        <span className="text-[11px] text-[var(--color-text-muted)]">
+          {t("editor.wordCount", { count: editor.storage.characterCount?.words?.() ?? 0 })}
         </span>
-        <span className="text-slate-200">·</span>
-        <span className="text-[11px] text-slate-400">
-          {editor.storage.characterCount?.characters?.() ?? 0} characters
+        <span className="text-[var(--color-border)]">·</span>
+        <span className="text-[11px] text-[var(--color-text-muted)]">
+          {t("editor.charCount", { count: editor.storage.characterCount?.characters?.() ?? 0 })}
         </span>
       </div>
       <Dialog.Root open={pendingCommentDraft != null} onOpenChange={(open) => {
@@ -1427,13 +1474,13 @@ export function MainEditor({
         }
       }}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-sm" />
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--color-text)]/30 backdrop-blur-sm" />
           <Dialog.Content className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="w-full max-w-lg rounded-[32px] bg-white p-8 shadow-2xl">
+            <div className="w-full max-w-lg rounded-[32px] bg-[var(--color-surface)] p-8 shadow-2xl">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">New comment</p>
-                  <Dialog.Title className="mt-2 text-2xl font-bold text-slate-900">Discuss this passage</Dialog.Title>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("editor.comment.new")}</p>
+                  <Dialog.Title className="mt-2 text-2xl font-bold text-[var(--color-text)]">{t("editor.comment.discussPassage")}</Dialog.Title>
                 </div>
                 <button
                   type="button"
@@ -1441,20 +1488,20 @@ export function MainEditor({
                     setPendingCommentDraft(null);
                     setCommentError(null);
                   }}
-                  className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-                  aria-label="Close comment composer"
+                  className="rounded-xl p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)]"
+                  aria-label={t("editor.comment.close")}
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <div className="mt-6 rounded-2xl bg-slate-50 px-4 py-4 text-sm font-medium leading-relaxed text-slate-700">
+              <div className="mt-6 rounded-2xl bg-[var(--color-canvas)] px-4 py-4 text-sm font-medium leading-relaxed text-[var(--color-text)]">
                 “{pendingCommentDraft?.selectedText ?? ""}”
               </div>
 
               <div className="mt-5">
-                <label htmlFor="comment-draft" className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
-                  Comment
+                <label htmlFor="comment-draft" className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
+                  {t("editor.comment.label")}
                 </label>
                 <textarea
                   id="comment-draft"
@@ -1462,20 +1509,20 @@ export function MainEditor({
                   onChange={(event) =>
                     setPendingCommentDraft((draft) => (draft ? { ...draft, content: event.target.value } : draft))
                   }
-                  placeholder="Explain what needs attention, what feels off, or what decision needs discussion."
-                  className="mt-2 min-h-[150px] w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-slate-400"
+                  placeholder={t("editor.comment.placeholder")}
+                  className="mt-2 min-h-[150px] w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm outline-none transition-colors focus:border-[var(--color-text-muted)]"
                 />
               </div>
 
               {commentError && (
-                <div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                <div className="mt-4 rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-4 py-3 text-sm font-medium text-[var(--color-destructive)]">
                   {commentError}
                 </div>
               )}
 
               <div className="mt-6 flex items-center justify-between gap-3">
-                <p className="text-xs leading-relaxed text-slate-400">
-                  Comments attach to saved text anchors so the thread survives future refreshes.
+                <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">
+                  {t("editor.comment.hint")}
                 </p>
                 <div className="flex gap-3">
                   <button
@@ -1484,17 +1531,17 @@ export function MainEditor({
                       setPendingCommentDraft(null);
                       setCommentError(null);
                     }}
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
+                    className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-alt)]"
                   >
-                    Cancel
+                    {t("editor.cancel")}
                   </button>
                   <button
                     type="button"
                     onClick={() => void handleCreateComment()}
                     disabled={isCreatingComment || !(pendingCommentDraft?.content.trim())}
-                    className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-2xl bg-[var(--color-text)] px-4 py-2 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isCreatingComment ? "Posting..." : "Post comment"}
+                    {isCreatingComment ? t("editor.comment.posting") : t("editor.comment.post")}
                   </button>
                 </div>
               </div>
@@ -1524,7 +1571,7 @@ function ToolbarButton({
       disabled={disabled}
       className={cn(
         "cursor-pointer p-1.5 rounded-lg transition-all disabled:cursor-not-allowed disabled:opacity-45",
-        active ? "bg-slate-900 text-white shadow-md" : "text-slate-400 hover:bg-slate-100 hover:text-slate-600",
+        active ? "bg-[var(--color-text)] text-white shadow-md" : "text-[var(--color-text-muted)] hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)]",
       )}
     >
       {children}
@@ -1532,16 +1579,3 @@ function ToolbarButton({
   );
 }
 
-function ToolbarTooltip({ children, text }: { children: React.ReactNode; text: string }) {
-  return (
-    <div className="group relative flex justify-center">
-      {children}
-      <div className="pointer-events-none absolute top-full mt-3 hidden flex-col items-center group-hover:flex z-50 animate-in fade-in slide-in-from-top-1 duration-200">
-        <div className="w-3 h-3 bg-slate-900 rotate-45 -mb-1.5" />
-        <div className="bg-slate-900 text-white text-[11px] font-medium p-3 rounded-xl shadow-2xl max-w-[200px] text-center leading-relaxed">
-          {text}
-        </div>
-      </div>
-    </div>
-  );
-}
