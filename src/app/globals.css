@@ -2,6 +2,20 @@
 @import "tailwind-animate";
 
 :root {
+  --color-canvas: #f7f7f5;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f4f4f5;
+  --color-border: #e2e8f0;
+  --color-text: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+  --color-accent: #2563eb;
+  --color-accent-muted: #eff6ff;
+  --color-success: #059669;
+  --color-destructive: #dc2626;
+  --color-editor-bg: var(--color-surface);
+  --color-editor-table-border: var(--color-border);
+  --color-editor-table-header: var(--color-surface-alt);
   --font-be-vietnam-pro: "Be Vietnam Pro", "Noto Sans Variable", ui-sans-serif, system-ui, sans-serif;
   --font-inter: "Inter Variable", "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
   --font-manrope: "Manrope Variable", "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
@@ -296,6 +310,9 @@
 .font-noto-serif { --font-family: var(--font-noto-serif); }
 .font-space-grotesk { --font-family: var(--font-space-grotesk); }
 
+/* Note: .theme-dark and .theme-midnight were intentionally removed —
+   no usages found in the codebase. Use .theme-notion-dark as the default dark theme. */
+
 /* ===== Body ===== */
 body {
   color: var(--color-text);
@@ -305,21 +322,14 @@ body {
 }
 
 /* ===== Smooth theme toggle ===== */
-* {
+body, body * {
   transition-property: background-color, border-color, color;
   transition-duration: 0.15s;
   transition-timing-function: ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; }
-}
-
-/* ===== Editor-specific tokens ===== */
-body {
-  --color-editor-bg: var(--color-surface);
-  --color-editor-table-border: var(--color-border);
-  --color-editor-table-header: var(--color-surface-alt);
+  body, body * { transition: none !important; }
 }
 
 /* ===== Editor styles ===== */
@@ -379,6 +389,15 @@ body {
   border-top: 2px solid var(--color-border);
   margin: 1.5em 0;
 }
+
+.editor-image-wrap {
+  position: relative;
+  resize: both;
+  overflow: hidden;
+  border-radius: 0.375rem;
+  background: var(--color-editor-bg);
+}
+.editor-image-wrap > img { display: block; }
 
 /* Comment thread highlight */
 [data-comment-thread-id] {
