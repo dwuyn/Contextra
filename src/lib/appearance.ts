@@ -1,13 +1,13 @@
 export type ThemeType =
-  | "notion"
-  | "mist"
-  | "forest"
-  | "cream"
-  | "graphite"
-  | "rose"
-  | "sage"
-  | "harbor"
-  | "plum";
+  | "notion" | "notion-dark"
+  | "mist" | "mist-dark"
+  | "forest" | "forest-dark"
+  | "cream" | "cream-dark"
+  | "graphite" | "graphite-dark"
+  | "rose" | "rose-dark"
+  | "sage" | "sage-dark"
+  | "harbor" | "harbor-dark"
+  | "plum" | "plum-dark";
 
 export type FontType =
   | "be-vietnam-pro"
@@ -174,6 +174,20 @@ export const THEME_OPTIONS: {
   },
 ];
 
+export const THEME_CARDS = THEME_OPTIONS.map(({ id, name, swatches }) => ({
+  id,
+  name,
+  family: name,
+  swatches: [swatches[0], swatches[1]],
+}));
+
+export function toggleThemeDark(theme: ThemeType): ThemeType {
+  if (theme.endsWith("-dark")) {
+    return theme.slice(0, -5) as ThemeType;
+  }
+  return (theme + "-dark") as ThemeType;
+}
+
 export const FONT_OPTIONS: {
   id: FontType;
   name: string;
@@ -230,9 +244,10 @@ export function normalizeTheme(value: unknown): ThemeType {
       return "notion";
     }
 
-    const base = value.endsWith("-dark") ? value.slice(0, -5) : value;
+    const isDark = value.endsWith("-dark");
+    const base = isDark ? value.slice(0, -5) : value;
     if (THEME_IDS.has(base as ThemeType)) {
-      return base as ThemeType;
+      return (base + (isDark ? "-dark" : "")) as ThemeType;
     }
   }
 

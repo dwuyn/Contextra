@@ -2,9 +2,9 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { User, Palette, Camera, Lock } from "lucide-react";
+import { User, Palette, Camera, Lock, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { FONT_OPTIONS, THEME_OPTIONS } from "@/lib/appearance";
+import { FONT_OPTIONS, THEME_CARDS, toggleThemeDark } from "@/lib/appearance";
 import { usePreferencesStore } from "@/store/usePreferencesStore";
 import { updateProfile, changePassword, logout } from "@/actions/auth";
 import { useRouter } from "next/navigation";
@@ -134,31 +134,71 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
               <div className="space-y-10">
                 <section>
                   <h3 className="text-lg font-bold text-slate-900 mb-6">Theme</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    {THEME_OPTIONS.map((t) => (
-                      <button
-                        key={t.id}
-                        onClick={() => setTheme(t.id)}
+                  
+                  {/* Dark mode toggle */}
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-medium">Dark mode</span>
+                    <button
+                      type="button"
+                      onClick={() => setTheme(toggleThemeDark(theme))}
+                      className={cn(
+                        "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                        theme.endsWith("-dark")
+                          ? "bg-[var(--color-accent)]"
+                          : "bg-[var(--color-border)]"
+                      )}
+                      role="switch"
+                      aria-checked={theme.endsWith("-dark")}
+                      aria-label="Toggle dark mode"
+                    >
+                      <span
                         className={cn(
-                          "flex min-h-28 flex-col items-start rounded-2xl border-2 p-6 text-left transition-all",
-                          theme === t.id ? "shadow-sm" : "hover:shadow-sm"
+                          "inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-sm transition-transform",
+                          theme.endsWith("-dark") ? "translate-x-5" : "translate-x-0.5"
                         )}
-                        style={{
-                          backgroundColor: t.previewBg,
-                          borderColor: theme === t.id ? t.previewAccent : "rgba(148, 163, 184, 0.26)",
-                          color: t.previewText,
-                        }}
                       >
-                        <div className="flex gap-2 mb-4">
-                          {t.swatches.map((swatch) => (
-                            <div
-                              key={swatch}
-                              className="h-4 w-4 rounded-full border border-black/10"
-                              style={{ backgroundColor: swatch }}
-                            />
-                          ))}
+                        {theme.endsWith("-dark") ? (
+                          <Moon className="h-3 w-3" />
+                        ) : (
+                          <Sun className="h-3 w-3 text-amber-500" />
+                        )}
+                      </span>
+                    </button>
+                  </div>
+                  
+                  {/* Theme swatch grid (shows only light family variants) */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {THEME_CARDS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          const target = theme.endsWith("-dark")
+                            ? (opt.id + "-dark") as typeof theme
+                            : opt.id;
+                          setTheme(target);
+                        }}
+                        className={cn(
+                          "flex items-center gap-3 rounded-xl border p-3 text-left text-sm transition-all",
+                          theme === opt.id || theme === (opt.id + "-dark")
+                            ? "border-[var(--color-accent)] ring-2 ring-[var(--color-accent-muted)]"
+                            : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"
+                        )}
+                        aria-label={`${opt.family} theme`}
+                        aria-pressed={theme === opt.id || theme === (opt.id + "-dark")}
+                      >
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-xs font-medium">{opt.family}</span>
+                          <div className="flex gap-1">
+                            {opt.swatches.map((color) => (
+                              <div
+                                key={color}
+                                className="h-3 w-3 rounded-full border border-[var(--color-border)]"
+                                style={{ backgroundColor: color }}
+                              />
+                            ))}
+                          </div>
                         </div>
-                        <span className="font-bold">{t.name}</span>
                       </button>
                     ))}
                   </div>

@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   normalizeTheme,
   normalizeFont,
+  toggleThemeDark,
   DEFAULT_THEME,
   DEFAULT_FONT,
   type ThemeType,
@@ -51,26 +52,26 @@ describe("normalizeTheme", () => {
     });
   });
 
-  describe("dark suffix stripping", () => {
-    it('strips -dark from "notion-dark"', () => {
-      expect(normalizeTheme("notion-dark")).toBe("notion");
+  describe("dark suffix preserving", () => {
+    it('preserves -dark on "notion-dark"', () => {
+      expect(normalizeTheme("notion-dark")).toBe("notion-dark");
     });
 
-    it('strips -dark from "mist-dark"', () => {
-      expect(normalizeTheme("mist-dark")).toBe("mist");
+    it('preserves -dark on "mist-dark"', () => {
+      expect(normalizeTheme("mist-dark")).toBe("mist-dark");
     });
 
-    it('strips -dark from "forest-dark"', () => {
-      expect(normalizeTheme("forest-dark")).toBe("forest");
+    it('preserves -dark on "forest-dark"', () => {
+      expect(normalizeTheme("forest-dark")).toBe("forest-dark");
     });
 
-    it('strips -dark from other valid themes', () => {
-      expect(normalizeTheme("cream-dark")).toBe("cream");
-      expect(normalizeTheme("graphite-dark")).toBe("graphite");
-      expect(normalizeTheme("rose-dark")).toBe("rose");
-      expect(normalizeTheme("sage-dark")).toBe("sage");
-      expect(normalizeTheme("harbor-dark")).toBe("harbor");
-      expect(normalizeTheme("plum-dark")).toBe("plum");
+    it('preserves -dark on other valid themes', () => {
+      expect(normalizeTheme("cream-dark")).toBe("cream-dark");
+      expect(normalizeTheme("graphite-dark")).toBe("graphite-dark");
+      expect(normalizeTheme("rose-dark")).toBe("rose-dark");
+      expect(normalizeTheme("sage-dark")).toBe("sage-dark");
+      expect(normalizeTheme("harbor-dark")).toBe("harbor-dark");
+      expect(normalizeTheme("plum-dark")).toBe("plum-dark");
     });
 
     it('returns DEFAULT_THEME when -dark is on an unknown theme', () => {
@@ -189,5 +190,23 @@ describe("normalizeFont", () => {
     it("returns DEFAULT_FONT for objects", () => {
       expect(normalizeFont({})).toBe(DEFAULT_FONT);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// toggleThemeDark
+// ---------------------------------------------------------------------------
+
+describe("toggleThemeDark", () => {
+  it("adds -dark suffix to a light theme", () => {
+    expect(toggleThemeDark("notion")).toBe("notion-dark");
+    expect(toggleThemeDark("mist")).toBe("mist-dark");
+    expect(toggleThemeDark("forest")).toBe("forest-dark");
+  });
+
+  it("removes -dark suffix from a dark theme", () => {
+    expect(toggleThemeDark("notion-dark")).toBe("notion");
+    expect(toggleThemeDark("mist-dark")).toBe("mist");
+    expect(toggleThemeDark("plum-dark")).toBe("plum");
   });
 });
