@@ -801,16 +801,16 @@ export function StoryBibleView() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-white overflow-y-auto">
+    <div className="h-full flex flex-col bg-[var(--color-surface)] overflow-y-auto">
       <div className="max-w-5xl mx-auto w-full px-12 py-10">
         <header className="mb-10">
-          <h1 className="text-3xl font-extrabold text-slate-900 mb-2">Story Bible</h1>
-          <p className="text-sm text-slate-400">
+          <h1 className="text-3xl font-extrabold text-[var(--color-text)] mb-2">Story Bible</h1>
+          <p className="text-sm text-[var(--color-text-muted)]">
             Track the key details of your story&apos;s world to improve AI suggestions or fill it up
             step-by-step to grow your idea into a first draft.
           </p>
           {errorMessage && (
-            <div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+            <div className="mt-4 rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-4 py-3 text-sm font-medium text-[var(--color-destructive)]">
               {errorMessage}
             </div>
           )}
@@ -822,7 +822,7 @@ export function StoryBibleView() {
               key={`summary-${currentProject.metadata.updatedAt}`}
               ref={braindumpRef}
               placeholder="Write a braindump of everything you know about the story. You can include information about plot, characters, worldbuilding, theme - anything!"
-              className="w-full min-h-[120px] bg-white border border-slate-100 rounded-xl p-4 text-sm text-slate-600 outline-none focus:border-slate-300 transition-colors resize-none"
+              className="w-full min-h-[120px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
               defaultValue={currentProject.metadata.summary}
               onBlur={() => void handleUpdateSummary()}
               disabled={!canManage || busyAction === "summary"}
@@ -834,7 +834,7 @@ export function StoryBibleView() {
               key={`genre-${currentProject.metadata.updatedAt}`}
               ref={genreRef}
               placeholder="What genre are you writing in? Feel free to include sub-genres and tropes."
-              className="w-full min-h-[80px] bg-white border border-slate-100 rounded-xl p-4 text-sm text-slate-600 outline-none focus:border-slate-300 transition-colors resize-none"
+              className="w-full min-h-[80px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
               defaultValue={currentProject.metadata.genre}
               onBlur={() => void handleUpdateGenre()}
               disabled={!canManage || busyAction === "genre"}
@@ -847,7 +847,7 @@ export function StoryBibleView() {
                 key={`synopsis-${currentProject.metadata.updatedAt}`}
                 ref={synopsisRef}
                 placeholder="Introduce the characters, their goals, and the central conflict, while conveying the story's tone, themes, and unique elements."
-                className="w-full min-h-[100px] bg-white border border-slate-100 rounded-xl p-4 pr-40 text-sm text-slate-600 outline-none focus:border-slate-300 transition-colors resize-none"
+                className="w-full min-h-[100px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 pr-40 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
                 defaultValue={currentProject.contextMemory.sharedNotes}
                 onBlur={() => void handleUpdateSynopsis()}
                 disabled={!canEdit || busyAction === "synopsis" || busyAction === "generateSynopsis"}
@@ -856,7 +856,7 @@ export function StoryBibleView() {
                 <button
                   onClick={() => void handleGenerateSynopsis()}
                   disabled={busyAction === "generateSynopsis"}
-                  className="absolute right-4 top-4 flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-md hover:bg-indigo-700 transition-all opacity-0 group-hover:opacity-100 disabled:opacity-60"
+                  className="absolute right-4 top-4 flex items-center gap-2 px-3 py-1.5 bg-[var(--color-accent)] text-white rounded-lg text-xs font-bold shadow-md hover:bg-[var(--color-accent)] transition-all opacity-0 group-hover:opacity-100 disabled:opacity-60"
                 >
                   {busyAction === "generateSynopsis" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                   Generate Synopsis
@@ -888,12 +888,12 @@ export function StoryBibleView() {
                 {currentProject.characters.map((character) => (
                   <div
                     key={character.id}
-                    className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-start justify-between gap-4"
+                    className="p-4 bg-[var(--color-surface-alt)] rounded-xl border border-[var(--color-border)] flex items-start justify-between gap-4"
                   >
                     <div>
-                      <h4 className="font-bold text-slate-900 text-sm">{character.name}</h4>
-                      <p className="text-xs text-slate-500 mt-0.5">{character.role}</p>
-                      <p className="text-xs text-slate-400 mt-2 italic leading-relaxed whitespace-pre-wrap">
+                      <h4 className="font-bold text-[var(--color-text)] text-sm">{character.name}</h4>
+                      <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">{character.role}</p>
+                      <p className="text-xs text-[var(--color-text-muted)] mt-2 italic leading-relaxed whitespace-pre-wrap">
                         &ldquo;{character.memory}&rdquo;
                       </p>
                     </div>
@@ -943,7 +943,7 @@ export function StoryBibleView() {
                 {worldRules.map((rule, index) => (
                   <div
                     key={`${rule}-${index}`}
-                    className="px-4 py-3 bg-white border border-slate-100 rounded-xl text-xs text-slate-600 flex items-center justify-between gap-4"
+                    className="px-4 py-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text-secondary)] flex items-center justify-between gap-4"
                   >
                     <span className="leading-relaxed whitespace-pre-wrap">{rule}</span>
                     {canEdit && (
@@ -992,17 +992,17 @@ export function StoryBibleView() {
             ) : (
               <div className="space-y-3">
                 {canonProposals.map((proposal) => (
-                  <div key={proposal.id} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                  <div key={proposal.id} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-500">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-accent)]">
                           {proposal.type.replace(/_/g, " ")}
                         </p>
-                        <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-800">
+                        <p className="mt-2 text-sm font-semibold leading-relaxed text-[var(--color-text)]">
                           {formatCanonProposalPayload(proposal.payload)}
                         </p>
                         {proposal.rationale && (
-                          <p className="mt-2 text-xs leading-relaxed text-slate-400">{proposal.rationale}</p>
+                          <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-muted)]">{proposal.rationale}</p>
                         )}
                       </div>
                       {canEdit && (
@@ -1061,52 +1061,52 @@ export function StoryBibleView() {
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-slate-100">
-                      <th className="text-left py-2 px-3 font-semibold text-slate-500 uppercase tracking-wider">Term</th>
-                      <th className="text-left py-2 px-3 font-semibold text-slate-500 uppercase tracking-wider">Replacement</th>
-                      <th className="text-left py-2 px-3 font-semibold text-slate-500 uppercase tracking-wider">Mode</th>
-                      <th className="text-left py-2 px-3 font-semibold text-slate-500 uppercase tracking-wider">Priority</th>
-                      <th className="text-center py-2 px-3 font-semibold text-slate-500 uppercase tracking-wider">On</th>
-                      <th className="text-left py-2 px-3 font-semibold text-slate-500 uppercase tracking-wider">Source</th>
-                      <th className="text-right py-2 px-3 font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                    <tr className="border-b border-[var(--color-border)]">
+                      <th className="text-left py-2 px-3 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Term</th>
+                      <th className="text-left py-2 px-3 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Replacement</th>
+                      <th className="text-left py-2 px-3 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Mode</th>
+                      <th className="text-left py-2 px-3 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Priority</th>
+                      <th className="text-center py-2 px-3 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">On</th>
+                      <th className="text-left py-2 px-3 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Source</th>
+                      <th className="text-right py-2 px-3 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pronunciationEntries.map((entry) => (
                       <tr
                         key={entry.id}
-                        className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors"
+                        className="border-b border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] transition-colors"
                       >
-                        <td className="py-2.5 px-3 font-medium text-slate-900">{entry.term}</td>
-                        <td className="py-2.5 px-3 text-slate-600 max-w-[200px] truncate" title={entry.replacement}>
+                        <td className="py-2.5 px-3 font-medium text-[var(--color-text)]">{entry.term}</td>
+                        <td className="py-2.5 px-3 text-[var(--color-text-secondary)] max-w-[200px] truncate" title={entry.replacement}>
                           {entry.replacement}
                         </td>
                         <td className="py-2.5 px-3">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)] font-medium">
                             {entry.renderMode}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3 text-slate-500">{entry.priority}</td>
+                        <td className="py-2.5 px-3 text-[var(--color-text-secondary)]">{entry.priority}</td>
                         <td className="py-2.5 px-3 text-center">
                           {canEdit && (
                             <button
                               onClick={() => void handleTogglePronunciationEntry(entry)}
                               className={cn(
                                 "inline-flex items-center justify-center w-8 h-5 rounded-full transition-colors",
-                                entry.enabled ? "bg-indigo-500" : "bg-slate-200"
+                                entry.enabled ? "bg-[var(--color-accent)]" : "bg-[var(--color-border)]"
                               )}
                               aria-label={entry.enabled ? "Disable entry" : "Enable entry"}
                             >
                               <span
                                 className={cn(
-                                  "inline-block w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform",
+                                  "inline-block w-3.5 h-3.5 rounded-full bg-[var(--color-surface)] shadow-sm transition-transform",
                                   entry.enabled ? "translate-x-3" : "-translate-x-3"
                                 )}
                               />
                             </button>
                           )}
                         </td>
-                        <td className="py-2.5 px-3 text-slate-400">{entry.source}</td>
+                        <td className="py-2.5 px-3 text-[var(--color-text-muted)]">{entry.source}</td>
                         <td className="py-2.5 px-3">
                           <div className="flex items-center justify-end gap-1.5">
                             <IconActionButton
@@ -1167,11 +1167,11 @@ export function StoryBibleView() {
             }
           >
             {!hasOutlineContent(outline) ? (
-              <div className="flex flex-col items-center justify-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+              <div className="flex flex-col items-center justify-center py-10 bg-[var(--color-surface-alt)] rounded-2xl border border-dashed border-[var(--color-border)]">
                 <button
                   onClick={() => void handleGenerateOutline()}
                   disabled={!canEdit || busyAction === "generateOutline"}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-indigo-200 transition-all disabled:opacity-50"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[var(--color-accent)] text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-indigo-200 transition-all disabled:opacity-50"
                 >
                   {busyAction === "generateOutline" ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
                   Generate Novel Outline
@@ -1179,7 +1179,7 @@ export function StoryBibleView() {
                 <button
                   onClick={() => void handleGenerateLongOutline()}
                   disabled={!canEdit || busyAction === "generateLongOutline"}
-                  className="mt-3 flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-lg hover:bg-slate-800 transition-all disabled:opacity-50"
+                  className="mt-3 flex items-center gap-2 px-5 py-2.5 bg-[var(--color-text)] text-white rounded-xl text-sm font-bold shadow-lg hover:opacity-90 transition-all disabled:opacity-50"
                 >
                   {busyAction === "generateLongOutline" ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
                   Generate 200-Chapter Map
@@ -1187,7 +1187,7 @@ export function StoryBibleView() {
                 {canEdit && (
                   <button
                     onClick={openActCreate}
-                    className="mt-4 text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                    className="mt-4 text-xs font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors"
                   >
                     or start by adding an act manually
                   </button>
@@ -1201,7 +1201,7 @@ export function StoryBibleView() {
                       <button
                         onClick={() => void handleGenerateOutline()}
                         disabled={busyAction === "generateOutline"}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors disabled:opacity-50"
+                        className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent-muted)] text-[var(--color-accent)] rounded-xl text-xs font-bold hover:bg-[var(--color-accent-muted)] transition-colors disabled:opacity-50"
                       >
                         {busyAction === "generateOutline" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                         Regenerate Outline
@@ -1209,7 +1209,7 @@ export function StoryBibleView() {
                       <button
                         onClick={() => void handleGenerateLongOutline()}
                         disabled={busyAction === "generateLongOutline"}
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors disabled:opacity-50"
+                        className="flex items-center gap-2 px-4 py-2 bg-[var(--color-text)] text-white rounded-xl text-xs font-bold hover:opacity-90 transition-colors disabled:opacity-50"
                       >
                         {busyAction === "generateLongOutline" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                         200-Chapter Map
@@ -1219,15 +1219,15 @@ export function StoryBibleView() {
                 </div>
 
                 {outline.acts.map((act, index) => (
-                  <div key={act.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+                  <div key={act.id} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
                           Act {index + 1}
                         </p>
-                        <h4 className="mt-1 text-lg font-bold text-slate-900">{act.title}</h4>
+                        <h4 className="mt-1 text-lg font-bold text-[var(--color-text)]">{act.title}</h4>
                         {act.summary && (
-                          <p className="mt-2 text-sm leading-relaxed text-slate-500 whitespace-pre-wrap">
+                          <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
                             {act.summary}
                           </p>
                         )}
@@ -1236,7 +1236,7 @@ export function StoryBibleView() {
                         <div className="flex items-center gap-2 shrink-0">
                           <button
                             onClick={() => openChapterCreate(act.id)}
-                            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                            className="flex items-center gap-1.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[11px] font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
                           >
                             <Plus size={12} />
                             Add Chapter
@@ -1256,7 +1256,7 @@ export function StoryBibleView() {
                     </div>
 
                     {act.chapters.length === 0 ? (
-                      <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-white/80 px-4 py-5 text-sm text-slate-400">
+                      <div className="mt-4 rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/80 px-4 py-5 text-sm text-[var(--color-text-muted)]">
                         No outline chapters yet for this act.
                       </div>
                     ) : (
@@ -1264,15 +1264,15 @@ export function StoryBibleView() {
                         {act.chapters.map((chapter, chapterIndex) => (
                           <div
                             key={chapter.id}
-                            className="rounded-2xl border border-slate-100 bg-white px-4 py-4 flex items-start justify-between gap-4"
+                            className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 flex items-start justify-between gap-4"
                           >
                             <div>
-                              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
                                 Chapter {chapterIndex + 1}
                               </p>
-                              <h5 className="mt-1 text-sm font-bold text-slate-900">{chapter.title}</h5>
+                              <h5 className="mt-1 text-sm font-bold text-[var(--color-text)]">{chapter.title}</h5>
                               {chapter.summary && (
-                                <p className="mt-2 text-xs leading-relaxed text-slate-500 whitespace-pre-wrap">
+                                <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
                                   {chapter.summary}
                                 </p>
                               )}
@@ -1495,9 +1495,9 @@ export function StoryBibleView() {
                 caseSensitive: e.target.checked,
               }))
             }
-            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+            className="h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
           />
-          <label htmlFor="pronunciation-case-sensitive" className="text-sm font-semibold text-slate-700">
+          <label htmlFor="pronunciation-case-sensitive" className="text-sm font-semibold text-[var(--color-text)]">
             Case sensitive
           </label>
         </div>
@@ -1624,15 +1624,15 @@ function BibleSection({
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm transition-all hover:shadow-md bg-white">
+    <div className="border border-[var(--color-border)] rounded-2xl overflow-hidden shadow-sm transition-all hover:shadow-md bg-[var(--color-surface)]">
       <div className="flex items-center justify-between px-6 py-4 gap-4">
         <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-4 group">
-          <div className="text-slate-400 group-hover:text-slate-600 transition-colors">
+          <div className="text-[var(--color-text-muted)] group-hover:text-[var(--color-text)] transition-colors">
             {isOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
           </div>
           <div className="flex items-center gap-3">
-            <div className="text-indigo-600">{icon}</div>
-            <span className="font-bold text-slate-900">{title}</span>
+            <div className="text-[var(--color-accent)]">{icon}</div>
+            <span className="font-bold text-[var(--color-text)]">{title}</span>
           </div>
         </button>
         {actions && <div className="animate-in fade-in slide-in-from-right-2 duration-300 flex gap-4">{actions}</div>}
@@ -1654,13 +1654,13 @@ function EmptyState({
   onAction?: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-6 py-8 text-center">
-      <p className="text-sm font-bold text-slate-700">{title}</p>
-      <p className="mt-2 text-xs leading-relaxed text-slate-400 max-w-lg mx-auto">{description}</p>
+    <div className="rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-alt)] px-6 py-8 text-center">
+      <p className="text-sm font-bold text-[var(--color-text)]">{title}</p>
+      <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-muted)] max-w-lg mx-auto">{description}</p>
       {actionLabel && onAction && (
         <button
           onClick={onAction}
-          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-xs font-bold text-[var(--color-text)] hover:bg-[var(--color-surface-alt)] transition-colors"
         >
           <Plus size={14} />
           {actionLabel}
@@ -1683,7 +1683,7 @@ function SectionActionButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700 disabled:text-slate-300 disabled:cursor-not-allowed transition-colors"
+      className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:text-[var(--color-text-muted)] disabled:cursor-not-allowed transition-colors"
     >
       {children}
     </button>
@@ -1711,8 +1711,8 @@ function IconActionButton({
       className={cn(
         "p-2 rounded-lg transition-colors border",
         variant === "danger"
-          ? "border-rose-100 text-rose-400 hover:text-rose-600 hover:bg-rose-50"
-          : "border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50",
+          ? "border-[var(--color-destructive)]/20 text-[var(--color-text-muted)] hover:text-[var(--color-destructive)] hover:bg-[var(--color-destructive)]/10"
+          : "border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-alt)]",
         disabled && "opacity-40 cursor-not-allowed pointer-events-none"
       )}
     >
@@ -1743,17 +1743,17 @@ function EntityDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-sm" />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--color-text)]/15 backdrop-blur-sm" />
         <Dialog.Content className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-xl rounded-[28px] bg-white p-8 shadow-2xl">
+          <div className="w-full max-w-xl rounded-[28px] bg-[var(--color-surface)] p-8 shadow-2xl">
             <div className="flex items-center justify-between gap-4 mb-6">
               <div>
-                <Dialog.Title className="text-2xl font-bold text-slate-900">{title}</Dialog.Title>
-                <Dialog.Description className="mt-2 text-sm text-slate-500">{description}</Dialog.Description>
+                <Dialog.Title className="text-2xl font-bold text-[var(--color-text)]">{title}</Dialog.Title>
+                <Dialog.Description className="mt-2 text-sm text-[var(--color-text-secondary)]">{description}</Dialog.Description>
               </div>
               <Dialog.Close asChild>
-                <button aria-label="Close dialog" className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                  <X size={20} className="text-slate-400" />
+                <button aria-label="Close dialog" className="p-2 hover:bg-[var(--color-surface-alt)] rounded-full transition-colors">
+                  <X size={20} className="text-[var(--color-text-muted)]" />
                 </button>
               </Dialog.Close>
             </div>
@@ -1762,14 +1762,14 @@ function EntityDialog({
 
             <div className="mt-8 flex items-center justify-end gap-3">
               <Dialog.Close asChild>
-                <button className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors">
+                <button className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors">
                   Cancel
                 </button>
               </Dialog.Close>
               <button
                 onClick={onSubmit}
                 disabled={busy}
-                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-2xl bg-[var(--color-text)] px-5 py-3 text-sm font-bold text-white hover:opacity-90 transition-colors disabled:opacity-50"
               >
                 {busy && <Loader2 size={16} className="animate-spin" />}
                 {submitLabel}
@@ -1804,21 +1804,21 @@ function ConfirmDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-sm" />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--color-text)]/15 backdrop-blur-sm" />
         <Dialog.Content className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
+          <div className="w-full max-w-md rounded-[28px] bg-[var(--color-surface)] p-8 shadow-2xl">
             <div className="flex items-start gap-4">
               <div
                 className={cn(
                   "mt-1 flex h-10 w-10 items-center justify-center rounded-2xl",
-                  confirmTone === "danger" ? "bg-rose-50 text-rose-500" : "bg-indigo-50 text-indigo-600"
+                  confirmTone === "danger" ? "bg-[var(--color-destructive)]/10 text-[var(--color-destructive)]" : "bg-[var(--color-accent-muted)] text-[var(--color-accent)]"
                 )}
               >
                 {confirmTone === "danger" ? <Trash2 size={18} /> : <Sparkles size={18} />}
               </div>
               <div>
-                <Dialog.Title className="text-xl font-bold text-slate-900">{title}</Dialog.Title>
-                <Dialog.Description className="mt-2 text-sm leading-relaxed text-slate-500">
+                <Dialog.Title className="text-xl font-bold text-[var(--color-text)]">{title}</Dialog.Title>
+                <Dialog.Description className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
                   {description}
                 </Dialog.Description>
               </div>
@@ -1826,7 +1826,7 @@ function ConfirmDialog({
 
             <div className="mt-8 flex items-center justify-end gap-3">
               <Dialog.Close asChild>
-                <button className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors">
+                <button className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors">
                   Cancel
                 </button>
               </Dialog.Close>
@@ -1835,7 +1835,7 @@ function ConfirmDialog({
                 disabled={busy}
                 className={cn(
                   "inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold text-white transition-colors disabled:opacity-50",
-                  confirmTone === "danger" ? "bg-rose-600 hover:bg-rose-700" : "bg-indigo-600 hover:bg-indigo-700"
+                  confirmTone === "danger" ? "bg-[var(--color-destructive)] hover:opacity-90" : "bg-[var(--color-accent)] hover:bg-[var(--color-accent)]"
                 )}
               >
                 {busy && <Loader2 size={16} className="animate-spin" />}
@@ -1862,13 +1862,13 @@ function FormInput({
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-semibold text-slate-700">{label}</span>
+      <span className="mb-2 block text-sm font-semibold text-[var(--color-text)]">{label}</span>
       <input
         type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-900 transition-colors"
+        className="w-full rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm outline-none focus:border-[var(--color-text)] transition-colors"
       />
     </label>
   );
@@ -1887,12 +1887,12 @@ function FormTextarea({
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-semibold text-slate-700">{label}</span>
+      <span className="mb-2 block text-sm font-semibold text-[var(--color-text)]">{label}</span>
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full min-h-[120px] rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-900 transition-colors resize-none"
+        className="w-full min-h-[120px] rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm outline-none focus:border-[var(--color-text)] transition-colors resize-none"
       />
     </label>
   );
@@ -1911,11 +1911,11 @@ function FormSelect({
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-semibold text-slate-700">{label}</span>
+      <span className="mb-2 block text-sm font-semibold text-[var(--color-text)]">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-900 transition-colors bg-white"
+        className="w-full rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--color-surface)]"
       >
         <option value="" disabled>
           Select an act

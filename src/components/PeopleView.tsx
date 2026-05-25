@@ -145,12 +145,12 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
     <div className="flex flex-col h-full animate-in fade-in duration-300" aria-busy={loading}>
       <header className="flex items-center justify-between mb-8">
         <div>
-          <p className="text-xs font-medium text-slate-400 mb-2">Workspace</p>
-          <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">People</h2>
+          <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2">Workspace</p>
+          <h2 className="text-4xl font-extrabold text-[var(--color-text)] tracking-tight">People</h2>
         </div>
         <button 
           onClick={onClose}
-          className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 hover:bg-slate-50 transition-colors shadow-sm"
+          className="flex h-10 items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm font-bold text-[var(--color-text)] hover:bg-[var(--color-canvas)] transition-colors shadow-sm"
         >
           Close
         </button>
@@ -163,14 +163,14 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
             <label htmlFor="people-search" className="sr-only">
               Find people by email
             </label>
-            <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+            <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" size={14} />
             <input 
               id="people-search"
               type="text" 
               placeholder="Find by email" 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl bg-slate-50 border-none px-9 py-2.5 text-sm outline-none placeholder:text-slate-400"
+              className="w-full rounded-xl bg-[var(--color-canvas)] border-none px-9 py-2.5 text-sm outline-none placeholder:text-[var(--color-text-muted)]"
             />
           </form>
 
@@ -203,8 +203,8 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
               {searchResults.length > 0 && (
                 <section>
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-slate-900">Search results</h3>
-                    <button onClick={() => setSearchResults([])} className="text-xs text-slate-400 hover:text-slate-600">Clear</button>
+                    <h3 className="text-xl font-bold text-[var(--color-text)]">Search results</h3>
+                    <button onClick={() => setSearchResults([])} className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">Clear</button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {searchResults.map((person) => (
@@ -220,16 +220,16 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
 
               <section>
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold text-slate-900">Discover people</h3>
-                  <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-1 rounded-md">
+                  <h3 className="text-xl font-bold text-[var(--color-text)]">Discover people</h3>
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)] px-2 py-1 rounded-md">
                     {discoveredPeople.length} users
                   </span>
                 </div>
                 
                 {discoveredPeople.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 rounded-[32px] border border-dashed border-slate-200 bg-slate-50">
-                    <UsersIcon size={40} className="text-slate-200 mb-4" />
-                    <p className="text-sm text-slate-400">No new people to discover right now.</p>
+                  <div className="flex flex-col items-center justify-center py-20 rounded-[32px] border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)]">
+                    <UsersIcon size={40} className="text-[var(--color-border)] mb-4" />
+                    <p className="text-sm text-[var(--color-text-muted)]">No new people to discover right now.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -248,34 +248,34 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
 
           {activeTab === "incoming" && (
             <section>
-              <h3 className="text-xl font-bold text-slate-900 mb-6">Incoming requests</h3>
+              <h3 className="text-xl font-bold text-[var(--color-text)] mb-6">Incoming requests</h3>
               {incomingRequests.length === 0 ? (
-                <div className="p-8 rounded-[32px] border border-dashed border-slate-200 bg-slate-50 text-center text-sm text-slate-400">
+                <div className="p-8 rounded-[32px] border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)] text-center text-sm text-[var(--color-text-muted)]">
                   No incoming requests right now.
                 </div>
               ) : (
                 <div className="space-y-4">
                   {incomingRequests.map((req) => (
-                    <div key={req.id} className="flex items-center justify-between p-5 rounded-[24px] bg-white border border-slate-100 shadow-sm">
+                    <div key={req.id} className="flex items-center justify-between p-5 rounded-[24px] bg-[var(--color-surface)] border border-[var(--color-border)] shadow-sm">
                       <div className="flex items-center gap-4">
-                        <div className="h-12 w-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-lg">
+                        <div className="h-12 w-12 rounded-full bg-[var(--color-accent-muted)] text-[var(--color-accent)] flex items-center justify-center font-bold text-lg">
                           {(req.senderName || "?")[0].toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900">{req.senderName || "Unknown"}</p>
-                          <p className="text-sm text-slate-400">{req.senderEmail}</p>
+                          <p className="font-bold text-[var(--color-text)]">{req.senderName || "Unknown"}</p>
+                          <p className="text-sm text-[var(--color-text-muted)]">{req.senderEmail}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <button 
                           onClick={() => handleAccept(req.id)}
-                          className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm"
+                          className="bg-[var(--color-accent)] text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-[var(--color-accent)] transition-colors shadow-sm"
                         >
                           Accept
                         </button>
                         <button 
                           onClick={() => handleReject(req.id)}
-                          className="text-slate-300 hover:text-slate-500 p-2"
+                          className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] p-2"
                         >
                           <X size={20} />
                         </button>
@@ -289,28 +289,28 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
 
           {activeTab === "outgoing" && (
             <section>
-              <h3 className="text-xl font-bold text-slate-900 mb-6">Outgoing requests</h3>
+              <h3 className="text-xl font-bold text-[var(--color-text)] mb-6">Outgoing requests</h3>
               {outgoingRequests.length === 0 ? (
-                <div className="p-8 rounded-[32px] border border-dashed border-slate-200 bg-slate-50 text-center text-sm text-slate-400">
+                <div className="p-8 rounded-[32px] border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)] text-center text-sm text-[var(--color-text-muted)]">
                   No outgoing requests right now.
                 </div>
               ) : (
                 <div className="space-y-4">
                   {outgoingRequests.map((req) => (
-                    <div key={req.id} className="flex items-center justify-between p-5 rounded-[24px] bg-white border border-slate-100 shadow-sm">
+                    <div key={req.id} className="flex items-center justify-between p-5 rounded-[24px] bg-[var(--color-surface)] border border-[var(--color-border)] shadow-sm">
                       <div className="flex items-center gap-4">
-                        <div className="h-12 w-12 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center font-bold text-lg">
+                        <div className="h-12 w-12 rounded-full bg-[var(--color-canvas)] text-[var(--color-text-muted)] flex items-center justify-center font-bold text-lg">
                           {(req.receiverName || req.receiverEmail || "?")[0].toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900">{req.receiverName || req.receiverEmail}</p>
-                          <p className="text-sm text-slate-400">{req.receiverEmail}</p>
-                          <p className="text-[10px] text-slate-400 italic mt-1">
+                          <p className="font-bold text-[var(--color-text)]">{req.receiverName || req.receiverEmail}</p>
+                          <p className="text-sm text-[var(--color-text-muted)]">{req.receiverEmail}</p>
+                          <p className="text-[10px] text-[var(--color-text-muted)] italic mt-1">
                             Sent on {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : "recently"}
                           </p>
                         </div>
                       </div>
-                      <span className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg">
+                      <span className="text-xs font-bold text-[var(--color-text-muted)] bg-[var(--color-canvas)] px-3 py-1.5 rounded-lg">
                         PENDING
                       </span>
                     </div>
@@ -331,7 +331,7 @@ function SidebarItem({ label, count, active, onClick }: { label: string, count: 
       onClick={onClick}
       className={cn(
         "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold transition-all",
-        active ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+        active ? "bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-canvas)] hover:text-[var(--color-text)]"
       )}
     >
       {label}: {count}
@@ -341,7 +341,7 @@ function SidebarItem({ label, count, active, onClick }: { label: string, count: 
 
 function PersonCard({ person, onSendRequest }: { person: PersonSummary, onSendRequest: () => void }) {
   return (
-    <div className="group flex flex-col p-6 rounded-[28px] bg-white border border-slate-100 shadow-sm transition-all hover:shadow-md">
+    <div className="group flex flex-col p-6 rounded-[28px] bg-[var(--color-surface)] border border-[var(--color-border)] shadow-sm transition-all hover:shadow-md">
       <div className="flex items-center gap-4 mb-6">
         {person.profileImageUrl ? (
           <Image
@@ -352,28 +352,28 @@ function PersonCard({ person, onSendRequest }: { person: PersonSummary, onSendRe
             className="h-14 w-14 rounded-2xl object-cover"
           />
         ) : (
-          <div className="h-14 w-14 rounded-2xl bg-slate-50 text-slate-300 flex items-center justify-center font-bold text-xl uppercase">
+          <div className="h-14 w-14 rounded-2xl bg-[var(--color-canvas)] text-[var(--color-text-muted)] flex items-center justify-center font-bold text-xl uppercase">
             {person.name.substring(0, 2)}
           </div>
         )}
         <div className="min-w-0">
-          <h4 className="font-bold text-slate-900 truncate">{person.name}</h4>
-          <p className="text-xs text-slate-400 truncate">{person.email}</p>
+          <h4 className="font-bold text-[var(--color-text)] truncate">{person.name}</h4>
+          <p className="text-xs text-[var(--color-text-muted)] truncate">{person.email}</p>
         </div>
       </div>
       
       {person.isFriend ? (
-        <div className="flex items-center gap-2 text-xs font-bold text-green-500 bg-green-50 px-4 py-2.5 rounded-xl justify-center">
+        <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-success)] bg-[var(--color-success)]/10 px-4 py-2.5 rounded-xl justify-center">
           Already friends
         </div>
       ) : person.hasPendingRequest ? (
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-50 px-4 py-2.5 rounded-xl justify-center">
+        <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-text-muted)] bg-[var(--color-canvas)] px-4 py-2.5 rounded-xl justify-center">
           Request pending
         </div>
       ) : (
         <button 
           onClick={onSendRequest}
-          className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm"
+          className="flex items-center justify-center gap-2 bg-[var(--color-accent)] text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[var(--color-accent)] transition-colors shadow-sm"
         >
           Send request
         </button>

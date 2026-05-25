@@ -105,7 +105,7 @@ function SortableChapter({
         <button
           {...attributes}
           {...listeners}
-          className="opacity-0 group-hover/item:opacity-100 cursor-grab active:cursor-grabbing p-1 text-slate-300 hover:text-slate-500 transition-all touch-none"
+          className="opacity-0 group-hover/item:opacity-100 cursor-grab active:cursor-grabbing p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-all touch-none"
           aria-label="Drag to reorder chapter"
         >
           <GripVertical size={14} />
@@ -116,13 +116,13 @@ function SortableChapter({
         className={cn(
           "flex-1 text-left px-3 py-2.5 rounded-xl text-sm transition-all flex items-center gap-3",
           isSelected && !isStoryBibleOpen
-            ? "bg-white text-indigo-600 shadow-sm border border-slate-100 font-bold"
-            : "text-slate-500 hover:bg-slate-100"
+            ? "bg-[var(--color-surface)] text-[var(--color-accent)] shadow-sm border border-[var(--color-border)] font-bold"
+            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
         )}
       >
         <div className={cn(
           "w-1.5 h-1.5 rounded-full flex-shrink-0",
-          isSelected && !isStoryBibleOpen ? "bg-indigo-600" : "bg-slate-300 opacity-0 group-hover/item:opacity-100"
+          isSelected && !isStoryBibleOpen ? "bg-[var(--color-accent)]" : "bg-[var(--color-border)] opacity-0 group-hover/item:opacity-100"
         )} />
         <span className="truncate">{chapter.title}</span>
         {openCommentCount > 0 && (
@@ -334,14 +334,14 @@ export function SidebarNavigator() {
   };
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-slate-200 bg-[var(--background)]">
+    <aside className="flex h-full w-64 flex-col border-r border-[var(--color-border)] bg-[var(--background)]">
       {/* Back to Dashboard & Project Title */}
-      <div className="p-4 border-b border-slate-100">
-        <Link href="/" className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors mb-4">
+      <div className="p-4 border-b border-[var(--color-border)]">
+        <Link href="/" className="flex items-center gap-1 text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest hover:text-[var(--color-text)] transition-colors mb-4">
           <ChevronLeft size={12} />
           Dashboard
         </Link>
-        <h1 className="text-lg font-bold text-slate-900 leading-tight truncate">{project.metadata.name}</h1>
+        <h1 className="text-lg font-bold text-[var(--color-text)] leading-tight truncate">{project.metadata.name}</h1>
       </div>
 
       {/* Action Buttons */}
@@ -360,7 +360,7 @@ export function SidebarNavigator() {
               type="button"
               onClick={() => void handleCreateChapter()}
               disabled={isCreatingChapter || !activeBranchId}
-              className="flex cursor-pointer items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex cursor-pointer items-center justify-center gap-2 px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-bold text-[var(--color-text)] hover:bg-[var(--color-surface-alt)] transition-all shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Create new chapter"
             >
               {isCreatingChapter ? (
@@ -375,7 +375,7 @@ export function SidebarNavigator() {
               onClick={() => importInputRef.current?.click()}
               disabled={isImporting || !activeBranchId}
               title="Import Markdown or text files as chapters"
-              className="flex cursor-pointer items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex cursor-pointer items-center justify-center gap-2 px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-bold text-[var(--color-text)] hover:bg-[var(--color-surface-alt)] transition-all shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Import chapters"
             >
               {isImporting ? (
@@ -387,7 +387,7 @@ export function SidebarNavigator() {
             </button>
           </div>
           {createChapterError && (
-            <div className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-700">
+            <div className="rounded-xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-3 py-2 text-[11px] font-medium text-[var(--color-destructive)]">
               {createChapterError}
             </div>
           )}
@@ -397,7 +397,7 @@ export function SidebarNavigator() {
             </div>
           )}
           {importError && (
-            <div className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-700">
+            <div className="rounded-xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-3 py-2 text-[11px] font-medium text-[var(--color-destructive)]">
               {importError}
             </div>
           )}
@@ -412,9 +412,9 @@ export function SidebarNavigator() {
       {/* Chapters List with DnD */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
         {visibleChapters.length === 0 ? (
-          <div className="mx-2 mt-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center">
-            <p className="text-sm font-bold text-slate-600">No chapters yet</p>
-            <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+          <div className="mx-2 mt-2 rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-alt)] px-4 py-6 text-center">
+            <p className="text-sm font-bold text-[var(--color-text-secondary)]">No chapters yet</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
               {canEdit
                 ? `Create your first chapter in ${activeBranch?.name ?? "this branch"} with New.`
                 : "This branch does not have any chapters yet."}
@@ -446,18 +446,18 @@ export function SidebarNavigator() {
       </div>
 
       {/* Bottom Controls */}
-      <div className="p-4 border-t border-slate-100 space-y-4">
+      <div className="p-4 border-t border-[var(--color-border)] space-y-4">
         {/* Privacy Toggle */}
-        <div className="bg-slate-50/50 rounded-2xl p-3 border border-slate-100">
+        <div className="bg-[var(--color-surface-alt)] rounded-2xl p-3 border border-[var(--color-border)]">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Visibility</span>
+            <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest">Visibility</span>
             {project.metadata.isPublic ? (
-              <span className="flex items-center gap-1 text-[10px] font-bold text-green-600 uppercase">
+              <span className="flex items-center gap-1 text-[10px] font-bold text-[var(--color-success)] uppercase">
                 <Globe size={10} />
                 Public
               </span>
             ) : (
-              <span className="flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase">
+              <span className="flex items-center gap-1 text-[10px] font-bold text-[var(--color-text-secondary)] uppercase">
                 <Lock size={10} />
                 Private
               </span>
@@ -469,8 +469,8 @@ export function SidebarNavigator() {
             className={cn(
               "w-full flex items-center justify-center gap-2 py-2 rounded-xl text-[11px] font-bold transition-all border shadow-sm",
               project.metadata.isPublic
-                ? "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                : "bg-indigo-600 text-white border-indigo-500 hover:bg-indigo-700"
+                ? "bg-[var(--color-surface)] text-[var(--color-text-secondary)] border-[var(--color-border)] hover:bg-[var(--color-surface-alt)]"
+                : "bg-[var(--color-accent)] text-white border-[var(--color-accent)] hover:bg-[var(--color-accent)]"
             )}
           >
             {isUpdatingPrivacy ? (
@@ -487,25 +487,25 @@ export function SidebarNavigator() {
           <div className="flex items-center gap-3">
             <div className={cn(
               "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
-              isStoryBibleOpen ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-400"
+              isStoryBibleOpen ? "bg-[var(--color-accent)] text-white" : "bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]"
             )}>
               <BookOpen size={16} />
             </div>
-            <span className={cn("text-xs font-bold transition-colors", isStoryBibleOpen ? "text-slate-900" : "text-slate-500")}>
+            <span className={cn("text-xs font-bold transition-colors", isStoryBibleOpen ? "text-[var(--color-text)]" : "text-[var(--color-text-secondary)]")}>
               Story Bible
             </span>
           </div>
           <button 
             onClick={() => setIsStoryBibleOpen(!isStoryBibleOpen)}
             className={cn(
-              "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2",
-              isStoryBibleOpen ? "bg-indigo-600" : "bg-slate-200"
+              "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2",
+              isStoryBibleOpen ? "bg-[var(--color-accent)]" : "bg-[var(--color-border)]"
             )}
             aria-label="Toggle Story Bible"
             aria-pressed={isStoryBibleOpen}
           >
             <span className={cn(
-              "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+              "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-[var(--color-surface)] shadow ring-0 transition duration-200 ease-in-out",
               isStoryBibleOpen ? "translate-x-4" : "translate-x-0"
             )} />
           </button>
@@ -517,17 +517,17 @@ export function SidebarNavigator() {
               type="button"
               onClick={() => setIsDeleteDialogOpen(true)}
               disabled={!selectedChapter || isDeletingChapter}
-              className="flex w-full items-center gap-3 text-slate-400 transition-colors hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center gap-3 text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-destructive)] disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Delete current chapter"
               title={selectedChapter ? `Delete ${selectedChapter.title}` : "Select a chapter to delete"}
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-surface-alt)]">
                 {isDeletingChapter ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
               </div>
               <span className="text-xs font-bold uppercase tracking-wider">Trash</span>
             </button>
             {deleteChapterError && (
-              <div className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-700">
+              <div className="rounded-xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-3 py-2 text-[11px] font-medium text-[var(--color-destructive)]">
                 {deleteChapterError}
               </div>
             )}
@@ -561,17 +561,17 @@ function DeleteChapterDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-sm" />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--color-text)]/15 backdrop-blur-sm" />
         <Dialog.Content className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
+          <div className="w-full max-w-md rounded-[28px] bg-[var(--color-surface)] p-8 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-4">
-                <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-50 text-rose-500">
+                <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--color-destructive)]/10 text-[var(--color-destructive)]">
                   <Trash2 size={18} />
                 </div>
                 <div>
-                  <Dialog.Title className="text-xl font-bold text-slate-900">Delete Chapter</Dialog.Title>
-                  <Dialog.Description className="mt-2 text-sm leading-relaxed text-slate-500">
+                  <Dialog.Title className="text-xl font-bold text-[var(--color-text)]">Delete Chapter</Dialog.Title>
+                  <Dialog.Description className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
                     Delete &ldquo;{chapterTitle}&rdquo;? This cannot be undone.
                   </Dialog.Description>
                 </div>
@@ -579,7 +579,7 @@ function DeleteChapterDialog({
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                  className="rounded-xl p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text)]"
                   aria-label="Close delete dialog"
                 >
                   <X size={16} />
@@ -591,7 +591,7 @@ function DeleteChapterDialog({
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+                  className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-alt)]"
                 >
                   Cancel
                 </button>
@@ -600,7 +600,7 @@ function DeleteChapterDialog({
                 type="button"
                 onClick={onConfirm}
                 disabled={busy}
-                className="inline-flex items-center gap-2 rounded-2xl bg-rose-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-2xl bg-[var(--color-destructive)] px-5 py-3 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:opacity-50"
               >
                 {busy && <Loader2 size={16} className="animate-spin" />}
                 Delete Chapter

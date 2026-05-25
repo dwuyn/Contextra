@@ -51,17 +51,17 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-sm animate-in fade-in duration-200" />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--color-text)]/20 backdrop-blur-sm animate-in fade-in duration-200" />
         <Dialog.Content
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           aria-describedby="create-project-description"
         >
-          <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="w-full max-w-md rounded-[28px] bg-[var(--color-surface)] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-6">
-              <Dialog.Title className="text-2xl font-bold text-slate-900">New Project</Dialog.Title>
+              <Dialog.Title className="text-2xl font-bold text-[var(--color-text)]">New Project</Dialog.Title>
               <Dialog.Close asChild>
-                <button aria-label="Close dialog" className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                  <X size={20} className="text-slate-400" />
+                <button aria-label="Close dialog" className="p-2 hover:bg-[var(--color-surface-alt)] rounded-full transition-colors">
+                  <X size={20} className="text-[var(--color-text-muted)]" />
                 </button>
               </Dialog.Close>
             </div>
@@ -72,7 +72,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label htmlFor="project-title" className="block text-sm font-semibold text-slate-700 mb-2">Project Title</label>
+                <label htmlFor="project-title" className="block text-sm font-semibold text-[var(--color-text)] mb-2">Project Title</label>
                 <input
                   id="project-title"
                   autoFocus
@@ -80,13 +80,13 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="What's the name of your story?"
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-slate-900 transition-colors focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1"
+                  className="w-full rounded-2xl border border-[var(--color-border)] px-4 py-3 outline-none focus:border-[var(--color-text)] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-text)] focus-visible:ring-offset-1"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-4">Project Visibility</label>
+                <label className="block text-sm font-semibold text-[var(--color-text)] mb-4">Project Visibility</label>
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     type="button"
@@ -94,13 +94,13 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                     className={cn(
                       "flex flex-col items-start p-4 rounded-2xl border-2 transition-all text-left",
                       !isPublic 
-                        ? "border-slate-900 bg-slate-50" 
-                        : "border-slate-100 hover:border-slate-200"
+                        ? "border-[var(--color-text)] bg-[var(--color-canvas)]" 
+                        : "border-[var(--color-border)] hover:border-[var(--color-border)]"
                     )}
                   >
-                    <Lock size={20} className={!isPublic ? "text-slate-900" : "text-slate-400"} />
-                    <span className="block mt-2 font-bold text-slate-900">Private</span>
-                    <span className="text-[10px] text-slate-500 mt-1 leading-tight">Only you and collaborators can view this project.</span>
+                    <Lock size={20} className={!isPublic ? "text-[var(--color-text)]" : "text-[var(--color-text-muted)]"} />
+                    <span className="block mt-2 font-bold text-[var(--color-text)]">Private</span>
+                    <span className="text-[10px] text-[var(--color-text-secondary)] mt-1 leading-tight">Only you and collaborators can view this project.</span>
                   </button>
 
                   <button
@@ -109,13 +109,13 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                     className={cn(
                       "flex flex-col items-start p-4 rounded-2xl border-2 transition-all text-left",
                       isPublic 
-                        ? "border-indigo-600 bg-indigo-50/30" 
-                        : "border-slate-100 hover:border-slate-200"
+                        ? "border-[var(--color-accent)] bg-[var(--color-accent-muted)]/30" 
+                        : "border-[var(--color-border)] hover:border-[var(--color-border)]"
                     )}
                   >
-                    <Globe size={20} className={isPublic ? "text-indigo-600" : "text-slate-400"} />
-                    <span className="block mt-2 font-bold text-slate-900">Public</span>
-                    <span className="text-[10px] text-slate-500 mt-1 leading-tight">Anyone with the link can read this project.</span>
+                    <Globe size={20} className={isPublic ? "text-[var(--color-accent)]" : "text-[var(--color-text-muted)]"} />
+                    <span className="block mt-2 font-bold text-[var(--color-text)]">Public</span>
+                    <span className="text-[10px] text-[var(--color-text-secondary)] mt-1 leading-tight">Anyone with the link can read this project.</span>
                   </button>
                 </div>
               </div>
@@ -123,11 +123,11 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full rounded-2xl bg-slate-900 py-4 font-bold text-white transition-transform active:scale-95 disabled:opacity-50 shadow-lg shadow-slate-900/10"
+                className="w-full rounded-2xl bg-[var(--color-text)] py-4 font-bold text-white transition-transform active:scale-95 disabled:opacity-50 shadow-lg shadow-[var(--color-text)]/10"
               >
                 {loading ? "Creating..." : "Create Project"}
               </button>
-              {error && <p className="rounded-xl bg-rose-50 p-3 text-sm font-medium text-rose-600">{error}</p>}
+              {error && <p className="rounded-xl bg-[var(--color-destructive)]/10 p-3 text-sm font-medium text-[var(--color-destructive)]">{error}</p>}
             </form>
           </div>
         </Dialog.Content>

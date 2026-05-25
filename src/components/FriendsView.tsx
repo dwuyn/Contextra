@@ -93,12 +93,12 @@ export function FriendsView({ onClose }: { onClose: () => void }) {
     <div className="flex flex-col h-full animate-in fade-in duration-300">
       <header className="flex items-center justify-between mb-8">
         <div>
-          <p className="text-xs font-medium text-slate-400 mb-2">Workspace</p>
-          <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Friends</h2>
+          <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2">Workspace</p>
+          <h2 className="text-4xl font-extrabold text-[var(--color-text)] tracking-tight">Friends</h2>
         </div>
         <button 
           onClick={onClose}
-          className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 hover:bg-slate-50 transition-colors shadow-sm"
+          className="flex h-10 items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm font-bold text-[var(--color-text)] hover:bg-[var(--color-canvas)] transition-colors shadow-sm"
         >
           Close
         </button>
@@ -111,21 +111,21 @@ export function FriendsView({ onClose }: { onClose: () => void }) {
             <label htmlFor="friends-search" className="sr-only">
               Search friends
             </label>
-            <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+            <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" size={14} />
             <input 
               id="friends-search"
               type="text" 
               placeholder="Search friends" 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl bg-slate-50 border-none px-9 py-2.5 text-sm outline-none placeholder:text-slate-400"
+              className="w-full rounded-xl bg-[var(--color-canvas)] border-none px-9 py-2.5 text-sm outline-none placeholder:text-[var(--color-text-muted)]"
             />
           </div>
 
           <div className="flex-1 overflow-y-auto min-h-0 pr-2">
-            <div className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 sticky top-0 bg-[var(--background)]">Private messages</div>
+            <div className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)] sticky top-0 bg-[var(--color-canvas)]">Private messages</div>
             {filteredFriends.length === 0 ? (
-              <p className="px-2 py-4 text-xs text-slate-400 italic">No friends yet. Use People to send friend requests.</p>
+              <p className="px-2 py-4 text-xs text-[var(--color-text-muted)] italic">No friends yet. Use People to send friend requests.</p>
             ) : (
               <nav className="space-y-1 pb-4">
                 {filteredFriends.map((friend) => (
@@ -134,17 +134,17 @@ export function FriendsView({ onClose }: { onClose: () => void }) {
                     onClick={() => handleSelectFriend(friend)}
                     className={cn(
                       "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-bold transition-all",
-                      selectedFriend?.id === friend.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                      selectedFriend?.id === friend.id ? "bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-canvas)] hover:text-[var(--color-text)]"
                     )}
                   >
                     <div className="flex items-center gap-3 truncate">
-                      <div className="h-8 w-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs shrink-0">
+                      <div className="h-8 w-8 rounded-full bg-[var(--color-accent-muted)] text-[var(--color-accent)] flex items-center justify-center font-bold text-xs shrink-0">
                         {friend.name[0].toUpperCase()}
                       </div>
                       <span className="truncate">{friend.name}</span>
                     </div>
                     {unreadMap[friend.id] && (
-                      <div className="h-2 w-2 rounded-full bg-blue-600 shrink-0 shadow-[0_0_8px_rgba(37,99,235,0.5)]"></div>
+                      <div className="h-2 w-2 rounded-full bg-[var(--color-accent)] shrink-0 shadow-[0_0_8px_rgba(37,99,235,0.5)]"></div>
                     )}
                   </button>
                 ))}
@@ -155,16 +155,16 @@ export function FriendsView({ onClose }: { onClose: () => void }) {
 
         {/* Main Area */}
         <div className={cn(
-          "flex-1 flex flex-col rounded-[40px] border border-slate-100 bg-white shadow-sm overflow-hidden",
+          "flex-1 flex flex-col rounded-[40px] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm overflow-hidden",
           !selectedFriend ? "items-center justify-center p-12" : ""
         )}>
           {!selectedFriend ? (
             <div className="text-center max-w-sm">
-              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-slate-50 text-slate-200">
+              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-[var(--color-canvas)] text-[var(--color-text-muted)]">
                 <MessageSquare size={40} />
               </div>
-              <h3 className="text-2xl font-bold text-slate-900 mb-3">Choose a friend</h3>
-              <p className="text-slate-400 leading-relaxed">Select one of your connected friends from the sidebar to open a private chat.</p>
+              <h3 className="text-2xl font-bold text-[var(--color-text)] mb-3">Choose a friend</h3>
+              <p className="text-[var(--color-text-muted)] leading-relaxed">Select one of your connected friends from the sidebar to open a private chat.</p>
             </div>
           ) : (
             <EmbeddedChat friend={selectedFriend} latestMessage={latestMessage} />
@@ -231,21 +231,21 @@ function EmbeddedChat({ friend, latestMessage }: { friend: FriendSummary, latest
   return (
     <div className="flex flex-col h-full w-full">
       {/* Profile Header */}
-      <div className="flex flex-col items-center justify-center pt-8 pb-6 border-b border-slate-100 bg-white shrink-0">
-        <div className="h-20 w-20 rounded-[24px] bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-3xl mb-4 relative shadow-inner">
+      <div className="flex flex-col items-center justify-center pt-8 pb-6 border-b border-[var(--color-border)] bg-[var(--color-surface)] shrink-0">
+        <div className="h-20 w-20 rounded-[24px] bg-[var(--color-accent-muted)] text-[var(--color-accent)] flex items-center justify-center font-bold text-3xl mb-4 relative shadow-inner">
           {friend.name[0].toUpperCase()}
-          <div className="absolute bottom-0 right-0 translate-x-1 translate-y-1 h-5 w-5 rounded-full bg-green-500 border-[3px] border-white"></div>
+          <div className="absolute bottom-0 right-0 translate-x-1 translate-y-1 h-5 w-5 rounded-full bg-[var(--color-success)] border-[3px] border-white"></div>
         </div>
-        <h3 className="text-xl font-extrabold text-slate-900 mb-1">{friend.name}</h3>
-        <p className="text-sm text-slate-400">{friend.email}</p>
+        <h3 className="text-xl font-extrabold text-[var(--color-text)] mb-1">{friend.name}</h3>
+        <p className="text-sm text-[var(--color-text-muted)]">{friend.email}</p>
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-[var(--background)]">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-[var(--color-canvas)]">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center opacity-40">
-            <p className="text-sm font-medium text-slate-600">No messages yet.</p>
-            <p className="text-xs text-slate-500 mt-1">Say hello to {friend.name}!</p>
+            <p className="text-sm font-medium text-[var(--color-text-secondary)]">No messages yet.</p>
+            <p className="text-xs text-[var(--color-text-secondary)] mt-1">Say hello to {friend.name}!</p>
           </div>
         ) : (
           messages.map((msg, idx) => (
@@ -259,12 +259,12 @@ function EmbeddedChat({ friend, latestMessage }: { friend: FriendSummary, latest
               <div className={cn(
                 "px-5 py-3.5 rounded-[24px] text-[15px] leading-relaxed",
                 msg.senderId === friend.id 
-                  ? "bg-white border border-slate-100 text-slate-900 rounded-tl-md shadow-sm" 
-                  : "bg-blue-600 text-white rounded-tr-md shadow-sm"
+                  ? "bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)] rounded-tl-md shadow-sm" 
+                  : "bg-[var(--color-accent)] text-white rounded-tr-md shadow-sm"
               )}>
                 {msg.content}
               </div>
-              <span className="text-[10px] text-slate-400 mt-1.5 uppercase font-bold tracking-wider px-1">
+              <span className="text-[10px] text-[var(--color-text-muted)] mt-1.5 uppercase font-bold tracking-wider px-1">
                 {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
@@ -273,7 +273,7 @@ function EmbeddedChat({ friend, latestMessage }: { friend: FriendSummary, latest
       </div>
 
       {/* Input */}
-      <div className="p-4 bg-white border-t border-slate-100 shrink-0">
+      <div className="p-4 bg-[var(--color-surface)] border-t border-[var(--color-border)] shrink-0">
         <form onSubmit={handleSendMessage} className="relative flex items-center gap-3">
           <label htmlFor="friend-message-input" className="sr-only">
             Message {friend.name}
@@ -284,13 +284,13 @@ function EmbeddedChat({ friend, latestMessage }: { friend: FriendSummary, latest
             placeholder="Type a message..."
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm outline-none focus:border-blue-500 focus:bg-white transition-colors"
+            className="flex-1 bg-[var(--color-canvas)] border border-[var(--color-border)] rounded-2xl px-5 py-3.5 text-sm outline-none focus:border-[var(--color-accent)] focus:bg-[var(--color-surface)] transition-colors"
           />
           <button 
             type="submit"
             aria-label={`Send message to ${friend.name}`}
             disabled={!inputValue.trim()}
-            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-all shadow-sm shrink-0"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent)] disabled:opacity-50 disabled:hover:bg-[var(--color-accent)] transition-all shadow-sm shrink-0"
           >
             <Send aria-hidden="true" size={18} className="translate-x-0.5" />
           </button>

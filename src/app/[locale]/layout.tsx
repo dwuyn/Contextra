@@ -1,0 +1,89 @@
+import type { Metadata } from "next";
+import { hasLocale, NextIntlClientProvider } from "next-intl";
+import { getMessages } from "next-intl/server";
+import { notFound } from "next/navigation";
+import { routing } from "@/lib/i18n-client";
+
+import "@fontsource/be-vietnam-pro/400.css";
+import "@fontsource/be-vietnam-pro/500.css";
+import "@fontsource/be-vietnam-pro/600.css";
+import "@fontsource/be-vietnam-pro/700.css";
+import "@fontsource-variable/ibm-plex-sans";
+import "@fontsource-variable/inter";
+import "@fontsource-variable/manrope";
+import "@fontsource-variable/noto-sans";
+import "@fontsource-variable/noto-serif";
+import "@fontsource-variable/source-serif-4";
+import "@fontsource-variable/space-grotesk";
+
+import { PreferencesProvider } from "@/components/PreferencesProvider";
+import "@/app/globals.css";
+
+export const metadata: Metadata = {
+  title: "Contextra - Collaborative AI Writing Workspace",
+  description: "A monolithic AI writing workspace inspired by Contextra.",
+};
+
+export default async function LocaleLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  if (!hasLocale(routing.locales, locale)) {
+    notFound();
+  }
+
+  const messages = await getMessages();
+
+  return (
+    <html lang={locale}>
+      <head>
+        <meta name="theme-color" content="#f7f7f5" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+      (function() {
+        try {
+          var stored = localStorage.getItem('contextra-preferences');
+          if (stored) {
+            var prefs = JSON.parse(stored);
+            var html = document.documentElement;
+            html.className = html.className
+              .split(/\\s+/)
+              .filter(function(c) { return !/^(theme-|font-)/.test(c); })
+              .join(' ');
+            var theme = prefs.state && prefs.state.theme;
+            if (theme) {
+              html.classList.add('theme-' + theme);
+            }
+            var font = prefs.state && prefs.state.font;
+            if (font) {
+              html.classList.add('font-' + font);
+            }
+          }
+        } catch(e) {}
+      })();
+    `,
+          }}
+        />
+      </head>
+      <body className="antialiased">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-xl focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:bg-[var(--color-text)] focus:text-[var(--color-canvas)] focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+        >
+          Skip to content
+        </a>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <PreferencesProvider>
+            <main id="main-content">{children}</main>
+          </PreferencesProvider>
+        </NextIntlClientProvider>
+      </body>
+    </html>
+  );
+}

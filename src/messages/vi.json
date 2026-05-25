@@ -1,0 +1,92 @@
+{
+  "common": {
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "delete": "Xóa",
+    "close": "Đóng",
+    "loading": "Đang tải...",
+    "saveChanges": "Lưu thay đổi",
+    "saved": "Đã lưu",
+    "saving": "Đang lưu..."
+  },
+  "auth": {
+    "email": "Địa chỉ email",
+    "password": "Mật khẩu",
+    "name": "Họ và tên",
+    "login": "Đăng nhập",
+    "loginAction": "Đăng nhập",
+    "register": "Tạo tài khoản",
+    "registerAction": "Tạo tài khoản",
+    "noAccount": "Chưa có tài khoản?",
+    "hasAccount": "Đã có tài khoản?",
+    "signUp": "Đăng ký",
+    "signIn": "Đăng nhập",
+    "logout": "Đăng xuất",
+    "dob": "Ngày sinh",
+    "changePassword": "Đổi mật khẩu",
+    "currentPassword": "Mật khẩu hiện tại",
+    "newPassword": "Mật khẩu mới",
+    "confirmPassword": "Xác nhận mật khẩu mới",
+    "profileImage": "Ảnh đại diện",
+    "browse": "Duyệt..."
+  },
+  "project": {
+    "new": "Tạo workspace mới",
+    "startNew": "Bắt đầu câu chuyện mới",
+    "noProjects": "Chưa có workspace nào"
+  },
+  "editor": {
+    "ai": {
+      "write": "Viết",
+      "rewrite": "Viết lại",
+      "describe": "Mô tả",
+      "brainstorm": "Lên ý tưởng"
+    },
+    "toolbar": {
+      "bold": "In đậm",
+      "italic": "In nghiêng",
+      "underline": "Gạch chân",
+      "heading": "Tiêu đề"
+    },
+    "placeholder": "Bắt đầu viết...",
+    "wordCount": "{count} từ"
+  },
+  "sidebar": {
+    "chapters": "Chương",
+    "addChapter": "Thêm chương",
+    "deleteChapter": "Xóa chương",
+    "storyBible": "Story Bible",
+    "versionHistory": "Lịch sử phiên bản"
+  },
+  "zen": {
+    "enter": "Vào chế độ tập trung",
+    "exit": "Thoát chế độ tập trung"
+  },
+  "command": {
+    "placeholder": "Nhập lệnh hoặc tìm kiếm...",
+    "noResults": "Không tìm thấy kết quả",
+    "navigation": "Điều hướng",
+    "chapters": "Chương",
+    "aiActions": "Hành động AI",
+    "settings": "Cài đặt",
+    "projects": "Dự án",
+    "goToDashboard": "Đi đến Bảng điều khiển",
+    "toggleTheme": "Chuyển đổi giao diện",
+    "toggleFont": "Đổi phông chữ",
+    "toggleZen": "Chế độ tập trung",
+    "generateChapter": "Tạo chương mới",
+    "rewriteSelection": "Viết lại đoạn đã chọn",
+    "describeSelection": "Mô tả đoạn đã chọn",
+    "brainstormIdeas": "Lên ý tưởng"
+  },
+  "a11y": {
+    "skipToContent": "Bỏ qua đến nội dung"
+  },
+  "voiceReader": {
+    "play": "Phát",
+    "pause": "Tạm dừng",
+    "stop": "Dừng",
+    "speed": "Tốc độ",
+    "voice": "Giọng đọc"
+  }
+}

@@ -6,9 +6,6 @@ import {
   X,
   Copy,
   Plus,
-  ThumbsUp,
-  ThumbsDown,
-  Star,
   MessageSquare,
   History,
   Sparkles,
@@ -129,11 +126,11 @@ export function AiCardsPane({
   }, [activeTab, aiCards, messages]);
 
   return (
-    <aside className="h-full w-96 border-l border-slate-200 bg-[var(--background)] flex flex-col">
+    <aside className="h-full w-96 border-l border-[var(--color-border)] bg-[var(--background)] flex flex-col">
       {/* Tabs Header */}
-      <div className="flex items-center px-4 pt-4 border-b border-slate-100 bg-[var(--background)]">
+      <div className="flex items-center px-4 pt-4 border-b border-[var(--color-border)] bg-[var(--background)]">
         {showCloseButton && onClose && (
-          <button onClick={onClose} className="mr-2 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all" aria-label="Close AI assistant">
+          <button onClick={onClose} className="mr-2 p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-all" aria-label="Close AI assistant">
             <X size={16} />
           </button>
         )}
@@ -141,7 +138,7 @@ export function AiCardsPane({
           onClick={() => onTabChange("history")}
           className={cn(
             "flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
-            activeTab === "history" ? "border-indigo-600 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"
+            activeTab === "history" ? "border-[var(--color-accent)] text-[var(--color-text)]" : "border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
           )}
         >
           <History size={14} />
@@ -151,7 +148,7 @@ export function AiCardsPane({
           onClick={() => onTabChange("chat")}
           className={cn(
             "flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
-            activeTab === "chat" ? "border-indigo-600 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"
+            activeTab === "chat" ? "border-[var(--color-accent)] text-[var(--color-text)]" : "border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
           )}
         >
           <MessageSquare size={14} />
@@ -164,36 +161,36 @@ export function AiCardsPane({
           <>
             {aiCards.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center px-8">
-                <div className="w-16 h-16 bg-white border border-slate-100 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-                  <Plus size={24} className="text-slate-200" />
+                <div className="w-16 h-16 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl flex items-center justify-center mb-6 shadow-sm">
+                  <Plus size={24} className="text-[var(--color-text-muted)]" />
                 </div>
-                <p className="text-sm font-bold text-slate-900 mb-2">No history yet</p>
-                <p className="text-xs text-slate-400 leading-relaxed">Highlight text and use AI tools to generate suggestions. They will appear here as cards.</p>
+                <p className="text-sm font-bold text-[var(--color-text)] mb-2">No history yet</p>
+                <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">Highlight text and use AI tools to generate suggestions. They will appear here as cards.</p>
               </div>
             ) : (
               aiCards.map((card) => (
-                <div key={card.id} className="bg-white border border-slate-100 rounded-[24px] shadow-sm overflow-hidden group hover:shadow-md transition-all">
-                  <div className="px-5 py-3 bg-slate-50/50 border-b border-slate-50 flex items-center justify-between">
+                <div key={card.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[24px] shadow-sm overflow-hidden group hover:shadow-md transition-all">
+                  <div className="px-5 py-3 bg-[var(--color-surface-alt)] border-b border-[var(--color-border)] flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className={cn(
                         "w-5 h-5 rounded-full flex items-center justify-center",
                         card.status === "loading" && "bg-amber-100",
-                        card.status === "ready" && "bg-indigo-100",
-                        card.status === "error" && "bg-rose-100",
+                        card.status === "ready" && "bg-[var(--color-accent-muted)]",
+                        card.status === "error" && "bg-[var(--color-destructive)]/10",
                       )}>
                         {card.status === "loading" ? (
                           <Loader2 size={10} className="animate-spin text-amber-600" />
                         ) : card.status === "error" ? (
-                          <AlertCircle size={10} className="text-rose-600" />
+                          <AlertCircle size={10} className="text-[var(--color-destructive)]" />
                         ) : (
-                          <Sparkles size={10} className="text-indigo-600" />
+                          <Sparkles size={10} className="text-[var(--color-accent)]" />
                         )}
                       </div>
-                      <span className="text-[10px] font-black uppercase tracking-tighter text-slate-400">{card.type}</span>
+                      <span className="text-[10px] font-black uppercase tracking-tighter text-[var(--color-text-muted)]">{card.type}</span>
                     </div>
                     <button
                       onClick={() => removeAiCard(card.id)}
-                      className="text-slate-300 hover:text-slate-500 transition-colors"
+                      className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
                       aria-label="Remove AI history card"
                     >
                       <X size={14} />
@@ -205,16 +202,16 @@ export function AiCardsPane({
                     <div className="mt-6 flex items-center justify-between">
                       {card.status === "ready" ? (
                         <div className="flex items-center gap-1">
-                          <button 
-                            onClick={() => useProjectStore.getState().insertContent(card.content)}
-                            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-slate-800 transition-colors"
-                          >
-                            <Plus size={12} />
-                            Insert
-                          </button>
-                          <button 
-                            onClick={() => navigator.clipboard.writeText(card.content)}
-                            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-slate-50 transition-colors"
+                            <button 
+                              onClick={() => useProjectStore.getState().insertContent(card.content)}
+                              className="flex items-center gap-2 px-4 py-2 bg-[var(--color-text)] text-[var(--color-surface)] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:opacity-90 transition-colors"
+                            >
+                              <Plus size={12} />
+                              Insert
+                            </button>
+                            <button 
+                              onClick={() => navigator.clipboard.writeText(card.content)}
+                              className="flex items-center gap-2 px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-[var(--color-surface-alt)] transition-colors"
                           >
                             <Copy size={12} />
                             Copy
@@ -223,7 +220,7 @@ export function AiCardsPane({
                       ) : (
                         <div className={cn(
                           "inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest",
-                          card.status === "loading" ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700",
+                          card.status === "loading" ? "bg-amber-50 text-amber-700" : "bg-[var(--color-destructive)]/10 text-[var(--color-destructive)]",
                         )}>
                           {card.status === "loading" ? (
                             <>
@@ -238,13 +235,6 @@ export function AiCardsPane({
                           )}
                         </div>
                       )}
-                      {card.status === "ready" && (
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <IconButton title="Coming soon" icon={<ThumbsUp size={12} />} />
-                          <IconButton title="Coming soon" icon={<ThumbsDown size={12} />} />
-                          <IconButton title="Coming soon" icon={<Star size={12} />} />
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -255,11 +245,11 @@ export function AiCardsPane({
           <div className="space-y-4 pb-4">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center px-8">
-                <div className="w-16 h-16 bg-white border border-slate-100 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-                  <MessageSquare size={24} className="text-slate-200" />
+                <div className="w-16 h-16 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl flex items-center justify-center mb-6 shadow-sm">
+                  <MessageSquare size={24} className="text-[var(--color-text-muted)]" />
                 </div>
-                <p className="text-sm font-bold text-slate-900 mb-2">AI Writing Assistant</p>
-                <p className="text-xs text-slate-400 leading-relaxed">Ask me anything about your story, brainstorm ideas, or ask for help with continuity.</p>
+                <p className="text-sm font-bold text-[var(--color-text)] mb-2">AI Writing Assistant</p>
+                <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">Ask me anything about your story, brainstorm ideas, or ask for help with continuity.</p>
               </div>
             ) : (
               messages.map((msg) => (
@@ -267,8 +257,8 @@ export function AiCardsPane({
                   <div className={cn(
                     "max-w-[85%] rounded-[20px] px-4 py-3 text-sm leading-relaxed",
                     msg.role === "user" 
-                      ? "bg-indigo-600 text-white rounded-tr-none" 
-                      : "bg-white border border-slate-100 text-slate-700 rounded-tl-none shadow-sm"
+                      ? "bg-[var(--color-accent)] text-white rounded-tr-none" 
+                      : "bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)] rounded-tl-none shadow-sm"
                   )}>
                     <div className="prose-sm max-w-none text-inherit leading-relaxed [&>p]:mb-2 last:[&>p]:mb-0 [&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4">
                       <ReactMarkdown>{msg.content || (isLoading && msg.role === "assistant" ? "Thinking..." : "")}</ReactMarkdown>
@@ -276,13 +266,13 @@ export function AiCardsPane({
                   </div>
                   <div className="mt-1 flex items-center gap-1 px-1">
                     {msg.role === "assistant" ? (
-                      <div className="w-3 h-3 rounded-full bg-indigo-50 flex items-center justify-center">
-                        <Sparkles size={6} className="text-indigo-600" />
+                      <div className="w-3 h-3 rounded-full bg-[var(--color-accent-muted)] flex items-center justify-center">
+                        <Sparkles size={6} className="text-[var(--color-accent)]" />
                       </div>
                     ) : (
-                      <User size={8} className="text-slate-300" />
+                      <User size={8} className="text-[var(--color-text-muted)]" />
                     )}
-                    <span className="text-[8px] font-bold uppercase tracking-wider text-slate-300">
+                    <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
                       {msg.role === "assistant" ? "Contextra AI" : "You"}
                     </span>
                   </div>
@@ -294,8 +284,8 @@ export function AiCardsPane({
       </div>
       
       {/* Input / Footer Area */}
-      <div className="p-4 border-t border-slate-100 bg-white">
-        {activeTab === "chat" ? (
+      <div className="p-4 border-t border-[var(--color-border)] bg-[var(--color-surface)]">
+        {activeTab === "chat" && (
           <form onSubmit={handleSubmit} className="relative">
             <label htmlFor="ai-chat-input" className="sr-only">
               Ask Contextra AI a question
@@ -307,27 +297,17 @@ export function AiCardsPane({
               onChange={(e) => setInput(e.target.value)}
               disabled={isLoading}
               placeholder="Ask Contextra AI..."
-              className="w-full bg-slate-50 border-none rounded-2xl pl-4 pr-12 py-3 text-sm focus:ring-1 focus:ring-indigo-600 outline-none transition-all placeholder:text-slate-400"
+              className="w-full bg-[var(--color-surface-alt)] border-none rounded-2xl pl-4 pr-12 py-3 text-sm focus:ring-1 focus:ring-[var(--color-accent)] outline-none transition-all placeholder:text-[var(--color-text-muted)]"
             />
             <button 
               type="submit"
               aria-label="Send message to Contextra AI"
               disabled={!input.trim() || isLoading}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center hover:bg-slate-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-[var(--color-text)] text-[var(--color-surface)] flex items-center justify-center hover:opacity-90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Send aria-hidden="true" size={14} />
             </button>
           </form>
-        ) : (
-          <div className="flex items-center justify-between">
-            <button title="Coming soon" disabled className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 hover:text-slate-600 disabled:opacity-50">
-              <MessageSquare size={14} />
-              Support
-            </button>
-            <button title="Coming soon" disabled className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-colors disabled:opacity-50">
-              Upgrade
-            </button>
-          </div>
         )}
       </div>
     </aside>
@@ -348,15 +328,15 @@ function HistoryCardBody({ card }: { card: AiHistoryCard }) {
 
   if (card.status === "error") {
     return (
-      <div className="rounded-2xl border border-rose-100 bg-rose-50/80 px-4 py-3">
+      <div className="rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/5 px-4 py-3">
         <div className="flex items-start gap-3">
-          <AlertCircle size={16} className="mt-0.5 text-rose-600" />
+          <AlertCircle size={16} className="mt-0.5 text-[var(--color-destructive)]" />
           <div className="space-y-1">
-            <p className="text-sm font-medium leading-relaxed text-rose-900 whitespace-pre-wrap">
+            <p className="text-sm font-medium leading-relaxed text-[var(--color-destructive)] whitespace-pre-wrap">
               {card.content}
             </p>
             {card.errorMessage ? (
-              <p className="text-xs leading-relaxed text-rose-700">
+              <p className="text-xs leading-relaxed text-[var(--color-destructive)]">
                 {card.errorMessage}
               </p>
             ) : null}
@@ -367,16 +347,8 @@ function HistoryCardBody({ card }: { card: AiHistoryCard }) {
   }
 
   return (
-    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+    <p className="text-sm text-[var(--color-text)] leading-relaxed whitespace-pre-wrap">
       {card.content}
     </p>
-  );
-}
-
-function IconButton({ icon, title }: { icon: React.ReactNode, title?: string }) {
-  return (
-    <button title={title} className="p-2 text-slate-300 hover:text-slate-500 hover:bg-slate-50 rounded-lg transition-all disabled:opacity-50">
-      {icon}
-    </button>
   );
 }

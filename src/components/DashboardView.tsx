@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CreateProjectModal } from "./CreateProjectModal";
+import { LoadingState } from "@/components/LoadingState";
 import Link from "next/link";
 import {
   Home,
@@ -28,7 +29,7 @@ const PreferencesModal = dynamic(
   () => import("./PreferencesModal").then((mod) => mod.PreferencesModal),
   {
     ssr: false,
-    loading: () => <DashboardModalLoading label="Loading settings..." />,
+    loading: () => <LoadingState variant="fullscreen" message="Loading settings..." />,
   }
 );
 
@@ -36,7 +37,7 @@ const AllProjectsModal = dynamic(
   () => import("./AllProjectsModal").then((mod) => mod.AllProjectsModal),
   {
     ssr: false,
-    loading: () => <DashboardModalLoading label="Loading projects..." />,
+    loading: () => <LoadingState variant="fullscreen" message="Loading projects..." />,
   }
 );
 
@@ -44,7 +45,7 @@ const PeopleView = dynamic(
   () => import("./PeopleView").then((mod) => mod.PeopleView),
   {
     ssr: false,
-    loading: () => <DashboardSurfaceLoading label="Loading people..." />,
+    loading: () => <LoadingState variant="inline" message="Loading people..." />,
   }
 );
 
@@ -52,7 +53,7 @@ const FriendsView = dynamic(
   () => import("./FriendsView").then((mod) => mod.FriendsView),
   {
     ssr: false,
-    loading: () => <DashboardSurfaceLoading label="Loading friends..." />,
+    loading: () => <LoadingState variant="inline" message="Loading friends..." />,
   }
 );
 
@@ -299,14 +300,14 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
                 {/* New Project Card */}
                 <button 
                   onClick={() => setShowCreateModal(true)}
-                  className="group relative flex aspect-[4/3] flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-[var(--color-border)] bg-transparent transition-all hover:border-slate-400 hover:bg-[var(--color-surface-alt)]"
+                  className="group relative flex aspect-[4/3] flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-[var(--color-border)] bg-transparent transition-all hover:border-[var(--color-text-muted)] hover:bg-[var(--color-surface-alt)]"
                 >
                   <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--color-canvas)] text-[var(--color-text-muted)] group-hover:bg-[var(--color-surface)] group-hover:text-[var(--color-text-secondary)] transition-colors">
                     <Plus size={24} />
                   </div>
                   <div className="text-center px-8">
                     <h4 className="text-lg font-bold text-[var(--color-text)] mb-2">{t("project.new")}</h4>
-                    <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">{t("project.createFirst")}</p>
+                    <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">{overview.recentProjects.length > 0 ? t("project.startNew") : t("project.createFirst")}</p>
                   </div>
                 </button>
 
@@ -314,7 +315,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
                   <Link key={project.id} href={`/project/${project.id}`}>
                     <div className="group relative flex aspect-[4/3] flex-col rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-sm transition-all hover:shadow-md hover:-translate-y-1">
                       <div className="mb-auto flex items-start justify-between">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 font-bold text-lg">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent-muted)] text-[var(--color-accent)] font-bold text-lg">
                           {project.name[0].toUpperCase()}
                         </div>
                         <button title="Coming soon" disabled className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] p-1 rounded-md hover:bg-[var(--color-surface)]/50 transition-colors disabled:opacity-50">
@@ -482,24 +483,4 @@ function NavItem({ icon, label, active, badge, disabled, onClick }: { icon: Reac
   );
 }
 
-function DashboardSurfaceLoading({ label }: { label: string }) {
-  return (
-    <div className="flex min-h-[50vh] items-center justify-center">
-      <div className="flex items-center gap-3 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-3 text-sm font-medium text-[var(--color-text-secondary)] shadow-sm">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-slate-700" />
-        <span>{label}</span>
-      </div>
-    </div>
-  );
-}
 
-function DashboardModalLoading({ label }: { label: string }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-text)]/20 backdrop-blur-sm p-4">
-      <div className="flex items-center gap-3 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-3 text-sm font-medium text-[var(--color-text-secondary)] shadow-sm">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-slate-700" />
-        <span>{label}</span>
-      </div>
-    </div>
-  );
-}

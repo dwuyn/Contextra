@@ -7,6 +7,7 @@ import { useProjectStore } from "@/store/useProjectStore";
 import { SidebarNavigator } from "@/components/SidebarNavigator";
 import { MainEditor } from "@/components/MainEditor";
 import { CollaborationPanel } from "@/components/CollaborationPanel";
+import { LoadingState } from "@/components/LoadingState";
 import type { AiCardsPaneTab } from "@/components/AiCardsPane";
 import { useSSE } from "@/lib/hooks/useSSE";
 import { useTranslations } from "next-intl";
@@ -17,7 +18,7 @@ const AiCardsPane = dynamic(
   () => import("@/components/AiCardsPane").then((mod) => mod.AiCardsPane),
   {
     ssr: false,
-    loading: () => <WorkspaceSidePanelLoading label="Loading AI assistant..." />,
+    loading: () => <LoadingState variant="overlay" message="Loading AI assistant..." />,
   }
 );
 
@@ -25,7 +26,7 @@ const StoryBibleView = dynamic(
   () => import("@/components/StoryBibleView").then((mod) => mod.StoryBibleView),
   {
     ssr: false,
-    loading: () => <WorkspaceCanvasLoading label="Loading story bible..." />,
+    loading: () => <LoadingState variant="inline" message="Loading story bible..." />,
   }
 );
 
@@ -33,7 +34,7 @@ const VersionHistoryPanel = dynamic(
   () => import("@/components/VersionHistoryPanel").then((mod) => mod.VersionHistoryPanel),
   {
     ssr: false,
-    loading: () => <WorkspaceSidePanelLoading label="Loading version history..." />,
+    loading: () => <LoadingState variant="overlay" message="Loading version history..." />,
   }
 );
 
@@ -174,12 +175,12 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
       )}
 
       {/* Sidebar — fixed drawer on mobile, static on desktop */}
-      <div className={[
+      <nav aria-label="Project navigation" className={[
         "fixed lg:static inset-y-0 left-0 z-40 lg:z-auto transition-transform duration-300",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
       ].join(" ")}>
         <SidebarNavigator />
-      </div>
+      </nav>
 
       {/* Main Content */}
       <main className="flex-1 overflow-hidden flex flex-col">
@@ -371,24 +372,4 @@ function PresenceStack({ count }: { count: number }) {
   );
 }
 
-function WorkspaceCanvasLoading({ label }: { label: string }) {
-  return (
-    <div className="flex h-full items-center justify-center bg-[var(--color-canvas)]">
-      <div className="flex items-center gap-3 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-3 text-sm font-medium text-[var(--color-text-secondary)] shadow-sm">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-text-muted)] border-t-[var(--color-text)]" />
-        <span>{label}</span>
-      </div>
-    </div>
-  );
-}
 
-function WorkspaceSidePanelLoading({ label }: { label: string }) {
-  return (
-    <div className="flex h-full w-96 items-center justify-center border-l border-[var(--color-border)] bg-[var(--background)] px-6">
-      <div className="flex items-center gap-3 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text-secondary)] shadow-sm">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-text-muted)] border-t-[var(--color-text)]" />
-        <span>{label}</span>
-      </div>
-    </div>
-  );
-}

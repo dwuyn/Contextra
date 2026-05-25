@@ -1,0 +1,117 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "close": "Close",
+    "loading": "Loading...",
+    "saveChanges": "Save changes",
+    "saved": "Saved",
+    "saving": "Saving..."
+  },
+  "auth": {
+    "email": "Email address",
+    "password": "Password",
+    "name": "Full name",
+    "login": "Log in",
+    "loginAction": "Log in",
+    "register": "Create account",
+    "registerAction": "Create account",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "signUp": "Sign up",
+    "signIn": "Sign in",
+    "logout": "Sign out",
+    "dob": "Date of birth",
+    "changePassword": "Change password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "profileImage": "Profile image",
+    "browse": "Browse..."
+  },
+  "nav": {
+    "dashboard": "Home",
+    "projects": "My Workspaces",
+    "people": "People",
+    "friends": "Friends",
+    "settings": "Preferences"
+  },
+  "project": {
+    "new": "New workspace",
+    "createFirst": "Create your first workspace and start writing with context-aware AI.",
+    "startNew": "Start a new story",
+    "noProjects": "No workspaces yet",
+    "recent": "Recent",
+    "publicProjects": "Public workspaces",
+    "private": "Private",
+    "public": "Public",
+    "collaborators": "Collaborators",
+    "invite": "Invite",
+    "manageCollaborators": "Manage collaborators"
+  },
+  "editor": {
+    "ai": {
+      "write": "Write",
+      "rewrite": "Rewrite",
+      "describe": "Describe",
+      "brainstorm": "Brainstorm",
+      "writeShortcut": "Write (⌘⇧W)",
+      "rewriteShortcut": "Rewrite (⌘⇧R)",
+      "describeShortcut": "Describe (⌘⇧D)",
+      "brainstormShortcut": "Brainstorm (⌘⇧B)"
+    },
+    "toolbar": {
+      "bold": "Bold",
+      "italic": "Italic",
+      "underline": "Underline",
+      "heading": "Heading"
+    },
+    "status": {
+      "saved": "Saved",
+      "saving": "Saving...",
+      "unsaved": "Unsaved changes"
+    },
+    "placeholder": "Start writing...",
+    "wordCount": "{count} words"
+  },
+  "sidebar": {
+    "chapters": "Chapters",
+    "addChapter": "Add chapter",
+    "deleteChapter": "Delete chapter",
+    "storyBible": "Story Bible",
+    "versionHistory": "Version History"
+  },
+  "zen": {
+    "enter": "Enter zen mode",
+    "exit": "Exit zen mode",
+    "toolbarHint": "Move cursor to the top to show the toolbar"
+  },
+  "command": {
+    "placeholder": "Type a command or search...",
+    "noResults": "No results found",
+    "navigation": "Navigation",
+    "chapters": "Chapters",
+    "aiActions": "AI Actions",
+    "settings": "Settings",
+    "projects": "Projects",
+    "goToDashboard": "Go to Dashboard",
+    "toggleTheme": "Toggle dark mode",
+    "toggleFont": "Change font",
+    "toggleZen": "Toggle zen mode",
+    "generateChapter": "Generate new chapter",
+    "rewriteSelection": "Rewrite selection",
+    "describeSelection": "Describe selection",
+    "brainstormIdeas": "Brainstorm ideas"
+  },
+  "a11y": {
+    "skipToContent": "Skip to content"
+  },
+  "voiceReader": {
+    "play": "Play",
+    "pause": "Pause",
+    "stop": "Stop",
+    "speed": "Speed",
+    "voice": "Voice"
+  }
+}

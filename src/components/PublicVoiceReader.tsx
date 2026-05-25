@@ -461,14 +461,14 @@ export function PublicVoiceReader({
           type="button"
           aria-label="Close voice reader"
           onClick={() => setIsPanelOpen(false)}
-          className="fixed inset-0 z-40 bg-slate-950/20 sm:hidden"
+          className="fixed inset-0 z-40 bg-[var(--color-text)]/20 sm:hidden"
         />
       )}
 
       {isPanelOpen && (
         <section
           className={cn(
-            "fixed z-50 border border-slate-200 bg-white shadow-2xl",
+            "fixed z-50 border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl",
             "inset-x-3 bottom-20 rounded-[30px] p-4",
             "sm:bottom-24 sm:right-4 sm:left-auto sm:w-[26rem] sm:rounded-[28px] sm:p-5"
           )}
@@ -476,13 +476,13 @@ export function PublicVoiceReader({
           <div className="flex flex-col gap-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-2 text-slate-900">
-                  <Volume2 size={18} className="text-indigo-600" />
-                  <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
+                <div className="flex items-center gap-2 text-[var(--color-text)]">
+                  <Volume2 size={18} className="text-[var(--color-accent)]" />
+                  <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
                     Voice Reader
                   </h3>
                 </div>
-                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
                   Google Cloud speech for the selected chapter only.
                 </p>
               </div>
@@ -490,7 +490,7 @@ export function PublicVoiceReader({
               <button
                 type="button"
                 onClick={() => setIsPanelOpen(false)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-text)]"
                 aria-label="Close voice reader panel"
               >
                 <X size={16} />
@@ -502,21 +502,21 @@ export function PublicVoiceReader({
                 className={cn(
                   "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em]",
                   playbackState === "playing"
-                    ? "bg-emerald-100 text-emerald-700"
+                    ? "bg-[var(--color-success)]/10 text-[var(--color-success)]"
                     : playbackState === "paused"
                       ? "bg-amber-100 text-amber-700"
-                      : "bg-slate-100 text-slate-600"
+                      : "bg-[var(--color-canvas)] text-[var(--color-text-secondary)]"
                 )}
               >
                 {helperStatusLabel}
               </span>
-              <span className="rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-700">
+              <span className="rounded-full bg-[var(--color-accent-muted)] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--color-accent)]">
                 {readerLanguageMode === "auto"
                   ? `Auto ${getReaderLanguageLabel(detectedLanguage)}`
                   : getReaderLanguageLabel(activeLanguage)}
               </span>
               {isLoadingVoices && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600">
+                <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-canvas)] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
                   <Loader2 size={12} className="animate-spin" />
                   Syncing
                 </span>
@@ -525,13 +525,13 @@ export function PublicVoiceReader({
 
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="flex min-w-0 flex-col gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
                   Language
                 </span>
                 <select
                   value={readerLanguageMode}
                   onChange={(event) => setReaderLanguageMode(event.target.value as ReaderLanguageMode)}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-slate-900"
+                  className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-text)]"
                 >
                   <option value="auto">Auto detect</option>
                   <option value="en-US">English</option>
@@ -540,14 +540,14 @@ export function PublicVoiceReader({
               </label>
 
               <label className="flex min-w-0 flex-col gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
                   Voice
                 </span>
                 <select
                   value={activeVoice?.id ?? ""}
                   onChange={(event) => setReaderVoice(activeLanguage, event.target.value)}
                   disabled={availableVoices.length === 0}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-slate-900 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-text)] disabled:cursor-not-allowed disabled:bg-[var(--color-canvas)] disabled:text-[var(--color-text-muted)]"
                 >
                   {availableVoices.length === 0 ? (
                     <option value="">No curated voice</option>
@@ -562,13 +562,13 @@ export function PublicVoiceReader({
               </label>
 
               <label className="flex min-w-0 flex-col gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
                   Speed
                 </span>
                 <select
                   value={String(readerRate)}
                   onChange={(event) => setReaderRate(Number(event.target.value))}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-slate-900"
+                  className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-text)]"
                 >
                   {SPEECH_RATE_OPTIONS.map((rateOption) => (
                     <option key={rateOption} value={String(rateOption)}>
@@ -583,7 +583,7 @@ export function PublicVoiceReader({
                   type="button"
                   onClick={handlePlay}
                   disabled={Boolean(unavailableReason)}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[var(--color-text)] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[var(--color-text)] disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-secondary)]"
                 >
                   <Play size={16} />
                   Play
@@ -592,7 +592,7 @@ export function PublicVoiceReader({
                   type="button"
                   onClick={() => void handlePauseResume()}
                   disabled={Boolean(unavailableReason) || playbackState === "idle"}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:bg-[var(--color-canvas)] disabled:text-[var(--color-text-muted)]"
                 >
                   <Pause size={16} />
                   {playbackState === "paused" ? "Resume" : "Pause"}
@@ -601,7 +601,7 @@ export function PublicVoiceReader({
                   type="button"
                   onClick={() => stopPlayback()}
                   disabled={playbackState === "idle"}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:bg-[var(--color-canvas)] disabled:text-[var(--color-text-muted)]"
                 >
                   <Square size={14} />
                   Stop
@@ -609,9 +609,9 @@ export function PublicVoiceReader({
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 rounded-2xl bg-slate-50 px-4 py-3">
-              <p className="text-sm text-slate-600">{helperText}</p>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+            <div className="flex flex-col gap-2 rounded-2xl bg-[var(--color-canvas)] px-4 py-3">
+              <p className="text-sm text-[var(--color-text-secondary)]">{helperText}</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
                 Selected chapter only
               </p>
             </div>
@@ -627,26 +627,26 @@ export function PublicVoiceReader({
           className={cn(
             "group inline-flex items-center gap-3 rounded-[24px] border px-4 py-3 shadow-lg backdrop-blur transition-all",
             playbackState === "playing"
-              ? "border-emerald-200 bg-emerald-50/95 text-emerald-900"
+              ? "border-[var(--color-success)]/30 bg-[var(--color-success)]/10 text-[var(--color-success)]"
               : playbackState === "paused"
                 ? "border-amber-200 bg-amber-50/95 text-amber-900"
-                : "border-slate-200 bg-white/95 text-slate-900 hover:bg-white"
+                : "border-[var(--color-border)] bg-[var(--color-surface)]/95 text-[var(--color-text)] hover:bg-[var(--color-surface)]"
           )}
         >
           <span
             className={cn(
               "flex h-10 w-10 items-center justify-center rounded-2xl",
               playbackState === "playing"
-                ? "bg-emerald-100 text-emerald-700"
+                ? "bg-[var(--color-success)]/10 text-[var(--color-success)]"
                 : playbackState === "paused"
                   ? "bg-amber-100 text-amber-700"
-                  : "bg-indigo-50 text-indigo-600"
+                  : "bg-[var(--color-accent-muted)] text-[var(--color-accent)]"
             )}
           >
             <Volume2 size={18} />
           </span>
           <span className="min-w-0 text-left">
-            <span className="block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+            <span className="block text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
               Voice Reader
             </span>
             <span className="block text-sm font-semibold">
@@ -659,7 +659,7 @@ export function PublicVoiceReader({
           </span>
           <ChevronUp
             size={18}
-            className={cn("text-slate-400 transition-transform", isPanelOpen && "rotate-180")}
+            className={cn("text-[var(--color-text-muted)] transition-transform", isPanelOpen && "rotate-180")}
           />
         </button>
       </div>

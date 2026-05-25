@@ -322,29 +322,29 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <aside className="flex h-full w-[380px] flex-col border-l border-slate-200 bg-white">
-      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+    <aside className="flex h-full w-[380px] flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]">
+      <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Collaboration</p>
-          <h2 className="text-lg font-bold text-slate-900">Live workspace</h2>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Collaboration</p>
+          <h2 className="text-lg font-bold text-[var(--color-text)]">Live workspace</h2>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+          className="rounded-xl p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)]"
           aria-label="Close collaboration panel"
         >
           <X size={18} />
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 border-b border-slate-100 px-4 py-3">
+      <div className="grid grid-cols-2 gap-2 border-b border-[var(--color-border)] px-4 py-3">
         <button
           type="button"
           onClick={() => setTab("members")}
           className={cn(
             "flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition-colors",
-            tab === "members" ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700",
+            tab === "members" ? "bg-[var(--color-text)] text-white" : "bg-[var(--color-canvas)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text)]",
           )}
         >
           <Users size={15} />
@@ -355,7 +355,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
           onClick={() => setTab("comments")}
           className={cn(
             "flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition-colors",
-            tab === "comments" ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700",
+            tab === "comments" ? "bg-[var(--color-text)] text-white" : "bg-[var(--color-canvas)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text)]",
           )}
         >
           <MessageSquare size={15} />
@@ -365,20 +365,20 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
 
       {tab === "members" ? (
         <div className="flex-1 overflow-y-auto px-4 py-4">
-          <section className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+          <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-canvas)]/70 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Presence</p>
-                <h3 className="mt-1 text-sm font-bold text-slate-900">{activePresence.length} active now</h3>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Presence</p>
+                <h3 className="mt-1 text-sm font-bold text-[var(--color-text)]">{activePresence.length} active now</h3>
               </div>
-              <div className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+              <div className="rounded-full bg-[var(--color-success)]/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-success)]">
                 Live
               </div>
             </div>
 
             <div className="mt-4 space-y-3">
               {activePresence.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-center text-xs text-slate-400">
+                <p className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-4 text-center text-xs text-[var(--color-text-muted)]">
                   No collaborators are active in this workspace right now.
                 </p>
               ) : (
@@ -387,33 +387,33 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                     ? project.chapters.find((item) => item.id === presence.chapterId)
                     : null;
                   return (
-                    <div key={presence.id} className="rounded-2xl bg-white px-3 py-3 shadow-sm">
+                    <div key={presence.id} className="rounded-2xl bg-[var(--color-surface)] px-3 py-3 shadow-sm">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-xs font-bold text-white">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--color-text)] text-xs font-bold text-white">
                           {getInitials(presence.user.name)}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-bold text-slate-900">{presence.user.name}</p>
+                            <p className="truncate text-sm font-bold text-[var(--color-text)]">{presence.user.name}</p>
                             <span
                               className={cn(
                                 "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
                                 presence.state === "editing"
                                   ? "bg-amber-100 text-amber-700"
-                                  : "bg-sky-100 text-sky-700",
+                                  : "bg-[var(--color-accent-muted)] text-[var(--color-accent)]",
                               )}
                             >
                               {getPresenceLabel(presence.state)}
                             </span>
                           </div>
-                          <p className="truncate text-xs text-slate-500">
+                          <p className="truncate text-xs text-[var(--color-text-secondary)]">
                             {chapter ? `${chapter.title}` : "Project overview"} • {formatTimestamp(presence.lastActiveAt)}
                           </p>
                         </div>
                         {presence.state === "editing" ? (
                           <PencilLine size={16} className="text-amber-500" />
                         ) : (
-                          <Eye size={16} className="text-sky-500" />
+                          <Eye size={16} className="text-[var(--color-accent)]" />
                         )}
                       </div>
                     </div>
@@ -423,11 +423,11 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
             </div>
           </section>
 
-          <section className="mt-5 rounded-2xl border border-slate-100 bg-white p-4">
+          <section className="mt-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Members</p>
-                <h3 className="mt-1 text-sm font-bold text-slate-900">{project.collaborators.length + 1} people</h3>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Members</p>
+                <h3 className="mt-1 text-sm font-bold text-[var(--color-text)]">{project.collaborators.length + 1} people</h3>
               </div>
             </div>
 
@@ -436,7 +436,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                 name={project.currentUser.id === project.metadata.ownerId ? "You" : "Owner"}
                 subtitle={project.metadata.ownerId === project.currentUser.id ? "Project owner" : "Project owner"}
                 badge="Owner"
-                accent="bg-slate-900 text-white"
+                accent="bg-[var(--color-text)] text-white"
               />
               {project.collaborators.map((collaborator) => {
                 const isSelf = collaborator.userId === project.currentUser.id;
@@ -446,7 +446,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                     type="button"
                     onClick={() => openRemoveMemberDialog(collaborator.userId, collaborator.user.name)}
                     disabled={isBusy}
-                    className="rounded-xl border border-rose-200 bg-rose-50 p-2 text-rose-600 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl border border-[var(--color-destructive)]/25 bg-[var(--color-destructive)]/10 p-2 text-[var(--color-destructive)] transition-colors hover:bg-[var(--color-destructive)]/15 disabled:cursor-not-allowed disabled:opacity-60"
                     aria-label={`Remove ${collaborator.user.name}`}
                   >
                     {isBusy ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
@@ -456,7 +456,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                     type="button"
                     onClick={() => openLeaveProjectDialog(collaborator.userId, collaborator.user.name)}
                     disabled={isBusy}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] font-bold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-destructive)]/25 bg-[var(--color-destructive)]/10 px-2.5 py-1.5 text-[11px] font-bold text-[var(--color-destructive)] transition-colors hover:bg-[var(--color-destructive)]/15 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isBusy ? <Loader2 size={13} className="animate-spin" /> : <LogOut size={13} />}
                     Leave
@@ -469,40 +469,40 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                     name={isSelf ? "You" : collaborator.user.name}
                     subtitle={collaborator.user.email ?? ""}
                     badge={collaborator.role}
-                    accent="bg-slate-100 text-slate-700"
+                    accent="bg-[var(--color-surface-alt)] text-[var(--color-text)]"
                     action={action}
                   />
                 );
               })}
             </div>
             {memberError && !membershipDialog && (
-              <div className="mt-3 rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+              <div className="mt-3 rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-3 py-2 text-xs font-medium text-[var(--color-destructive)]">
                 {memberError}
               </div>
             )}
           </section>
 
-          <section className="mt-5 rounded-2xl border border-slate-100 bg-white p-4">
+          <section className="mt-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Pending invites</p>
-                <h3 className="mt-1 text-sm font-bold text-slate-900">{project.pendingInvites.length} waiting</h3>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Pending invites</p>
+                <h3 className="mt-1 text-sm font-bold text-[var(--color-text)]">{project.pendingInvites.length} waiting</h3>
               </div>
             </div>
 
             <div className="mt-4 space-y-3">
               {project.pendingInvites.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-400">
+                <p className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)] px-3 py-4 text-center text-xs text-[var(--color-text-muted)]">
                   No outstanding collaborator invites.
                 </p>
               ) : (
                 project.pendingInvites.map((invite) => (
-                  <div key={invite.id} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-3">
+                  <div key={invite.id} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-canvas)]/80 px-3 py-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-900">{invite.receiver.name}</p>
-                        <p className="truncate text-xs text-slate-500">{invite.receiver.email}</p>
-                        <div className="mt-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        <p className="truncate text-sm font-bold text-[var(--color-text)]">{invite.receiver.name}</p>
+                        <p className="truncate text-xs text-[var(--color-text-secondary)]">{invite.receiver.email}</p>
+                        <div className="mt-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
                           <Clock3 size={11} />
                           Invited {formatTimestamp(invite.createdAt)}
                         </div>
@@ -512,7 +512,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                           type="button"
                           onClick={() => void handleCancelInvite(invite.id)}
                           disabled={threadActionId === invite.id}
-                          className="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-[11px] font-bold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {threadActionId === invite.id ? "..." : "Cancel"}
                         </button>
@@ -525,14 +525,14 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
           </section>
 
           {canManage && (
-            <section className="mt-5 rounded-2xl border border-slate-100 bg-white p-4">
+            <section className="mt-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
               <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--color-accent-muted)] text-[var(--color-accent)]">
                   <UserPlus size={16} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Invite collaborator</p>
-                  <h3 className="text-sm font-bold text-slate-900">Bring a friend into the draft</h3>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Invite collaborator</p>
+                  <h3 className="text-sm font-bold text-[var(--color-text)]">Bring a friend into the draft</h3>
                 </div>
               </div>
 
@@ -542,12 +542,12 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                   value={friendSearch}
                   onChange={(event) => setFriendSearch(event.target.value)}
                   placeholder="Filter friends"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-colors focus:border-slate-400"
+                  className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-canvas)] px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--color-border)]"
                 />
                 <select
                   value={selectedFriendId}
                   onChange={(event) => setSelectedFriendId(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition-colors focus:border-slate-400"
+                  className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--color-border)]"
                 >
                   <option value="">Choose a friend</option>
                   {inviteableFriends.map((friend) => (
@@ -559,7 +559,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                 <select
                   value={permissionLevel}
                   onChange={(event) => setPermissionLevel(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition-colors focus:border-slate-400"
+                  className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--color-border)]"
                 >
                   <option value="1">Level 1 • Read/comment</option>
                   <option value="2">Level 2 • Edit chapters</option>
@@ -569,13 +569,13 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                   type="button"
                   onClick={() => void handleInviteSubmit()}
                   disabled={!selectedFriendId || isInviteBusy}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--color-text)] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isInviteBusy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                   Send invite
                 </button>
                 {inviteError && (
-                  <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+                  <div className="rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-3 py-2 text-xs font-medium text-[var(--color-destructive)]">
                     {inviteError}
                   </div>
                 )}
@@ -585,15 +585,15 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="border-b border-slate-100 px-4 py-3">
+          <div className="border-b border-[var(--color-border)] px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Current chapter</p>
-                <h3 className="truncate text-sm font-bold text-slate-900">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Current chapter</p>
+                <h3 className="truncate text-sm font-bold text-[var(--color-text)]">
                   {selectedChapter?.title ?? "Choose a chapter"}
                 </h3>
               </div>
-              <div className="flex items-center gap-2 rounded-full bg-slate-50 px-2 py-1">
+              <div className="flex items-center gap-2 rounded-full bg-[var(--color-canvas)] px-2 py-1">
                 {(["open", "resolved", "all"] as const).map((filter) => (
                   <button
                     key={filter}
@@ -601,7 +601,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                     onClick={() => setCommentFilter(filter)}
                     className={cn(
                       "rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors",
-                      commentFilter === filter ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700",
+                      commentFilter === filter ? "bg-[var(--color-text)] text-white" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]",
                     )}
                   >
                     {filter}
@@ -612,13 +612,13 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="grid min-h-0 flex-1 grid-cols-[200px_minmax(0,1fr)]">
-            <div className="border-r border-slate-100 bg-slate-50/70 p-3">
+            <div className="border-r border-[var(--color-border)] bg-[var(--color-canvas)]/70 p-3">
               {isLoadingComments ? (
-                <div className="flex h-full items-center justify-center text-slate-400">
+                <div className="flex h-full items-center justify-center text-[var(--color-text-muted)]">
                   <Loader2 size={18} className="animate-spin" />
                 </div>
               ) : filteredThreads.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-5 text-center text-xs text-slate-400">
+                <div className="rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-5 text-center text-xs text-[var(--color-text-muted)]">
                   {selectedChapterId ? "No matching threads yet." : "Select a chapter to review comments."}
                 </div>
               ) : (
@@ -631,25 +631,25 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                       className={cn(
                         "w-full rounded-2xl border px-3 py-3 text-left transition-colors",
                         selectedThread?.id === thread.id
-                          ? "border-slate-900 bg-white shadow-sm"
-                          : "border-transparent bg-white/80 hover:border-slate-200",
+                          ? "border-[var(--color-text)] bg-[var(--color-surface)] shadow-sm"
+                          : "border-transparent bg-[var(--color-surface)]/80 hover:border-[var(--color-border)]",
                       )}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span
                           className={cn(
                             "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                            thread.status === "open" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700",
+                            thread.status === "open" ? "bg-amber-100 text-amber-700" : "bg-[var(--color-success)]/10 text-[var(--color-success)]",
                           )}
                         >
                           {thread.status}
                         </span>
                         {thread.isDetached && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-rose-500">Detached</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-destructive)]">Detached</span>
                         )}
                       </div>
-                      <p className="mt-2 line-clamp-2 text-xs font-semibold text-slate-900">{thread.selectedText}</p>
-                      <p className="mt-2 text-[11px] text-slate-500">
+                      <p className="mt-2 line-clamp-2 text-xs font-semibold text-[var(--color-text)]">{thread.selectedText}</p>
+                      <p className="mt-2 text-[11px] text-[var(--color-text-secondary)]">
                         {thread.replies.length} repl{thread.replies.length === 1 ? "y" : "ies"}
                       </p>
                     </button>
@@ -661,11 +661,11 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
             <div className="flex min-h-0 flex-col">
               {selectedThread ? (
                 <>
-                  <div className="border-b border-slate-100 px-4 py-4">
+                  <div className="border-b border-[var(--color-border)] px-4 py-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Selected text</p>
-                        <blockquote className="mt-2 rounded-2xl bg-slate-50 px-3 py-3 text-sm font-medium text-slate-700">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Selected text</p>
+                        <blockquote className="mt-2 rounded-2xl bg-[var(--color-canvas)] px-3 py-3 text-sm font-medium text-[var(--color-text)]">
                           “{selectedThread.selectedText}”
                         </blockquote>
                       </div>
@@ -675,7 +675,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                             type="button"
                             onClick={() => void handleUpdateThreadStatus(selectedThread, "resolved")}
                             disabled={threadActionId === selectedThread.id}
-                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             Resolve
                           </button>
@@ -684,7 +684,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                             type="button"
                             onClick={() => void handleUpdateThreadStatus(selectedThread, "open")}
                             disabled={threadActionId === selectedThread.id}
-                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             Reopen
                           </button>
@@ -696,28 +696,28 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                   <div className="flex-1 overflow-y-auto px-4 py-4">
                     <div className="space-y-3">
                       {selectedThread.replies.map((reply) => (
-                        <div key={reply.id} className="rounded-2xl border border-slate-100 bg-white px-3 py-3 shadow-sm">
+                        <div key={reply.id} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 shadow-sm">
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
-                              <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-slate-900 text-[11px] font-bold text-white">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-[var(--color-text)] text-[11px] font-bold text-white">
                                 {getInitials(reply.author.name)}
                               </div>
                               <div>
-                                <p className="text-sm font-bold text-slate-900">{reply.author.name}</p>
-                                <p className="text-[11px] text-slate-500">{formatTimestamp(reply.createdAt)}</p>
+                                <p className="text-sm font-bold text-[var(--color-text)]">{reply.author.name}</p>
+                                <p className="text-[11px] text-[var(--color-text-secondary)]">{formatTimestamp(reply.createdAt)}</p>
                               </div>
                             </div>
                             {reply.authorUserId === selectedThread.authorUserId && (
-                              <Check size={14} className="text-emerald-500" />
+                              <Check size={14} className="text-[var(--color-success)]" />
                             )}
                           </div>
-                          <p className="mt-3 text-sm leading-relaxed text-slate-700">{reply.content}</p>
+                          <p className="mt-3 text-sm leading-relaxed text-[var(--color-text)]">{reply.content}</p>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="border-t border-slate-100 px-4 py-4">
+                  <div className="border-t border-[var(--color-border)] px-4 py-4">
                     <label className="sr-only" htmlFor={`reply-${selectedThread.id}`}>
                       Reply to thread
                     </label>
@@ -728,23 +728,23 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                         setReplyDrafts((drafts) => ({ ...drafts, [selectedThread.id]: event.target.value }))
                       }
                       placeholder="Add a reply"
-                      className="min-h-[90px] w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-colors focus:border-slate-400"
+                      className="min-h-[90px] w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-canvas)] px-4 py-3 text-sm outline-none transition-colors focus:border-[var(--color-border)]"
                     />
                     <div className="mt-3 flex items-center justify-between gap-3">
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-[11px] text-[var(--color-text-muted)]">
                         {selectedThread.isDetached ? "This anchor no longer exists in the chapter." : "Selecting this thread focuses the anchored text in the editor."}
                       </p>
                       <button
                         type="button"
                         onClick={() => void handleReply(selectedThread)}
                         disabled={threadActionId === selectedThread.id || !(replyDrafts[selectedThread.id] ?? "").trim()}
-                        className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-2xl bg-[var(--color-text)] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {threadActionId === selectedThread.id ? "Sending..." : "Reply"}
                       </button>
                     </div>
                     {commentError && (
-                      <div className="mt-3 rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+                      <div className="mt-3 rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-3 py-2 text-xs font-medium text-[var(--color-destructive)]">
                         {commentError}
                       </div>
                     )}
@@ -753,11 +753,11 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
               ) : (
                 <div className="flex h-full items-center justify-center px-8 text-center">
                   <div>
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-slate-50 text-slate-300">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-[var(--color-canvas)] text-[var(--color-text-muted)]">
                       <MessageSquare size={24} />
                     </div>
-                    <p className="mt-4 text-sm font-bold text-slate-700">No thread selected</p>
-                    <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                    <p className="mt-4 text-sm font-bold text-[var(--color-text)]">No thread selected</p>
+                    <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-muted)]">
                       Create a comment from selected text in the editor, then review it here with the rest of the team.
                     </p>
                   </div>
@@ -779,20 +779,20 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-sm" />
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--color-text)]/30 backdrop-blur-sm" />
           <Dialog.Content className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
+            <div className="w-full max-w-md rounded-[28px] bg-[var(--color-surface)] p-8 shadow-2xl">
               <div className="flex items-start gap-4">
-                <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-50 text-rose-500">
+                <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--color-destructive)]/10 text-[var(--color-destructive)]">
                   {membershipDialog?.kind === "leave" ? <LogOut size={18} /> : <Trash2 size={18} />}
                 </div>
                 <div>
-                  <Dialog.Title className="text-xl font-bold text-slate-900">
+                  <Dialog.Title className="text-xl font-bold text-[var(--color-text)]">
                     {membershipDialog?.kind === "leave"
                       ? `Leave ${project.metadata.name}?`
                       : `Remove ${membershipDialog?.memberName ?? "member"}?`}
                   </Dialog.Title>
-                  <Dialog.Description className="mt-2 text-sm leading-relaxed text-slate-500">
+                  <Dialog.Description className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
                     {membershipDialog?.kind === "leave"
                       ? "You will immediately lose access to this project and return to the dashboard."
                       : `This removes ${membershipDialog?.memberName ?? "this member"} from the workspace immediately. Their existing chapters, comments, and history stay intact.`}
@@ -801,7 +801,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
               </div>
 
               {memberError && (
-                <div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+                <div className="mt-4 rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-3 py-2 text-xs font-medium text-[var(--color-destructive)]">
                   {memberError}
                 </div>
               )}
@@ -811,7 +811,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                   <button
                     type="button"
                     disabled={memberActionUserId != null}
-                    className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Cancel
                   </button>
@@ -820,7 +820,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                   type="button"
                   onClick={() => void handleConfirmMembershipChange()}
                   disabled={memberActionUserId === membershipDialog?.memberUserId}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-rose-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-[var(--color-destructive)] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[var(--color-destructive)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {memberActionUserId === membershipDialog?.memberUserId && <Loader2 size={16} className="animate-spin" />}
                   {membershipDialog?.kind === "leave" ? "Leave project" : "Remove member"}
@@ -848,10 +848,10 @@ function MemberCard({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-3">
+    <div className="flex items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-canvas)]/70 px-3 py-3">
       <div className="min-w-0">
-        <p className="truncate text-sm font-bold text-slate-900">{name}</p>
-        <p className="truncate text-xs text-slate-500">{subtitle}</p>
+        <p className="truncate text-sm font-bold text-[var(--color-text)]">{name}</p>
+        <p className="truncate text-xs text-[var(--color-text-secondary)]">{subtitle}</p>
       </div>
       <div className="flex items-center gap-2">
         {action}

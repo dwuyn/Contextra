@@ -22,8 +22,6 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
-  
-  Maximize2,
   Zap,
   Globe,
   Search,
@@ -1116,8 +1114,8 @@ export function MainEditor({
 
   if (!canEdit && !canCollaborate) {
     return (
-      <div className="flex flex-col h-full bg-[var(--background)] relative">
-        <div className="border-b border-slate-50 bg-[var(--background)] px-6 py-4">
+      <div className="flex flex-col h-full bg-[var(--color-canvas)] relative">
+        <div className="border-b border-[var(--color-border)]/50 bg-[var(--color-canvas)] px-6 py-4">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2 rounded-full bg-[var(--color-accent-muted)] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-accent)]">
               <Globe size={12} />
@@ -1130,7 +1128,7 @@ export function MainEditor({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-20 py-20 pb-40 scroll-smooth bg-[var(--background)]">
+        <div className="flex-1 overflow-y-auto px-20 py-20 pb-40 scroll-smooth bg-[var(--color-canvas)]">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-5xl font-extrabold text-[var(--color-text)] mb-12 tracking-tight leading-tight">
               {currentChapter?.title || t("editor.untitledChapter")}
@@ -1156,8 +1154,8 @@ export function MainEditor({
   const canManualSave = Boolean(selectedChapterId) && !isLoadingContent && canEdit;
 
   return (
-    <div className="flex flex-col h-full bg-[var(--background)]">
-      <div className="flex items-center gap-2 px-6 py-2 border-b border-slate-50 bg-[var(--background)]">
+    <div className="flex flex-col h-full bg-[var(--color-canvas)]">
+      <div className="flex items-center gap-2 px-6 py-2 border-b border-[var(--color-border)]/50 bg-[var(--color-canvas)]">
         <div className="flex items-center gap-1 bg-[var(--color-canvas)] rounded-xl p-1">
           <Tooltip.Provider delayDuration={300}>
             <Tooltip.Root>
@@ -1331,9 +1329,6 @@ export function MainEditor({
           >
             <Download size={16} />
           </button>
-        <button type="button" title="Coming soon" disabled className="p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50">
-          <Maximize2 size={16} />
-        </button>
         </div>
       </div>
 
@@ -1402,10 +1397,6 @@ export function MainEditor({
         >
           <Search size={12} />
           {t("editor.ai.describe")}
-        </button>
-        <button type="button" title="Coming soon" disabled className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:opacity-90 transition-colors flex items-center gap-2 text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50">
-          <Zap size={12} />
-          Expand
         </button>
       </BubbleMenu>
 
