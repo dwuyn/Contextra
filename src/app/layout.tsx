@@ -34,15 +34,18 @@ export default function RootLayout({
           var stored = localStorage.getItem('contextra-preferences');
           if (stored) {
             var prefs = JSON.parse(stored);
+            var html = document.documentElement;
+            html.className = html.className
+              .split(/\\s+/)
+              .filter(function(c) { return !/^(theme-|font-)/.test(c); })
+              .join(' ');
             var theme = prefs.state && prefs.state.theme;
-            var isDark = prefs.state && prefs.state.darkMode;
             if (theme) {
-              var className = 'theme-' + theme;
-              if (isDark) className += ' theme-' + theme + '-dark';
-              document.documentElement.className = className;
+              html.classList.add('theme-' + theme);
             }
-            if (prefs.state && prefs.state.font) {
-              document.documentElement.className += ' font-' + prefs.state.font;
+            var font = prefs.state && prefs.state.font;
+            if (font) {
+              html.classList.add('font-' + font);
             }
           }
         } catch(e) {}
