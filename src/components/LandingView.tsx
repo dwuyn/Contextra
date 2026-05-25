@@ -61,19 +61,13 @@ export function LandingView() {
                 Return to a draft, see the parts of your story that matter, and keep moving without rebuilding everything from scratch.
               </p>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <div className="mt-8">
                 <Link 
                   href="/register" 
                   className="group inline-flex items-center justify-center gap-2 rounded-full bg-[var(--color-text)] px-6 py-3.5 text-sm font-bold text-white transition-colors hover:bg-[var(--color-text)]"
                 >
                   Create account
                   <ChevronRight size={18} className="transition-transform group-hover:translate-x-0.5" />
-                </Link>
-                <Link 
-                  href="/login" 
-                  className="inline-flex items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-3.5 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)]"
-                >
-                  Sign in
                 </Link>
               </div>
 
@@ -120,6 +114,29 @@ export function LandingView() {
           </div>
         </section>
 
+        <div className="bg-[var(--color-canvas)] py-24">
+          <div className="mx-auto max-w-4xl px-6">
+            <h2 className="mb-4 text-center text-2xl font-bold text-[var(--color-text)]">
+              See how it works
+            </h2>
+            <p className="mb-8 text-center text-[var(--color-text-secondary)]">
+              Contextra remembers your characters, plot threads, and world-building as you write.
+            </p>
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-sm">
+              <div className="prose prose-slate max-w-none text-[var(--color-text)]">
+                <p>
+                  The council chamber fell silent as <mark className="rounded bg-amber-100 px-1 text-amber-900">Elara</mark>{" "}
+                  rose from her seat. Her hands, still bandaged from the encounter in the Ironwood Forest, gripped the edge
+                  of the obsidian table...
+                </p>
+                <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-3 text-sm text-[var(--color-text-secondary)]">
+                  Contextra memory: Elara was wounded in Chapter 3 during the Ironwood Forest confrontation.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <section className="border-t border-[var(--color-border)] px-6 py-16">
           <div className="mx-auto flex max-w-7xl flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
@@ -132,18 +149,13 @@ export function LandingView() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div>
+              <p className="mb-3 text-center text-sm text-[var(--color-text-muted)]">Trusted by writers worldwide</p>
               <Link 
                 href="/register" 
                 className="inline-flex items-center justify-center rounded-full bg-[var(--color-text)] px-6 py-3.5 text-sm font-bold text-white transition-colors hover:bg-[var(--color-text)]"
               >
                 Create account
-              </Link>
-              <Link 
-                href="/login" 
-                className="inline-flex items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-3.5 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)]"
-              >
-                Sign in
               </Link>
             </div>
           </div>
@@ -176,7 +188,7 @@ function HeroPoint({ icon, label }: { icon: ReactNode; label: string }) {
 
 function WorkspacePreview() {
   return (
-    <div className="overflow-hidden rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm">
+    <div className="animate-[page-enter_0.5s_ease-out_0.2s_both] overflow-hidden rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Current project</p>
