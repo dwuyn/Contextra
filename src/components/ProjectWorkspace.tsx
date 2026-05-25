@@ -1,18 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useProjectStore } from "@/store/useProjectStore";
+import { useZenStore } from "@/store/useZenStore";
 import { SidebarNavigator } from "@/components/SidebarNavigator";
-import { MainEditor } from "@/components/MainEditor";
 import { CollaborationPanel } from "@/components/CollaborationPanel";
+import { CommandPalette } from "@/components/CommandPalette";
 import { LoadingState } from "@/components/LoadingState";
 import type { AiCardsPaneTab } from "@/components/AiCardsPane";
 import { useSSE } from "@/lib/hooks/useSSE";
+import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
 import { Menu, Bot, History, Users } from "lucide-react";
 import type { ProjectCommentThread, ProjectData, ProjectInvite, ProjectPresence } from "@/types/project";
+
+const MainEditor = dynamic(
+  () => import("@/components/MainEditor").then((mod) => mod.MainEditor),
+  {
+    ssr: false,
+    loading: () => <LoadingState variant="overlay" message="Loading editor..." />,
+  }
+);
 
 const AiCardsPane = dynamic(
   () => import("@/components/AiCardsPane").then((mod) => mod.AiCardsPane),
@@ -62,6 +72,51 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
   const [isCollabOpen, setIsCollabOpen] = useState(false);
   const [presenceNow, setPresenceNow] = useState(() => Date.now());
   const t = useTranslations();
+
+  const { isZenMode, exitZen } = useZenStore();
+  const [showChrome, setShowChrome] = useState(false);
+  const chromeTimer = useRef<number | null>(null);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isZenMode) return;
+    setShowChrome(true);
+    if (chromeTimer.current) window.clearTimeout(chromeTimer.current);
+    chromeTimer.current = window.setTimeout(() => setShowChrome(false), 3000);
+  }, [isZenMode]);
+
+  useEffect(() => {
+    if (!isZenMode) {
+      setShowChrome(true);
+      return;
+    }
+    setShowChrome(false);
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      if (chromeTimer.current) window.clearTimeout(chromeTimer.current);
+    };
+  }, [isZenMode, handleMouseMove]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isZenMode) {
+        exitZen();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isZenMode, exitZen]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "f") {
+        e.preventDefault();
+        exitZen();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [exitZen]);
 
   useEffect(() => {
     if (!project) return;
@@ -165,6 +220,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
   };
 
   return (
+    <>
     <div className="flex h-screen w-full overflow-hidden bg-[var(--color-canvas)] relative">
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
@@ -175,17 +231,24 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
       )}
 
       {/* Sidebar — fixed drawer on mobile, static on desktop */}
+      {!isZenMode && (
       <nav aria-label="Project navigation" className={[
         "fixed lg:static inset-y-0 left-0 z-40 lg:z-auto transition-transform duration-300",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
       ].join(" ")}>
         <SidebarNavigator />
       </nav>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 overflow-hidden flex flex-col">
         {/* Desktop Top Bar */}
-        <div className="hidden lg:flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+        <div className={cn(
+          "hidden lg:flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface)]",
+          isZenMode && !showChrome && "opacity-0 pointer-events-none -translate-y-full",
+          isZenMode && showChrome && "opacity-100",
+          "transition-all duration-500",
+        )}>
           <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Project</p>
             <h1 className="text-lg font-bold text-[var(--color-text)] truncate">{project.metadata.name}</h1>
@@ -218,7 +281,12 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
         </div>
 
         {/* Mobile Top Bar */}
-        <div className="flex lg:hidden items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+        <div className={cn(
+          "flex lg:hidden items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]",
+          isZenMode && !showChrome && "opacity-0 pointer-events-none -translate-y-full",
+          isZenMode && showChrome && "opacity-100",
+          "transition-all duration-500",
+        )}>
           <button
             onClick={() => setIsSidebarOpen(true)}
             className="p-2 rounded-xl text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
@@ -264,7 +332,10 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
         </div>
 
         {/* Editor Area */}
-        <div className="flex-1 overflow-hidden">
+        <div className={cn(
+          "flex-1 overflow-hidden",
+          isZenMode && "max-w-2xl mx-auto w-full",
+        )}>
           {isStoryBibleOpen ? (
             <StoryBibleView />
           ) : (
@@ -277,33 +348,33 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
       </main>
 
       {/* Version History Panel */}
-      {isHistoryOpen && selectedChapterId && (
+      {!isZenMode && isHistoryOpen && selectedChapterId && (
         <div className="hidden lg:flex">
           <VersionHistoryPanel onClose={() => setIsHistoryOpen(false)} />
         </div>
       )}
 
       {/* Mobile Version History Drawer */}
-      {isHistoryOpen && selectedChapterId && (
+      {!isZenMode && isHistoryOpen && selectedChapterId && (
         <div className="fixed inset-y-0 right-0 z-40 lg:hidden shadow-2xl">
           <VersionHistoryPanel onClose={() => setIsHistoryOpen(false)} />
         </div>
       )}
 
-      {isCollabOpen && (
+      {!isZenMode && isCollabOpen && (
         <div className="hidden lg:flex">
           <CollaborationPanel onClose={() => setIsCollabOpen(false)} />
         </div>
       )}
 
-      {isCollabOpen && (
+      {!isZenMode && isCollabOpen && (
         <div className="fixed inset-y-0 right-0 z-40 lg:hidden shadow-2xl">
           <CollaborationPanel onClose={() => setIsCollabOpen(false)} />
         </div>
       )}
 
       {/* AI Pane — mounted on first open, then kept alive for quick reopen */}
-      {shouldRenderAiPane && (
+      {!isZenMode && shouldRenderAiPane && (
         <div className={[
           "fixed inset-y-0 right-0 z-40 transition-transform duration-300 lg:relative lg:inset-y-auto lg:right-auto lg:z-auto lg:transition-[width] lg:duration-300",
           isAiPaneOpen ? "translate-x-0 lg:w-96" : "translate-x-full lg:translate-x-0 lg:w-0",
@@ -326,7 +397,22 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
           onClick={() => setIsAiPaneOpen(false)}
         />
       )}
+
+      {isZenMode && showChrome && (
+        <button
+          onClick={exitZen}
+          className="fixed bottom-6 right-6 z-50 rounded-full bg-[var(--color-surface)] px-4 py-2
+            text-sm font-medium text-[var(--color-text-secondary)] shadow-lg border border-[var(--color-border)]
+            hover:text-[var(--color-text)] transition-all"
+          aria-label="Exit zen mode"
+        >
+          Exit zen mode
+        </button>
+      )}
     </div>
+
+    <CommandPalette chapters={project.chapters.map(ch => ({ id: ch.id, title: ch.title }))} />
+    </>
   );
 }
 
