@@ -360,6 +360,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
                               height={180}
                               sizes="(min-width: 1024px) 25vw, (min-width: 768px) 50vw, 100vw"
                               className="h-full w-full object-cover"
+                              loading="lazy"
                             />
                           ) : (
                             <div className="h-full w-full flex items-center justify-center text-[var(--color-border)] font-bold">IMAGE</div>
