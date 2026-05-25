@@ -45,9 +45,9 @@ type CanonPromptContextInput = {
 };
 
 const CANON_CONTEXT_BUDGETS = {
-  entities: 4_500,
-  facts: 6_000,
-  relations: 3_000,
+  entities: 8_000,
+  facts: 12_000,
+  relations: 6_000,
 };
 
 function stripReasoning(text: string) {
@@ -308,17 +308,40 @@ function buildProposalRows(input: ChapterCanonInput, extraction: CanonExtraction
 
 export async function createCanonProposalsForChapter(input: ChapterCanonInput) {
   if (!stripHtml(input.content)) {
-    await prisma.canonProposal.deleteMany({ where: { chapterId: input.chapterId, status: "pending" } });
+    await prisma.canonProposal.deleteMany({ where: { chapterId: input.chapterId, status: "pending", type: { not: "continuity_warning" } } });
     return;
   }
 
   const extraction = await extractCanon(input);
   const rows = buildProposalRows(input, extraction);
 
-  await prisma.canonProposal.deleteMany({ where: { chapterId: input.chapterId, status: "pending" } });
+  await prisma.canonProposal.deleteMany({ where: { chapterId: input.chapterId, status: "pending", type: { not: "continuity_warning" } } });
   if (rows.length === 0) return;
 
-  await prisma.canonProposal.createMany({ data: rows });
+  for (const row of rows) {
+    try {
+      if (row.type === "entity") {
+        await approveEntity(input.projectId, row.payload as CanonProposalPayload);
+      } else if (row.type === "fact") {
+        await approveFact(input.projectId, {
+          chapterId: row.chapterId,
+          branchId: row.branchId,
+          payload: row.payload,
+        });
+      } else if (row.type === "relation") {
+        await approveRelation(input.projectId, {
+          chapterId: row.chapterId,
+          payload: row.payload,
+        });
+      }
+    } catch (error) {
+      console.error(`Failed to auto-approve ${row.type} proposal:`, row.payload, error);
+    }
+  }
+
+  await prisma.canonProposal.createMany({
+    data: rows.map((row) => ({ ...row, status: row.type === "continuity_warning" ? "pending" : "auto_approved" })),
+  });
 }
 
 async function findEntityByName(projectId: string, name: string) {
@@ -498,9 +521,9 @@ async function semanticCanonHits(projectId: string, query: string, limit = 12) {
     const embedding = await generateEmbedding(query);
     const vectorLiteral = toPgVectorLiteral(embedding);
     const facts = await prisma.$queryRaw<Array<{ content: string; distance: number }>>`
-      SELECT "content", "vector" <-> ${vectorLiteral}::vector as distance
+      SELECT "content", "vector" <=> ${vectorLiteral}::vector as distance
       FROM "CanonFact"
-      WHERE "projectId" = ${projectId} AND "status" = 'approved' AND "vector" IS NOT NULL
+      WHERE "projectId" = ${projectId} AND "status" = 'approved' AND "vector" IS NOT NULL AND ("vector" <=> ${vectorLiteral}::vector) < 0.35
       ORDER BY distance ASC
       LIMIT ${limit}
     `;

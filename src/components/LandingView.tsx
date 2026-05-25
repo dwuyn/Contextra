@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/i18n-client";
 import type { ReactNode } from "react";
 import {
   BookOpen,

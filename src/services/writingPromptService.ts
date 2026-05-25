@@ -20,6 +20,14 @@ function buildCanonList(items: string[], emptyMessage: string) {
   return items.length ? items.map((item) => `- ${item}`).join("\n") : `- ${emptyMessage}`;
 }
 
+function buildArcSummaryBlock(context: PromptContext) {
+  if (!context.arcSummaries || context.arcSummaries.length === 0) return "";
+  return `
+[ARC SUMMARIES]
+${context.arcSummaries.map((s) => `- ${s}`).join("\n")}
+`.trim();
+}
+
 function buildContinuityContextBlock(context: PromptContext) {
   const sharedNotes = context.sharedNotes.trim() || "No shared notes yet.";
   const worldRules = buildBulletedList(context.worldRules, "No world rules yet.");
@@ -28,6 +36,7 @@ function buildContinuityContextBlock(context: PromptContext) {
   const canonEntities = buildCanonList(context.canonContext.entities, "No approved canon entities yet.");
   const canonFacts = buildCanonList(context.canonContext.facts, "No approved canon facts yet.");
   const canonRelations = buildCanonList(context.canonContext.relations, "No approved canon relations yet.");
+  const arcSummaryBlock = buildArcSummaryBlock(context);
 
   return `
 [STORY BIBLE]
@@ -41,7 +50,7 @@ Audience: ${context.audience}
 ${worldRules}
 
 [LONG-FORM PLAN]
-Current Arc: ${context.canonContext.currentArc}
+${arcSummaryBlock ? `${arcSummaryBlock}\n\n` : ""}Current Arc: ${context.canonContext.currentArc}
 Current Beat: ${context.canonContext.currentBeat}
 Legacy Outline: ${context.outlineContext}
 

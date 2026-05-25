@@ -971,7 +971,7 @@ export function StoryBibleView() {
 
           <BibleSection
             icon={<Sparkles size={18} />}
-            title="Canon Review"
+            title="Pending Proposals (Legacy)"
             actions={
               canEdit ? (
                 <SectionActionButton
@@ -984,10 +984,11 @@ export function StoryBibleView() {
               ) : undefined
             }
           >
+            <p className="text-xs text-[var(--color-text-muted)] mb-4">New canon entries are now auto-managed. The items below are pending proposals from the previous workflow.</p>
             {canonProposals.length === 0 ? (
               <EmptyState
-                title="No pending canon updates"
-                description="Saved chapters that introduce durable story facts will appear here for review."
+                title="No pending legacy proposals"
+                description="All previous canon updates have been reviewed. Going forward, new canon entries are automatically approved when chapters are saved."
               />
             ) : (
               <div className="space-y-3">

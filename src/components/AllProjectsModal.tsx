@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { listProjects, listPublicProjects } from "@/actions/projects";
 import { X, Search, Globe, Lock, Clock } from "lucide-react";
-import Link from "next/link";
+import { Link } from "@/lib/i18n-client";
 import { cn } from "@/lib/utils";
 import type { ProjectListItem, PublicProject } from "@/types/project";
 

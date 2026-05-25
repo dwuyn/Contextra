@@ -55,8 +55,22 @@ next-env.d.ts
 *.swp
 *.swo
 
+# AI/Tool local state
+.omo/
+.superpowers/
+
+# ESLint
+.eslintcache
+
+# Vite/Vitest cache
+.vite/
+
+# npm pack output
+*.tgz
+
 # Docker
 .docker
+/data/
 
 # OS
 Thumbs.db
@@ -64,3 +78,6 @@ Desktop.ini
 
 CLAUDE.md
 AGENTS.md
+
+# AI-generated docs
+docs/

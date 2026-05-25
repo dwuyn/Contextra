@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useProjectStore } from "@/store/useProjectStore";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, Plus, Download, BookOpen, Trash2, Globe, Lock, GripVertical, Loader2, X } from "lucide-react";
-import Link from "next/link";
+import { Link } from "@/lib/i18n-client";
 import { createChapter, updateSettings, reorderChapters, deleteChapter } from "@/actions/projects";
 import { useRef, useState, type ChangeEvent } from "react";
 import type { ChapterMeta } from "@/types/project";

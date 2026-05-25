@@ -1,37 +1,47 @@
+import createMiddleware from "next-intl/middleware";
+import { routing } from "@/lib/i18n-client";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { updateSession } from "@/lib/auth";
 
+const intlMiddleware = createMiddleware(routing);
+
 export async function proxy(request: NextRequest) {
+  const response = await intlMiddleware(request);
+
   const session = request.cookies.get("session")?.value;
+  const pathname = request.nextUrl.pathname;
+  const dl = routing.defaultLocale;
 
-  const isAuthRoute = request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/register");
-  const isPublicRoute = request.nextUrl.pathname === "/";
+  if (pathname.startsWith("/api/")) return response;
 
-  if (!session && !isAuthRoute && !isPublicRoute) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  const isLogin = pathname === `/${dl}/login` || pathname === "/login";
+  const isRegister = pathname === `/${dl}/register` || pathname === "/register";
+  const isAuth = isLogin || isRegister;
+  const isPublic = pathname === "/" || pathname === `/${dl}` || pathname === `/${dl}/`;
+
+  if (!session && !isAuth && !isPublic) {
+    return NextResponse.redirect(new URL(`/${dl}/login`, request.url));
   }
 
   let refreshedSession: NextResponse | undefined;
   try {
     refreshedSession = await updateSession(request);
   } catch {
-    const response = isPublicRoute
-      ? NextResponse.next()
-      : NextResponse.redirect(new URL("/login", request.url));
-    response.cookies.delete("session");
-    return response;
+    const res = isPublic
+      ? (response || NextResponse.next())
+      : NextResponse.redirect(new URL(`/${dl}/login`, request.url));
+    res.cookies.delete("session");
+    return res;
   }
 
-  if (session && isAuthRoute) {
-    return NextResponse.redirect(new URL("/", request.url));
+  if (session && isAuth) {
+    return NextResponse.redirect(new URL(`/${dl}`, request.url));
   }
 
-  return refreshedSession || NextResponse.next();
+  return refreshedSession || response;
 }
 
 export const config = {
-  matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|icon.png).*)",
-  ],
+  matcher: ["/((?!api|_next|_vercel|.*\\..*).*)"],
 };

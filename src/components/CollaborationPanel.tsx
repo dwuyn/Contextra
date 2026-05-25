@@ -2,7 +2,7 @@
 
 import { startTransition, useDeferredValue, useEffect, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/i18n-client";
 import {
   Check,
   Clock3,

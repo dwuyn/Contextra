@@ -15,7 +15,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useState, useRef, useEffect, startTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/i18n-client";
 import ReactMarkdown from "react-markdown";
 
 export type AiCardsPaneTab = "history" | "chat";

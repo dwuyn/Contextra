@@ -108,6 +108,30 @@ export async function updateProfile(userId: string, data: { name?: string; email
   return createSession(updatedUser);
 }
 
+export async function setProfileImage(userId: string, profileImageUrl: string) {
+  return prisma.$transaction(async (tx) => {
+    const existingUser = await tx.user.findUnique({
+      where: { id: userId },
+      select: { profileImageUrl: true },
+    });
+
+    if (!existingUser) {
+      throw new Error("User not found");
+    }
+
+    const updatedUser = await tx.user.update({
+      where: { id: userId },
+      data: { profileImageUrl },
+      select: { profileImageUrl: true },
+    });
+
+    return {
+      previousProfileImageUrl: existingUser.profileImageUrl,
+      profileImageUrl: updatedUser.profileImageUrl,
+    };
+  });
+}
+
 export async function changePassword(userId: string, oldPassword: string, newPassword: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },

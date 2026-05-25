@@ -28,7 +28,9 @@
     "newPassword": "New password",
     "confirmPassword": "Confirm new password",
     "profileImage": "Profile image",
-    "browse": "Browse..."
+    "browse": "Browse...",
+    "uploadPhoto": "Upload photo",
+    "avatarRequirements": "PNG, JPG, or WEBP up to 5 MB."
   },
   "nav": {
     "dashboard": "Home",
@@ -56,10 +58,10 @@
       "rewrite": "Rewrite",
       "describe": "Describe",
       "brainstorm": "Brainstorm",
-      "writeShortcut": "Write (⌘⇧W)",
-      "rewriteShortcut": "Rewrite (⌘⇧R)",
-      "describeShortcut": "Describe (⌘⇧D)",
-      "brainstormShortcut": "Brainstorm (⌘⇧B)"
+      "writeShortcut": "Write (\u2318\u21E7W)",
+      "rewriteShortcut": "Rewrite (\u2318\u21E7R)",
+      "describeShortcut": "Describe (\u2318\u21E7D)",
+      "brainstormShortcut": "Brainstorm (\u2318\u21E7B)"
     },
     "toolbar": {
       "bold": "Bold",
@@ -70,10 +72,37 @@
     "status": {
       "saved": "Saved",
       "saving": "Saving...",
-      "unsaved": "Unsaved changes"
+      "unsaved": "Unsaved changes",
+      "saveFailed": "Save failed",
+      "memoryStale": "Memory is being rebuilt",
+      "unsavedChanges": "Unsaved changes"
     },
+    "save": "Save",
+    "cancel": "Cancel",
+    "chapterTitle": "Chapter title",
+    "charCount": "{count} characters",
+    "wordCount": "{count} words",
     "placeholder": "Start writing...",
-    "wordCount": "{count} words"
+    "emptyChapter": "This chapter is empty.",
+    "loading": "Loading editor...",
+    "untitledChapter": "Untitled Chapter",
+    "readingMode": "Reading mode",
+    "noChapter": {
+      "title": "No chapters yet",
+      "description": "Add a chapter to start writing."
+    },
+    "comment": {
+      "new": "New comment",
+      "comment": "Comment",
+      "discussPassage": "Discuss this passage",
+      "close": "Close",
+      "label": "Your comment",
+      "placeholder": "Share your thoughts on this passage...",
+      "hint": "Comments are visible to all collaborators.",
+      "post": "Post comment",
+      "posting": "Posting...",
+      "commentingMode": "Commenting mode"
+    }
   },
   "sidebar": {
     "chapters": "Chapters",

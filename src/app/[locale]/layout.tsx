@@ -16,6 +16,7 @@ import "@fontsource-variable/noto-serif";
 import "@fontsource-variable/source-serif-4";
 import "@fontsource-variable/space-grotesk";
 
+import { LocaleLangSetter } from "@/components/LocaleLangSetter";
 import { PreferencesProvider } from "@/components/PreferencesProvider";
 import "@/app/globals.css";
 
@@ -36,8 +37,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Contextra — AI-Powered Collaborative Writing",
-    description:
-      "Write your next story with context-aware AI.",
+    description: "Write your next story with context-aware AI.",
   },
 };
 
@@ -56,51 +56,19 @@ export default async function LocaleLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale}>
-      <head>
-        <meta name="theme-color" content="#f7f7f5" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-      (function() {
-        try {
-          var stored = localStorage.getItem('contextra-preferences');
-          if (stored) {
-            var prefs = JSON.parse(stored);
-            var html = document.documentElement;
-            html.className = html.className
-              .split(/\\s+/)
-              .filter(function(c) { return !/^(theme-|font-)/.test(c); })
-              .join(' ');
-            var theme = prefs.state && prefs.state.theme;
-            if (theme) {
-              html.classList.add('theme-' + theme);
-            }
-            var font = prefs.state && prefs.state.font;
-            if (font) {
-              html.classList.add('font-' + font);
-            }
-          }
-        } catch(e) {}
-      })();
-    `,
-          }}
-        />
-      </head>
-      <body className="antialiased">
-        <a
-          href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-xl focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:bg-[var(--color-text)] focus:text-[var(--color-canvas)] focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
-        >
-          Skip to content
-        </a>
-        <NextIntlClientProvider locale={locale} messages={messages}>
-          <PreferencesProvider>
-            <main id="main-content">{children}</main>
-          </PreferencesProvider>
-        </NextIntlClientProvider>
-      </body>
-    </html>
+    <>
+      <LocaleLangSetter locale={locale} />
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-xl focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:bg-[var(--color-text)] focus:text-[var(--color-canvas)] focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+      >
+        Skip to content
+      </a>
+      <NextIntlClientProvider locale={locale} messages={messages}>
+        <PreferencesProvider>
+          <main id="main-content">{children}</main>
+        </PreferencesProvider>
+      </NextIntlClientProvider>
+    </>
   );
 }

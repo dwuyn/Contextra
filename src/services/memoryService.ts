@@ -93,6 +93,64 @@ export async function upsertChapterSummary(input: ChapterSummaryInput) {
 /**
  * Summarizes a chapter's events and characters and stores the compressed representation in the database.
  */
+type ArcSummaryInput = {
+  projectId: string;
+  arcId: string;
+  arcTitle: string;
+  arcDescription: string;
+  startChapterIndex: number;
+  endChapterIndex: number;
+};
+
+export async function upsertArcSummary(input: ArcSummaryInput) {
+  const summaries = await prisma.chapterSummary.findMany({
+    where: {
+      chapter: {
+        projectId: input.projectId,
+        index: { gte: input.startChapterIndex, lte: input.endChapterIndex },
+      },
+    },
+    select: { summary: true },
+    orderBy: { chapter: { index: "asc" } },
+  });
+
+  if (summaries.length === 0) return;
+
+  const digest = summaries
+    .map((s, i) => `Ch ${input.startChapterIndex + i}: ${s.summary}`)
+    .join("\n");
+
+  const { text } = await generateText({
+    model: chatModel(),
+    prompt: `
+You are a continuity editor compressing chapter summaries into a concise arc summary.
+
+[ARC]
+Title: ${input.arcTitle}
+Description: ${input.arcDescription}
+Chapter range: ${input.startChapterIndex}-${input.endChapterIndex}
+
+[CHAPTER SUMMARIES]
+${digest}
+
+Write a 3-5 sentence summary of what happens across this arc. Include:
+- The major events and turning points
+- Character arcs and key developments
+- How the arc moves the overall story forward
+
+Return only the summary text. No markdown, no heading, no commentary.
+`.trim(),
+    temperature: 0.3,
+  });
+
+  const arcSummary = stripReasoning(text);
+
+  await prisma.storyArc.update({
+    where: { id: input.arcId },
+    data: { arcSummary },
+  });
+}
+
 export async function compressChapter(chapterId: string) {
   const chapter = await prisma.chapter.findUnique({
     where: { id: chapterId },

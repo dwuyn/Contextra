@@ -18,20 +18,66 @@ export function toPgVectorLiteral(values: number[]) {
 /**
  * Splits text into chunks by sentences/paragraphs, roughly matching the target token/word size.
  */
-function chunkText(text: string, maxWords: number = CHUNK_SIZE, overlapWords: number = OVERLAP): string[] {
-  if (!text.trim()) return [];
+function splitSentences(text: string): string[] {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (!cleaned) return [];
+  const matches = cleaned.match(/[^.!?]+[.!?]+(\s|$)/g) || [];
+  const sentences: string[] = [...matches];
+  const remaining = cleaned.replace(/[^.!?]+[.!?]+(\s|$)/g, "").trim();
+  if (remaining) sentences.push(remaining);
+  return sentences.map((s) => s.trim()).filter(Boolean);
+}
 
-  // Simple word-based chunker. For production, consider a token-based chunker or sentence boundary detection.
-  const words = text.split(/\s+/);
-  if (words.length <= maxWords) return [text];
-
+function fallbackWordChunks(words: string[], maxWords: number, overlapWords: number): string[] {
   const chunks: string[] = [];
   let i = 0;
   while (i < words.length) {
-    const chunk = words.slice(i, i + maxWords).join(" ");
-    chunks.push(chunk);
+    chunks.push(words.slice(i, i + maxWords).join(" "));
     i += maxWords - overlapWords;
   }
+  return chunks;
+}
+
+function chunkText(text: string, maxWords: number = CHUNK_SIZE, overlapWords: number = OVERLAP): string[] {
+  if (!text.trim()) return [];
+
+  const sentences = splitSentences(text);
+  if (sentences.length <= 1) {
+    const words = text.split(/\s+/);
+    if (words.length <= maxWords) return [text];
+    return fallbackWordChunks(words, maxWords, overlapWords);
+  }
+
+  const chunks: string[] = [];
+  let currentChunk: string[] = [];
+  let currentWordCount = 0;
+
+  for (const sentence of sentences) {
+    const sentenceWordCount = sentence.split(/\s+/).filter(Boolean).length;
+
+    if (currentWordCount + sentenceWordCount <= maxWords) {
+      currentChunk.push(sentence);
+      currentWordCount += sentenceWordCount;
+    } else if (sentenceWordCount > maxWords) {
+      if (currentChunk.length > 0) {
+        chunks.push(currentChunk.join(" "));
+        currentChunk = [];
+        currentWordCount = 0;
+      }
+      chunks.push(...fallbackWordChunks(sentence.split(/\s+/), maxWords, overlapWords));
+    } else {
+      if (currentChunk.length > 0) {
+        chunks.push(currentChunk.join(" "));
+      }
+      currentChunk = [sentence];
+      currentWordCount = sentenceWordCount;
+    }
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk.join(" "));
+  }
+
   return chunks;
 }
 
@@ -71,16 +117,16 @@ export async function processAndSaveChapterChunks(chapterId: string, content: st
   }
 
   const chunks = chunkText(cleanContent);
+  const embeddings = await Promise.all(
+    chunks.map((chunkContent) => generateEmbedding(chunkContent, "RETRIEVAL_DOCUMENT")),
+  );
+
   const embeddedChunks: Array<{ chunkContent: string; vectorLiteral: string; index: number }> = [];
-
-  for (let i = 0; i < chunks.length; i++) {
-    const chunkContent = chunks[i];
-    const embedding = await generateEmbedding(chunkContent, "RETRIEVAL_DOCUMENT");
-    if (embedding.length !== EMBEDDING_DIMENSIONS) {
-      throw new Error(`Expected 768 dimensions, got ${embedding.length}`);
+  for (let i = 0; i < embeddings.length; i++) {
+    if (embeddings[i].length !== EMBEDDING_DIMENSIONS) {
+      throw new Error(`Expected 768 dimensions, got ${embeddings[i].length}`);
     }
-
-    embeddedChunks.push({ chunkContent, vectorLiteral: toPgVectorLiteral(embedding), index: i });
+    embeddedChunks.push({ chunkContent: chunks[i], vectorLiteral: toPgVectorLiteral(embeddings[i]), index: i });
   }
 
   await prisma.$transaction(async tx => {
@@ -113,16 +159,16 @@ export async function semanticSearch(
     ? Prisma.sql`c."id" IN (${Prisma.join(chapterIds)})`
     : Prisma.sql`c."branchId" = ${branchId}`;
   
-  // Use raw SQL for nearest neighbor search using the <-> operator (cosine distance)
+  // Use raw SQL for nearest neighbor search using cosine distance (<=>)
   // We join with Chapter to ensure we only retrieve chunks from the current project/branch context.
   const results = await prisma.$queryRaw<Array<{ content: string; chapterTitle: string; distance: number }>>`
     SELECT
       sc.content,
       c.title as "chapterTitle",
-      sc.vector <-> ${queryVector}::vector as distance
+      sc.vector <=> ${queryVector}::vector as distance
     FROM "SceneChunk" sc
     JOIN "Chapter" c ON sc."chapterId" = c.id
-    WHERE c."projectId" = ${projectId} AND ${chapterFilter}
+    WHERE c."projectId" = ${projectId} AND ${chapterFilter} AND (sc.vector <=> ${queryVector}::vector) < 0.35
     ORDER BY distance ASC
     LIMIT ${limit}
   `;

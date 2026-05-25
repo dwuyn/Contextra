@@ -35,7 +35,9 @@ ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
 RUN groupadd --system --gid 1001 nodejs \
-  && useradd --system --uid 1001 --gid 1001 nextjs
+  && useradd --system --uid 1001 --gid 1001 nextjs \
+  && mkdir -p /app/data/avatars \
+  && chown -R nextjs:nodejs /app/data
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./

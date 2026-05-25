@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/i18n-client";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { usePreferencesStore } from "@/store/usePreferencesStore";

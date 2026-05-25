@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/i18n-client";
 import { register } from "@/actions/auth";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";

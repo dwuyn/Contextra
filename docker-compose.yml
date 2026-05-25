@@ -40,6 +40,8 @@ services:
         condition: service_healthy
     ports:
       - "${APP_PORT:-3000}:3000"
+    volumes:
+      - avatar-data:/app/data
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
@@ -50,3 +52,4 @@ services:
 
 volumes:
   postgres-data:
+  avatar-data:

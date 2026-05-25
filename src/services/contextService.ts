@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { loadCanonPromptContext } from "@/services/canonService";
 
@@ -26,6 +27,7 @@ export interface PromptContext {
     facts: string[];
     relations: string[];
   };
+  arcSummaries: string[];
 }
 
 type ContextChapter = {
@@ -80,11 +82,11 @@ function stripHtml(content: string) {
 }
 
 const CONTEXT_BUDGETS = {
-  characterDigest: 5_000,
-  ragContext: 6_000,
-  recentSummaries: 3_000,
-  slidingWindow: 6_000,
-  worldRules: 4_000,
+  characterDigest: 10_000,
+  ragContext: 12_000,
+  recentSummaries: 6_000,
+  slidingWindow: 10_000,
+  worldRules: 8_000,
 };
 
 function takeByCharBudget<T>(items: T[], render: (item: T) => string, budget: number) {
@@ -253,12 +255,71 @@ async function loadMostRecentChapterText(chapterId?: string) {
   return text ? text.slice(-CONTEXT_BUDGETS.slidingWindow) : "No immediate previous text.";
 }
 
+type CachedEntry = {
+  context: PromptContext;
+  cachedAt: number;
+};
+
+const contextCache = new Map<string, CachedEntry>();
+const CACHE_TTL_MS = 30_000;
+
+function buildCacheKey(projectId: string, branchId: string, userInstructions?: string): string {
+  if (userInstructions) {
+    const hash = createHash("md5").update(userInstructions).digest("hex").slice(0, 8);
+    return `${projectId}:${branchId}:${hash}`;
+  }
+  return `${projectId}:${branchId}`;
+}
+
+export function invalidateContextCache(projectId: string) {
+  for (const key of contextCache.keys()) {
+    if (key.startsWith(projectId)) {
+      contextCache.delete(key);
+    }
+  }
+}
+
+async function getMaxUpdatedAt(projectId: string, branchId: string): Promise<number> {
+  const [project, lastChapter, lastCanon] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id: projectId },
+      select: { updatedAt: true },
+    }),
+    prisma.chapter.findFirst({
+      where: { projectId, branchId },
+      orderBy: { updatedAt: "desc" },
+      select: { updatedAt: true },
+    }),
+    prisma.canonEntity.findFirst({
+      where: { projectId, status: "active" },
+      orderBy: { updatedAt: "desc" },
+      select: { updatedAt: true },
+    }),
+  ]);
+
+  return Math.max(
+    project?.updatedAt.getTime() ?? 0,
+    lastChapter?.updatedAt.getTime() ?? 0,
+    lastCanon?.updatedAt.getTime() ?? 0,
+  );
+}
+
 export async function composeContext(
   projectId: string, 
   branchId: string, 
   userInstructions: string,
   fromRagService: (q: string, pId: string, bId: string, l: number, chapterIds?: string[]) => Promise<string[]> = async () => []
 ): Promise<PromptContext> {
+  const cacheKey = buildCacheKey(projectId, branchId, userInstructions);
+  const cached = contextCache.get(cacheKey);
+
+  if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
+    const maxUpdatedAt = await getMaxUpdatedAt(projectId, branchId);
+    if (cached.cachedAt > maxUpdatedAt) {
+      return cached.context;
+    }
+  }
+
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
@@ -293,14 +354,27 @@ export async function composeContext(
   const recentChapterSummaries = getRecentChapterSummaries(lineage);
   const mostRecentChapter = lineage[lineage.length - 1];
 
-  const [ragContext, canonContext, characterDigest, slidingWindowText] = await Promise.all([
+  const [ragContext, canonContext, characterDigest, slidingWindowText, arcs] = await Promise.all([
     loadRagContext(projectId, branch.id, userInstructions, fromRagService, lineageChapterIds),
     loadCanonPromptContext({ projectId, currentChapterIndex, userInstructions }),
     loadCharacterDigest(projectId, userInstructions),
     loadMostRecentChapterText(mostRecentChapter?.id),
+    prisma.storyArc.findMany({
+      where: {
+        projectId,
+        endChapterIndex: { lte: currentChapterIndex },
+        arcSummary: { not: null },
+      },
+      orderBy: { sortOrder: "asc" },
+      select: { title: true, arcSummary: true },
+    }),
   ]);
 
-  return {
+  const arcSummaries = arcs
+    .filter((a) => a.arcSummary)
+    .map((a) => `${a.title}: ${a.arcSummary}`);
+
+  const result = {
     projectName: project.name,
     projectSummary: project.summary,
     branchName: branch.name,
@@ -316,7 +390,11 @@ export async function composeContext(
     ragContext,
     outlineContext: buildLegacyOutlineContext(project.outline, currentChapterIndex),
     canonContext,
+    arcSummaries,
   };
+
+  contextCache.set(cacheKey, { context: result, cachedAt: Date.now() });
+  return result;
 }
 
 async function buildContinuity(

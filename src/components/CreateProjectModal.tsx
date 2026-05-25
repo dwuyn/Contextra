@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createProject } from "@/actions/projects";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/i18n-client";
 import { X, Globe, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/useProjectStore";

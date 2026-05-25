@@ -1,14 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { type ChangeEvent, useRef, useState } from "react";
 import { User, Palette, Lock, Sun, Moon } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
 import { FONT_OPTIONS, THEME_CARDS, toggleThemeDark } from "@/lib/appearance";
 import { usePreferencesStore } from "@/store/usePreferencesStore";
 import { updateProfile, changePassword, logout } from "@/actions/auth";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/i18n-client";
 import { useTranslations } from "next-intl";
 
 interface PreferencesModalProps {
@@ -32,14 +32,18 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
   const router = useRouter();
   const t = useTranslations("auth");
   const ct = useTranslations("common");
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // Account Form State
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [dob, setDob] = useState(user.dob || "");
+  const [profileImageUrl, setProfileImageUrl] = useState(user.profileImageUrl || "");
   const [isUpdating, setIsUpdating] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileSuccess, setProfileSuccess] = useState("");
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
 
   // Password Form State
   const [oldPassword, setOldPassword] = useState("");
@@ -90,6 +94,50 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
     await logout();
     router.push("/login");
   };
+
+  const handleAvatarUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    setAvatarError("");
+    setIsUploadingAvatar(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/account/avatar", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error((await response.text()) || "Failed to upload avatar.");
+      }
+
+      const result = (await response.json()) as { profileImageUrl?: string };
+
+      if (!result.profileImageUrl) {
+        throw new Error("Failed to upload avatar.");
+      }
+
+      setProfileImageUrl(result.profileImageUrl);
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+      setAvatarError(getErrorMessage(error));
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  const displayName = name.trim() || user.name;
+  const displayEmail = email.trim() || user.email;
+  const avatarInitial = (displayName || displayEmail || "U").charAt(0).toUpperCase();
 
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
@@ -217,24 +265,55 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
                 <div className="space-y-12">
                   <section>
                     <h3 className="text-lg font-bold text-[var(--color-text)] mb-6">Account</h3>
-                    <div className="flex gap-12">
+                    <div className="flex flex-col gap-8 xl:flex-row xl:gap-12">
                       {/* User Summary Card */}
-                      <div className="w-56 h-72 rounded-[32px] border border-[var(--color-border)] bg-[var(--background)] flex flex-col items-center justify-center p-6 shrink-0">
-                        <div className="w-24 h-24 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center text-3xl font-bold text-[var(--color-text-muted)] mb-6">
-                          {user.profileImageUrl ? (
+                      <div className="mx-auto flex min-h-72 w-56 shrink-0 flex-col items-center rounded-[32px] border border-[var(--color-border)] bg-[var(--background)] px-6 py-7 xl:mx-0">
+                        <div className="mb-5 flex h-24 w-24 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-3xl font-bold text-[var(--color-text-muted)]">
+                          {profileImageUrl ? (
                             <Image
-                              src={user.profileImageUrl}
-                              alt={user.name}
+                              src={profileImageUrl}
+                              alt={displayName}
                               width={96}
                               height={96}
                               className="w-full h-full rounded-full object-cover"
                             />
                           ) : (
-                            user.name[0].toUpperCase()
+                            avatarInitial
                           )}
                         </div>
-                        <h4 className="font-bold text-[var(--color-text)] text-center line-clamp-1">{user.name}</h4>
-                        <p className="text-[10px] text-[var(--color-text-muted)] text-center truncate w-full">{user.email}</p>
+                        <div className="w-full text-center">
+                          <h4 className="line-clamp-1 text-lg font-bold leading-tight tracking-tight text-[var(--color-text)]">
+                            {displayName}
+                          </h4>
+                          <p className="mt-1 truncate text-xs leading-4 text-[var(--color-text-secondary)]">
+                            {displayEmail}
+                          </p>
+                        </div>
+                        <div className="mt-auto w-full space-y-3 pt-6">
+                          <input
+                            ref={avatarInputRef}
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            onChange={handleAvatarUpload}
+                            className="sr-only"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => avatarInputRef.current?.click()}
+                            disabled={isUploadingAvatar}
+                            className="w-full rounded-full border border-[var(--color-border)] px-4 py-2.5 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-alt)] disabled:opacity-50"
+                          >
+                            {isUploadingAvatar ? ct("saving") : t("uploadPhoto")}
+                          </button>
+                          <p className="text-center text-[10px] text-[var(--color-text-muted)]">
+                            {t("avatarRequirements")}
+                          </p>
+                          {avatarError && (
+                            <p className="text-center text-xs font-bold text-[var(--color-destructive)]">
+                              {avatarError}
+                            </p>
+                          )}
+                        </div>
                       </div>
 
                       {/* Form Fields */}

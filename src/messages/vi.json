@@ -28,7 +28,9 @@
     "newPassword": "Mật khẩu mới",
     "confirmPassword": "Xác nhận mật khẩu mới",
     "profileImage": "Ảnh đại diện",
-    "browse": "Duyệt..."
+    "browse": "Duyệt...",
+    "uploadPhoto": "Tải ảnh lên",
+    "avatarRequirements": "PNG, JPG hoặc WEBP tối đa 5 MB."
   },
   "project": {
     "new": "Tạo workspace mới",
@@ -48,8 +50,40 @@
       "underline": "Gạch chân",
       "heading": "Tiêu đề"
     },
+    "status": {
+      "saved": "Đã lưu",
+      "saving": "Đang lưu...",
+      "unsaved": "Chưa lưu thay đổi",
+      "saveFailed": "Lưu thất bại",
+      "memoryStale": "Đang xây dựng lại bộ nhớ",
+      "unsavedChanges": "Chưa lưu thay đổi"
+    },
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "chapterTitle": "Tiêu đề chương",
+    "charCount": "{count} ký tự",
+    "wordCount": "{count} từ",
     "placeholder": "Bắt đầu viết...",
-    "wordCount": "{count} từ"
+    "emptyChapter": "Chương này trống.",
+    "loading": "Đang tải...",
+    "untitledChapter": "Chương không tiêu đề",
+    "readingMode": "Chế độ đọc",
+    "noChapter": {
+      "title": "Chưa có chương nào",
+      "description": "Thêm chương để bắt đầu viết."
+    },
+    "comment": {
+      "new": "Bình luận mới",
+      "comment": "Bình luận",
+      "discussPassage": "Thảo luận đoạn này",
+      "close": "Đóng",
+      "label": "Bình luận của bạn",
+      "placeholder": "Chia sẻ suy nghĩ về đoạn này...",
+      "hint": "Bình luận hiển thị cho tất cả cộng tác viên.",
+      "post": "Đăng bình luận",
+      "posting": "Đang đăng...",
+      "commentingMode": "Chế độ bình luận"
+    }
   },
   "sidebar": {
     "chapters": "Chương",

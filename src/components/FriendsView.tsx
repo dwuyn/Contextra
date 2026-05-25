@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useState, useEffect, useRef } from "react";
 import { MessageSquare, Search, Send } from "lucide-react";
 import { getFriends } from "@/actions/friends";
@@ -47,7 +48,7 @@ function toDirectMessage(data: Record<string, unknown>): DirectMessageSummary | 
   };
 }
 
-export function FriendsView({ onClose }: { onClose: () => void }) {
+export function FriendsView() {
   const [friends, setFriends] = useState<FriendSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFriend, setSelectedFriend] = useState<FriendSummary | null>(null);
@@ -96,12 +97,14 @@ export function FriendsView({ onClose }: { onClose: () => void }) {
           <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2">Workspace</p>
           <h2 className="text-4xl font-extrabold text-[var(--color-text)] tracking-tight">Friends</h2>
         </div>
-        <button 
-          onClick={onClose}
-          className="flex h-10 items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm font-bold text-[var(--color-text)] hover:bg-[var(--color-canvas)] transition-colors shadow-sm"
-        >
-          Close
-        </button>
+        {selectedFriend ? (
+          <button 
+            onClick={() => setSelectedFriend(null)}
+            className="flex h-10 items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm font-bold text-[var(--color-text)] hover:bg-[var(--color-canvas)] transition-colors shadow-sm"
+          >
+            Close
+          </button>
+        ) : null}
       </header>
 
       <div className="flex gap-10 flex-1 min-h-0">
@@ -179,6 +182,7 @@ function EmbeddedChat({ friend, latestMessage }: { friend: FriendSummary, latest
   const [messages, setMessages] = useState<DirectMessageSummary[]>([]);
   const [inputValue, setInputValue] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const friendInitial = friend.name.charAt(0).toUpperCase();
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -231,13 +235,23 @@ function EmbeddedChat({ friend, latestMessage }: { friend: FriendSummary, latest
   return (
     <div className="flex flex-col h-full w-full">
       {/* Profile Header */}
-      <div className="flex flex-col items-center justify-center pt-8 pb-6 border-b border-[var(--color-border)] bg-[var(--color-surface)] shrink-0">
-        <div className="h-20 w-20 rounded-[24px] bg-[var(--color-accent-muted)] text-[var(--color-accent)] flex items-center justify-center font-bold text-3xl mb-4 relative shadow-inner">
-          {friend.name[0].toUpperCase()}
-          <div className="absolute bottom-0 right-0 translate-x-1 translate-y-1 h-5 w-5 rounded-full bg-[var(--color-success)] border-[3px] border-white"></div>
+      <div className="flex shrink-0 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent-muted)] text-base font-bold text-[var(--color-accent)] shadow-inner">
+          {friend.profileImageUrl ? (
+            <Image
+              src={friend.profileImageUrl}
+              alt={friend.name}
+              width={48}
+              height={48}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            friendInitial
+          )}
         </div>
-        <h3 className="text-xl font-extrabold text-[var(--color-text)] mb-1">{friend.name}</h3>
-        <p className="text-sm text-[var(--color-text-muted)]">{friend.email}</p>
+        <h3 className="truncate text-xl font-extrabold tracking-tight text-[var(--color-text)]">
+          {friend.name}
+        </h3>
       </div>
 
       {/* Messages */}

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { deleteChapterSummary, upsertChapterSummary } from "@/services/memoryService";
+import { deleteChapterSummary, upsertArcSummary, upsertChapterSummary } from "@/services/memoryService";
 import { processAndSaveChapterChunks } from "@/services/ragService";
 import { createCanonProposalsForChapter } from "@/services/canonService";
 import { prisma } from "@/lib/prisma";
@@ -67,6 +67,50 @@ export async function refreshChapterContinuityNow({
     upsertChapterSummary({ chapterId, title, content }),
     createCanonProposalsForChapter({ chapterId, projectId, branchId, title, content }),
   ]);
+
+  triggerArcSummaryIfComplete({ chapterId, projectId }).catch((err) =>
+    console.error("Failed to upsert arc summary", err),
+  );
+}
+
+async function triggerArcSummaryIfComplete({ chapterId, projectId }: { chapterId: string; projectId: string }) {
+  const chapter = await prisma.chapter.findUnique({
+    where: { id: chapterId },
+    select: { index: true },
+  });
+  if (!chapter) return;
+
+  const chapterIndex = chapter.index;
+
+  const activeArc = await prisma.storyArc.findFirst({
+    where: {
+      projectId,
+      OR: [
+        {
+          startChapterIndex: { lte: chapterIndex },
+          endChapterIndex: { gte: chapterIndex },
+        },
+        { startChapterIndex: null, endChapterIndex: null },
+      ],
+    },
+    orderBy: { sortOrder: "asc" },
+  });
+
+  if (
+    activeArc &&
+    activeArc.startChapterIndex != null &&
+    activeArc.endChapterIndex != null &&
+    chapterIndex === activeArc.endChapterIndex
+  ) {
+    await upsertArcSummary({
+      projectId,
+      arcId: activeArc.id,
+      arcTitle: activeArc.title,
+      arcDescription: activeArc.summary || "",
+      startChapterIndex: activeArc.startChapterIndex,
+      endChapterIndex: activeArc.endChapterIndex,
+    });
+  }
 }
 
 export async function enqueueChapterContinuityJob({

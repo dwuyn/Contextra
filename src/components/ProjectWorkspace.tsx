@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/i18n-client";
 import { useProjectStore } from "@/store/useProjectStore";
 import { useZenStore } from "@/store/useZenStore";
 import { SidebarNavigator } from "@/components/SidebarNavigator";

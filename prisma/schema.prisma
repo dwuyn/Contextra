@@ -283,6 +283,7 @@ model StoryArc {
   projectId         String
   title             String
   summary           String   @default("")
+  arcSummary        String?
   startChapterIndex Int?
   endChapterIndex   Int?
   status            String   @default("planned")

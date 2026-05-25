@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { CreateProjectModal } from "./CreateProjectModal";
 import { LoadingState } from "@/components/LoadingState";
-import Link from "next/link";
+import { Link, useRouter } from "@/lib/i18n-client";
 import {
   Home,
   Layers,
@@ -211,7 +211,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
       case "people":
         return <PeopleView onClose={() => setActiveView("home")} />;
       case "friends":
-        return <FriendsView onClose={() => setActiveView("home")} />;
+        return <FriendsView />;
       default:
         return (
           <>
@@ -483,5 +483,4 @@ function NavItem({ icon, label, active, badge, disabled, onClick }: { icon: Reac
     </button>
   );
 }
-
 
