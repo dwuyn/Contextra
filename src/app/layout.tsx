@@ -25,6 +25,32 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+      (function() {
+        try {
+          var stored = localStorage.getItem('contextra-preferences');
+          if (stored) {
+            var prefs = JSON.parse(stored);
+            var theme = prefs.state && prefs.state.theme;
+            var isDark = prefs.state && prefs.state.darkMode;
+            if (theme) {
+              var className = 'theme-' + theme;
+              if (isDark) className += ' theme-' + theme + '-dark';
+              document.documentElement.className = className;
+            }
+            if (prefs.state && prefs.state.font) {
+              document.documentElement.className += ' font-' + prefs.state.font;
+            }
+          }
+        } catch(e) {}
+      })();
+    `,
+          }}
+        />
+      </head>
       <body className="antialiased">
         <PreferencesProvider>
           {children}
