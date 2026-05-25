@@ -1,100 +1,118 @@
 "use client";
 
 import { useState } from "react";
-import { login } from "@/actions/auth";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { BookOpen } from "lucide-react";
+import { login } from "@/actions/auth";
+import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
+import { Link } from "@/lib/i18n-client";
 
-const UNEXPECTED_LOGIN_MESSAGE = "Unable to sign in. Please try again.";
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+}
 
 export function LoginView() {
+  const t = useTranslations("auth");
+  const ct = useTranslations("common");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-
+    setPending(true);
     try {
-      const result = await login(email, password);
-      if (!result.ok) {
-        setError(result.message);
-        return;
-      }
-
+      await login(email, password);
       router.push("/");
-    } catch {
-      setError(UNEXPECTED_LOGIN_MESSAGE);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setPending(false);
     }
-  };
+  }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f7f7f5] p-6">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--color-canvas)] px-4">
       <div className="w-full max-w-md">
-        <Link href="/" className="mb-6 inline-flex items-center gap-3 text-slate-900">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white">
-            <BookOpen size={18} />
-          </div>
-          <div>
-            <p className="text-sm font-bold">Contextra</p>
-            <p className="text-xs text-slate-500">Writing workspace</p>
-          </div>
-        </Link>
+        <div className="mb-8 text-center">
+          <h1 className="text-2xl font-bold text-[var(--color-text)]">{t("login")}</h1>
+        </div>
 
-        <div className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-sm">
-          <h1 className="text-3xl font-bold text-slate-900">Welcome back</h1>
-          <p className="mt-2 text-sm leading-relaxed text-slate-500">
-            Open your workspace and pick up where your story left off.
-          </p>
+        <form
+          onSubmit={handleSubmit}
+          className="rounded-2xl bg-[var(--color-surface)] p-8 shadow-sm border border-[var(--color-border)]"
+        >
+          {error && (
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="mb-6 rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950 dark:text-red-400"
+            >
+              {error}
+            </div>
+          )}
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+          <div className="space-y-5">
             <label className="block">
-              <span className="sr-only">Email address</span>
+              <span className="text-xs font-bold uppercase tracking-wider mb-1.5 block text-[var(--color-text-secondary)]">
+                {t("email")}
+              </span>
               <input
-                name="email"
                 type="email"
-                placeholder="Email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
                 required
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+                className={cn(
+                  "w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-canvas)] px-3 py-2",
+                  "text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)]",
+                  "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
+                )}
               />
             </label>
+
             <label className="block">
-              <span className="sr-only">Password</span>
+              <span className="text-xs font-bold uppercase tracking-wider mb-1.5 block text-[var(--color-text-secondary)]">
+                {t("password")}
+              </span>
               <input
-                name="password"
                 type="password"
-                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
                 required
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+                className={cn(
+                  "w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-canvas)] px-3 py-2",
+                  "text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)]",
+                  "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
+                )}
               />
             </label>
+
             <button
               type="submit"
-              className="w-full rounded-2xl bg-slate-900 py-4 font-bold text-white transition-colors hover:bg-slate-800 active:scale-95"
+              disabled={pending}
+              className={cn(
+                "w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-colors",
+                "bg-[var(--color-accent)] hover:opacity-90",
+                "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-2",
+                pending && "opacity-60 cursor-not-allowed"
+              )}
             >
-              Sign in
+              {pending ? ct("loading") : t("loginAction")}
             </button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <Link
-              href="/register"
-              className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
-            >
-              Need an account? Create one
-            </Link>
           </div>
 
-          {error && (
-            <p role="alert" aria-live="assertive" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-500">
-              {error}
-            </p>
-          )}
-        </div>
+          <p className="mt-6 text-center text-sm text-[var(--color-text-secondary)]">
+            {t("noAccount")}{" "}
+            <Link href="/register" className="font-medium text-[var(--color-accent)] hover:underline">
+              {t("signUp")}
+            </Link>
+          </p>
+        </form>
       </div>
     </div>
   );
