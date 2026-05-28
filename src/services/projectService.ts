@@ -4,7 +4,7 @@ import type { ProjectOutline } from "@/types/project";
 import { refreshChapterContinuityStatus } from "@/services/continuityService";
 import { requireFriendship } from "@/services/chatService";
 import { writeCharacterVector } from "@/services/contextService";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type {
   CreateChapterResult,
   HomeOverviewData,
@@ -157,9 +157,7 @@ function hasMeaningfulChapterContent(content?: string) {
   return Boolean(content?.replace(/<[^>]+>/g, " ").trim());
 }
 
-function stripHtmlToPlainText(content: string) {
-  return content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
+import { stripHtmlToPlainText } from "@/lib/utils";
 
 function getPresenceCutoff() {
   return new Date(Date.now() - ACTIVE_PRESENCE_TTL_MS);
@@ -731,16 +729,18 @@ export async function createChapter(projectId: string, userId: string, input: Cr
   await requireProjectPermission(projectId, userId, "edit");
   await requireBranchInProject(projectId, input.branchId);
 
-  const chapterCount = await prisma.chapter.count({ where: { projectId } });
-  const chapter = await prisma.chapter.create({
-    data: {
-      projectId,
-      branchId: input.branchId,
-      title: input.title,
-      summary: input.summary ?? "",
-      content: input.content ?? "",
-      index: chapterCount + 1,
-    },
+  const chapter = await prisma.$transaction(async (tx) => {
+    const chapterCount = await tx.chapter.count({ where: { projectId, branchId: input.branchId } });
+    return tx.chapter.create({
+      data: {
+        projectId,
+        branchId: input.branchId,
+        title: input.title,
+        summary: input.summary ?? "",
+        content: input.content ?? "",
+        index: chapterCount + 1,
+      },
+    });
   });
 
   const continuity = hasMeaningfulChapterContent(chapter.content)
@@ -1472,7 +1472,7 @@ export async function listProjectAudience(projectId: string, excludeUserIds: str
 }
 
 export async function sendProjectChat(projectId: string, userId: string, input: SendProjectChatInput) {
-  await requireProjectPermission(projectId, userId, "view");
+  await requireProjectPermission(projectId, userId, "edit");
 
   await prisma.chatMessage.create({
     data: {
@@ -1591,11 +1591,11 @@ export async function reorderChapters(projectId: string, userId: string, ordered
     throw new Error("Cannot reorder chapters across branches");
   }
 
-  await prisma.$transaction(
-    orderedIds.map((id, index) =>
-      prisma.chapter.update({ where: { id }, data: { index: index + 1 } })
-    )
-  );
+  await prisma.$executeRaw`
+    UPDATE "Chapter" AS c SET "index" = v.index
+    FROM (VALUES ${Prisma.join(orderedIds.map((id, index) => Prisma.sql`(${id}, ${index + 1})`))}) AS v(id, index)
+    WHERE c.id = v.id
+  `;
 
   return getProject(projectId, userId);
 }

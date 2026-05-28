@@ -36,7 +36,6 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
 
   // Account Form State
   const [name, setName] = useState(user.name);
-  const [email, setEmail] = useState(user.email);
   const [dob, setDob] = useState(user.dob || "");
   const [profileImageUrl, setProfileImageUrl] = useState(user.profileImageUrl || "");
   const [isUpdating, setIsUpdating] = useState(false);
@@ -58,7 +57,7 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
     setProfileError("");
     setProfileSuccess("");
     try {
-      await updateProfile({ name, email, dob });
+      await updateProfile({ name, dob });
       setProfileSuccess("Account updated.");
       router.refresh();
     } catch (err) {
@@ -136,7 +135,7 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
   };
 
   const displayName = name.trim() || user.name;
-  const displayEmail = email.trim() || user.email;
+  const displayEmail = user.email;
   const avatarInitial = (displayName || displayEmail || "U").charAt(0).toUpperCase();
 
   return (
@@ -335,10 +334,11 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
                             <span className="text-xs font-bold uppercase tracking-wider mb-1.5 block text-[var(--color-text-secondary)]">{t("email")}</span>
                             <input 
                               type="email" 
-                              value={email}
-                              onChange={(e) => setEmail(e.target.value)}
+                              value={user.email}
+                              readOnly
+                              disabled
                               placeholder={t("email")}
-                              className="w-full rounded-2xl border border-[var(--color-border)] px-6 py-4 text-sm font-medium focus:border-[var(--color-accent)] outline-none transition-colors bg-[var(--color-canvas)] text-[var(--color-text-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
+                              className="w-full rounded-2xl border border-[var(--color-border)] px-6 py-4 text-sm font-medium focus:border-[var(--color-accent)] outline-none transition-colors bg-[var(--color-canvas)] text-[var(--color-text-secondary)] opacity-60 cursor-not-allowed"
                             />
                           </label>
                         </div>

@@ -69,8 +69,19 @@ export async function updateSession(request: NextRequest) {
   const session = request.cookies.get("session")?.value;
   if (!session) return;
 
-  // Refresh the session so it doesn't expire
   const parsed = await decrypt(session);
+
+  try {
+    const { prisma } = await import("@/lib/prisma");
+    const user = await prisma.user.findUnique({
+      where: { id: parsed.userId },
+      select: { id: true },
+    });
+    if (!user) return;
+  } catch {
+    return;
+  }
+
   parsed.expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const res = NextResponse.next();
   res.cookies.set({

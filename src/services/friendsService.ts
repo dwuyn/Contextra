@@ -76,41 +76,42 @@ export async function createFriendRequest(senderId: string, receiverUserId: stri
 }
 
 export async function respondToFriendRequest(userId: string, requestId: string, action: "accepted" | "rejected") {
-  const request = await prisma.friendRequest.findUnique({
-    where: { id: requestId },
-  });
-
-  if (!request || request.receiverId !== userId) throw new Error("Request not found");
-
-  const updatedRequest = await prisma.friendRequest.update({
-    where: { id: requestId },
-    data: { status: action },
-    include: {
-      sender: true,
-      receiver: true,
-    }
-  });
-
-  if (action === "accepted") {
-    // Check if friendship already exists
-    const existingFriendship = await prisma.friendship.findFirst({
-      where: {
-        OR: [
-          { userId: request.senderId, friendId: request.receiverId },
-          { userId: request.receiverId, friendId: request.senderId },
-        ],
-      },
+  return prisma.$transaction(async (tx) => {
+    const request = await tx.friendRequest.findUnique({
+      where: { id: requestId },
     });
 
-    if (!existingFriendship) {
-      await prisma.friendship.create({
-        data: {
-          userId: request.senderId,
-          friendId: request.receiverId,
+    if (!request || request.receiverId !== userId) throw new Error("Request not found");
+
+    const updatedRequest = await tx.friendRequest.update({
+      where: { id: requestId },
+      data: { status: action },
+      include: {
+        sender: true,
+        receiver: true,
+      }
+    });
+
+    if (action === "accepted") {
+      const existingFriendship = await tx.friendship.findFirst({
+        where: {
+          OR: [
+            { userId: request.senderId, friendId: request.receiverId },
+            { userId: request.receiverId, friendId: request.senderId },
+          ],
         },
       });
-    }
-  }
 
-  return updatedRequest;
+      if (!existingFriendship) {
+        await tx.friendship.create({
+          data: {
+            userId: request.senderId,
+            friendId: request.receiverId,
+          },
+        });
+      }
+    }
+
+    return updatedRequest;
+  });
 }

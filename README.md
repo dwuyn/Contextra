@@ -1,140 +1,146 @@
 # Contextra
 
-Contextra is a collaborative, AI-assisted writing workspace for long-form fiction. The current codebase combines a Tiptap editor, story bible tools, branch-aware context assembly, chapter memory/RAG, and lightweight collaboration features in a Next.js 16 app.
+Contextra is a collaborative writing workspace for long-form fiction. It combines a chapter editor, story bible, branching/version history, AI-assisted drafting, continuity memory, and lightweight realtime collaboration in a single Next.js app.
 
-## What is implemented
+## Tech Stack
 
-- Email/password auth with JWT cookie sessions
-- Project dashboard for personal and public projects
-- Tiptap chapter editor with autosave, manual checkpoints, version restore, markdown export, and in-browser voice playback
-- Story Bible editing for project summary, genre, synopsis, world rules, characters, and outline
-- Branch creation/merge and per-branch chapter ordering
-- AI actions for chapter generation, rewrite, sensory expansion, synopsis generation, outline generation, and project chat
-- Continuity memory that summarizes saved chapters and stores vectorized scene chunks for semantic retrieval
-- Collaboration features including friends, direct messages, project invites, permission levels, live presence, and inline comment threads
-- SSE-based realtime updates, with optional Redis fan-out for multi-instance deployments
-
-## Tech stack
-
-- Next.js 16, React 19, App Router
+- Next.js 16 with the App Router and React 19
+- TypeScript
 - Tailwind CSS 4
-- Prisma 7 with PostgreSQL
-- `pgvector` for semantic retrieval
-- Vercel AI SDK with Google Cloud Vertex AI (`gemini-2.5-flash` for chat, `gemini-embedding-001` for embeddings)
+- Prisma 7 with PostgreSQL 16 and `pgvector`
+- Vercel AI SDK with Google Vertex AI
+- Google Cloud Text-to-Speech for voice-reader features
 - Zustand for client state
 - Tiptap for the editor
+- Vitest for tests
 
-## AI context flow
-
-When AI features run, the app currently builds context from:
-
-1. Project metadata and story bible fields
-2. Branch lineage and recent chapter summaries
-3. The latest chapter text window
-4. Semantic search hits from saved `SceneChunk` embeddings
-
-This logic lives primarily in `src/services/contextService.ts`, `src/services/memoryService.ts`, and `src/services/ragService.ts`.
-
-## Local development
+## Local Setup
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22 LTS recommended
+- npm
 - PostgreSQL 16+ with the `vector` extension available
-- Google Cloud project with Vertex AI API enabled
-- Optional: Redis if you want distributed realtime events
+- Google Cloud project access for AI features
+- Optional: Redis for multi-instance SSE fan-out
 
-### Setup
+### 1. Install dependencies
 
-1. Install dependencies:
+```bash
+npm install
+```
 
-   ```bash
-   npm install
-   ```
+### 2. Create your env file
 
-2. Create your local env file:
+```bash
+cp .env.example .env
+```
 
-   ```bash
-   cp .env.example .env
-   ```
+Minimum values to review in `.env`:
 
-3. Create the database and make sure `pgvector` is installed for that Postgres instance.
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `GOOGLE_CLOUD_PROJECT`
+- `GOOGLE_CLOUD_LOCATION`
 
-4. Run Prisma migrations:
+### 3. Prepare the database
 
-   ```bash
-   npx prisma migrate dev
-   ```
+Create the database, make sure `pgvector` is installed, then run migrations:
 
-5. Configure your Google Cloud project and location in `.env`.
+```bash
+npx prisma migrate dev
+```
 
-6. After deploying the AI provider migration, re-embed all existing vectors:
+### 4. Start the app
 
-   ```bash
-   npm run reembed:ai
-   ```
+```bash
+npm run dev
+```
 
-7. Start the dev server:
-
-   ```bash
-   npm run dev
-   ```
-
-6. Open `http://localhost:3000`.
+Open `http://localhost:3000`.
 
 ### Useful commands
 
 ```bash
 npm run dev
-npm run lint
 npm run build
+npm run lint
+npx vitest
+npx prisma generate
+npm run reembed:ai
+npm run worker:continuity:once
 ```
 
-## Docker and Compose
+## Docker Setup
 
-The repository now includes a production-style Docker setup that can bring up the app with PostgreSQL + `pgvector`, run Prisma migrations, and then start the Next.js server.
+The repo ships a multi-stage Docker build with separate `runner` and `migrator` targets. `docker-compose.yml` supports both:
 
-### Compose startup
+- local image builds from the checked-out repo
+- tagged GHCR images for deployment
 
-1. Create your env file:
+### 1. Create your env file
 
-   ```bash
-   cp .env.example .env
-   ```
+```bash
+cp .env.example .env
+```
 
-2. Start the stack:
+`docker-compose.yml` injects its own container-to-container `DATABASE_URL`, so the host-based value in `.env` is only used for local non-Docker development.
 
-   ```bash
-   docker compose up --build
-   ```
+### 2. Build the app images
 
-3. Open `http://localhost:3000`.
+```bash
+docker compose build next-app migrate
+```
 
-If port `3000` is already in use on your machine, set `APP_PORT` in `.env` to another value such as `3001` and then open `http://localhost:<APP_PORT>`.
+### 3. Start Postgres
 
-### What the stack does
+```bash
+docker compose up -d postgres
+```
 
-- Runs Postgres 16 with `pgvector` available
-- Waits for the database health check to pass
-- Runs `prisma migrate deploy`
-- Starts the standalone Next.js server on port `3000`
-- Keeps Postgres on the internal Compose network by default so it does not fight with an existing local database on port `5432`
+### 4. Run Prisma migrations
 
-### Notes
+```bash
+docker compose run --rm migrate
+```
 
-- Google Cloud auth works automatically via ADC when deployed on Google Cloud. For local Docker development, mount your service account key and set `GOOGLE_APPLICATION_CREDENTIALS` to the in-container path.
-- Google TTS remains optional. If you want voice-reader features in Docker, mount the service-account key into the app container and set `GOOGLE_APPLICATION_CREDENTIALS` to the in-container path.
+### 5. Start the app
 
-## Project structure
+```bash
+docker compose up -d next-app
+```
 
-- `src/app`: App Router routes and API handlers
-- `src/actions`: server actions
-- `src/components`: UI and editor surfaces
-- `src/services`: business logic, AI, RAG, continuity, auth, and collaboration services
-- `src/lib`: shared libraries, auth helpers, Prisma client, realtime transport, and Tiptap extensions
-- `src/store`: Zustand client state
-- `prisma`: schema and migrations
+Open `http://localhost:3000` by default. If you set `APP_PORT` in `.env`, use that port instead.
+
+### Optional Google credentials in Docker
+
+If you want AI or TTS features from inside the containers, mount a service-account key into the app and migrator containers and point `GOOGLE_APPLICATION_CREDENTIALS` at the in-container path, for example `/app/google-key.json`.
+
+### Stop the stack
+
+```bash
+docker compose down
+```
+
+## Project Structure
+
+- `src/app/`: App Router pages, route handlers, locale routing, and API endpoints
+- `src/actions/`: Server actions for auth, projects, AI, export, people, friends, and pronunciation
+- `src/components/`: Main UI surfaces such as the editor, dashboard, collaboration panels, and modals
+- `src/services/`: Business logic for AI, RAG, continuity, auth, projects, collaboration, and TTS
+- `src/lib/`: Shared infrastructure including auth helpers, Prisma, i18n, validation, avatar storage, and realtime utilities
+- `src/store/`: Zustand stores for preferences, project state, and zen mode
+- `src/messages/`: Translation message files
+- `src/types/`: Shared TypeScript types
+- `prisma/`: Prisma schema and migration history
+- `scripts/`: One-off workers and maintenance scripts
+
+## Notes
+
+- Production builds use `output: "standalone"` in Next.js.
+- Avatar uploads are stored under `/app/data` in Docker and persisted with a named volume.
+- Redis is optional and only needed when realtime SSE events must fan out across multiple app instances.
 
 ## License
 
-Private project for personal/internal use.
+Private project for personal or internal use.

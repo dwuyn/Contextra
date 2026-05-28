@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-export async function getDirectMessages(userId: string, friendId: string) {
+export async function getDirectMessages(userId: string, friendId: string, cursor?: string, take = 100) {
   return prisma.directMessage.findMany({
     where: {
       OR: [
@@ -9,6 +9,8 @@ export async function getDirectMessages(userId: string, friendId: string) {
       ],
     },
     orderBy: { createdAt: "asc" },
+    take,
+    ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
   });
 }
 

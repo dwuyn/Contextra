@@ -53,16 +53,7 @@ const CANON_CONTEXT_BUDGETS = {
 
 const CANON_SIMILARITY_THRESHOLD = 0.45;
 
-function stripReasoning(text: string) {
-  return text
-    .replace(/<think>[\s\S]*?<\/think>/g, "")
-    .replace(/^```(?:\w+)?\s*([\s\S]*?)\s*```$/u, "$1")
-    .trim();
-}
-
-function stripHtml(content: string) {
-  return content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
+import { stripReasoning, stripHtml, toStringList } from "@/lib/utils";
 
 const CANON_EXTRACT_CHUNK = 48_000;
 const CANON_EXTRACT_HEAD_TAIL = 24_000;
@@ -70,10 +61,6 @@ const CANON_EXTRACT_HEAD_TAIL = 24_000;
 function prepareCanonExtractContent(fullText: string) {
   if (fullText.length <= CANON_EXTRACT_CHUNK) return fullText;
   return fullText.slice(0, CANON_EXTRACT_HEAD_TAIL) + "\n\n[...]\n\n" + fullText.slice(-CANON_EXTRACT_HEAD_TAIL);
-}
-
-function toStringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
 function normalizeName(value: unknown) {

@@ -7,8 +7,16 @@ export type LoginActionResult =
   | { ok: true }
   | { ok: false; message: string };
 
-export async function register(name: string, email: string, password: string) {
-  return authService.register(name, email, password);
+export async function register(name: string, email: string, password: string): Promise<LoginActionResult> {
+  try {
+    await authService.register(name, email, password);
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof Error) {
+      return { ok: false, message: error.message };
+    }
+    throw error;
+  }
 }
 
 export async function login(email: string, password: string): Promise<LoginActionResult> {
@@ -40,7 +48,7 @@ export async function getUser() {
   return authService.getUser(session.userId);
 }
 
-export async function updateProfile(data: { name?: string; email?: string; dob?: string; profileImageUrl?: string }) {
+export async function updateProfile(data: { name?: string; dob?: string; profileImageUrl?: string }) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
   return authService.updateProfile(session.userId, data);

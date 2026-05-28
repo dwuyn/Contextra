@@ -1,4 +1,5 @@
-FROM node:20-bookworm-slim AS base
+# Prisma 7's CLI toolchain now pulls helpers that expect Node 22.
+FROM node:22-bookworm-slim AS base
 WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1

@@ -14,12 +14,7 @@ import {
   extractLatestUserText,
 } from "./promptLanguageService";
 
-function stripReasoning(text: string) {
-  return text
-    .replace(/<think>[\s\S]*?<\/think>/g, "")
-    .replace(/^```(?:\w+)?\s*([\s\S]*?)\s*```$/u, "$1")
-    .trim();
-}
+import { stripReasoning } from "@/lib/utils";
 
 export type StoryBibleGenerationContext = {
   projectName: string;

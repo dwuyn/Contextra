@@ -17,11 +17,6 @@ export async function GET(req: NextRequest) {
     start(controller) {
       const remove = addConnection(userId, controller);
 
-      req.signal.addEventListener("abort", () => {
-        remove();
-      });
-
-      // Keep-alive heartbeat every 15 seconds
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(new TextEncoder().encode(": heartbeat\n\n"));
@@ -29,6 +24,11 @@ export async function GET(req: NextRequest) {
           clearInterval(heartbeat);
         }
       }, 15000);
+
+      req.signal.addEventListener("abort", () => {
+        clearInterval(heartbeat);
+        remove();
+      });
     },
   });
 

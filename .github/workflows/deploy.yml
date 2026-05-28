@@ -65,9 +65,17 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
+            set -e
+
             cd /home/dwyn/Contextra
 
+            git fetch --depth=1 origin main
+            git checkout --force ${{ github.sha }}
+
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u dwuyn --password-stdin
+
+            export APP_IMAGE="${{ env.APP_IMAGE }}:${{ github.sha }}"
+            export MIGRATE_IMAGE="${{ env.MIGRATE_IMAGE }}:${{ github.sha }}"
 
             docker compose pull migrate next-app
 
@@ -76,5 +84,36 @@ jobs:
             docker compose run --rm migrate
 
             docker compose up -d next-app
+
+            container_id="$(docker compose ps -q next-app)"
+            if [ -z "$container_id" ]; then
+              docker compose logs next-app
+              exit 1
+            fi
+
+            attempts=0
+
+            while [ "$attempts" -lt 30 ]; do
+              health_status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id")"
+
+              if [ "$health_status" = "healthy" ] || [ "$health_status" = "running" ]; then
+                break
+              fi
+
+              if [ "$health_status" = "unhealthy" ] || [ "$health_status" = "exited" ]; then
+                docker compose logs next-app
+                exit 1
+              fi
+
+              attempts=$((attempts + 1))
+              sleep 5
+            done
+
+            final_status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id")"
+
+            if [ "$final_status" != "healthy" ] && [ "$final_status" != "running" ]; then
+              docker compose logs next-app
+              exit 1
+            fi
 
             docker image prune -f

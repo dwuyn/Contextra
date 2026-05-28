@@ -13,8 +13,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@google-cloud/storage", "@google-cloud/text-to-speech"],
   images: {
     remotePatterns: [
-      { protocol: "https", hostname: "**" },
-      { protocol: "http", hostname: "**" },
+      { protocol: "https", hostname: "storage.googleapis.com" },
     ],
   },
   turbopack: {

@@ -1,30 +1,48 @@
 import { createVertex } from "@ai-sdk/google-vertex";
 
-const project = process.env.GOOGLE_CLOUD_PROJECT;
-if (!project) {
-  throw new Error("Missing required env var: GOOGLE_CLOUD_PROJECT");
+let cachedVertex: ReturnType<typeof createVertex> | null = null;
+
+function requireEnv(name: "GOOGLE_CLOUD_PROJECT" | "GOOGLE_CLOUD_LOCATION") {
+  const value = process.env[name]?.trim();
+
+  if (!value) {
+    throw new Error(`Missing required env var: ${name}`);
+  }
+
+  return value;
 }
 
-const location = process.env.GOOGLE_CLOUD_LOCATION;
-if (!location) {
-  throw new Error("Missing required env var: GOOGLE_CLOUD_LOCATION");
+function getChatModelId() {
+  return process.env.AI_CHAT_MODEL || "gemini-2.5-flash";
 }
 
-const aiChatModel = process.env.AI_CHAT_MODEL || "gemini-2.5-flash";
-const aiEmbeddingModel = process.env.AI_EMBEDDING_MODEL || "gemini-embedding-001";
-const aiEmbeddingDimensions = Number(process.env.AI_EMBEDDING_DIMENSIONS) || 768;
+function getEmbeddingModelId() {
+  return process.env.AI_EMBEDDING_MODEL || "gemini-embedding-001";
+}
 
-const vertex = createVertex({
-  project,
-  location,
-});
+function getEmbeddingDimensions() {
+  const dimensions = Number(process.env.AI_EMBEDDING_DIMENSIONS);
+  return Number.isFinite(dimensions) && dimensions > 0 ? dimensions : 768;
+}
 
-export function chatModel(modelId: string = aiChatModel) {
-  return vertex.languageModel(modelId);
+// Builds can import this module while collecting route data, so defer provider
+// initialization until an AI-backed path actually executes.
+function getVertex() {
+  cachedVertex ??= createVertex({
+    project: requireEnv("GOOGLE_CLOUD_PROJECT"),
+    location: requireEnv("GOOGLE_CLOUD_LOCATION"),
+  });
+
+  return cachedVertex;
+}
+
+export function chatModel(modelId: string = getChatModelId()) {
+  return getVertex().languageModel(modelId);
 }
 
 export function embeddingModel() {
-  const baseModel = vertex.embeddingModel(aiEmbeddingModel);
+  const baseModel = getVertex().embeddingModel(getEmbeddingModelId());
+  const outputDimensionality = getEmbeddingDimensions();
 
   return Object.assign(Object.create(Object.getPrototypeOf(baseModel)), baseModel, {
     doEmbed(options: Parameters<typeof baseModel.doEmbed>[0]) {
@@ -34,7 +52,7 @@ export function embeddingModel() {
           ...options.providerOptions,
           vertex: {
             ...options.providerOptions?.vertex,
-            outputDimensionality: aiEmbeddingDimensions,
+            outputDimensionality,
           },
         },
       });

@@ -1,5 +1,21 @@
 import { z } from "zod";
 
+export const RegisterSchema = z.object({
+  name: z.string().min(1).max(200),
+  email: z.string().email(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+export const LoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
+export const ChangePasswordSchema = z.object({
+  oldPassword: z.string().min(1),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
 export const CreateProjectSchema = z.object({
   name: z.string().min(1).max(200),
   mode: z.string(),
@@ -150,7 +166,7 @@ export const UpdateCommentThreadStatusSchema = z.object({
 export const SendProjectChatSchema = z.object({
   content: z.string().min(1),
   fileName: z.string().optional(),
-  fileUrl: z.string().optional()
+  fileUrl: z.string().url().refine((url) => url.startsWith("https://"), "Only HTTPS URLs are allowed").optional(),
 });
 
 export const ProjectAiChatRequestSchema = z.object({

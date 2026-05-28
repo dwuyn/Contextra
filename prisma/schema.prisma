@@ -132,6 +132,8 @@ model FriendRequest {
 
   sender     User     @relation("SentRequests", fields: [senderId], references: [id])
   receiver   User     @relation("ReceivedRequests", fields: [receiverId], references: [id])
+
+  @@unique([senderId, receiverId])
 }
 
 model DirectMessage {

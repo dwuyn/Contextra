@@ -24,16 +24,13 @@ import {
 } from "@/services/projectService";
 import type { Prisma } from "@prisma/client";
 import type { ProjectOutline } from "@/types/project";
+import { normalizeStringList } from "@/lib/utils";
 
 const STORY_BIBLE_CONTEXT_BUDGETS = {
   characters: 10_000,
   chapters: 16_000,
   worldRules: 4_000,
 };
-
-function normalizeStringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
 
 function takeStringsByBudget(values: string[], budget: number) {
   const selected: string[] = [];
@@ -171,19 +168,21 @@ export async function generateChapterAction(projectId: string, branchId: string,
   const context = await composeContext(projectId, branchId, input.instructions, semanticSearch);
   const result = await generateChapter(input, context);
 
-  const chapterCount = await prisma.chapter.count({ where: { projectId } });
-  
-  const newChapter = await prisma.chapter.create({
-    data: {
-      projectId,
-      branchId,
-      title: result.title,
-      summary: result.summary,
-      content: result.content,
-      index: chapterCount + 1,
-      source: "ai",
-      aiContext: context as unknown as Prisma.InputJsonValue,
-    },
+  const newChapter = await prisma.$transaction(async (tx) => {
+    const chapterCount = await tx.chapter.count({ where: { projectId, branchId } });
+
+    return tx.chapter.create({
+      data: {
+        projectId,
+        branchId,
+        title: result.title,
+        summary: result.summary,
+        content: result.content,
+        index: chapterCount + 1,
+        source: "ai",
+        aiContext: context as unknown as Prisma.InputJsonValue,
+      },
+    });
   });
 
   const continuity = await refreshChapterContinuityStatus({

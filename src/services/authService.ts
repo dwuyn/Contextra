@@ -7,6 +7,9 @@ import * as friendsService from "./friendsService";
 export const INVALID_LOGIN_MESSAGE = "Invalid email or password";
 
 export async function register(name: string, email: string, password: string) {
+  if (!password || password.length < 8) {
+    throw new Error("Password must be at least 8 characters");
+  }
   const normalizedEmail = email.trim().toLowerCase();
   const existing = await prisma.user.findUnique({
     where: { email: normalizedEmail },
@@ -72,7 +75,6 @@ export async function createSession(user: SessionUser) {
       email: user.email,
       profileImageUrl: user.profileImageUrl,
     },
-    token: session,
   };
 }
 
@@ -94,12 +96,11 @@ export async function getUser(userId: string) {
   });
 }
 
-export async function updateProfile(userId: string, data: { name?: string; email?: string; dob?: string; profileImageUrl?: string }) {
+export async function updateProfile(userId: string, data: { name?: string; dob?: string; profileImageUrl?: string }) {
   const updatedUser = await prisma.user.update({
     where: { id: userId },
     data: {
       name: data.name,
-      email: data.email?.trim().toLowerCase(),
       dateOfBirth: data.dob,
       profileImageUrl: data.profileImageUrl,
     },
@@ -133,6 +134,10 @@ export async function setProfileImage(userId: string, profileImageUrl: string) {
 }
 
 export async function changePassword(userId: string, oldPassword: string, newPassword: string) {
+  if (!newPassword || newPassword.length < 8) {
+    throw new Error("Password must be at least 8 characters");
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
   });

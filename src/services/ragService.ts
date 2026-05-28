@@ -8,9 +8,7 @@ const OVERLAP = 50;
 const EMBEDDING_DIMENSIONS = 768;
 const COSINE_DISTANCE_THRESHOLD = 0.45;
 
-function stripHtmlToPlainText(content: string) {
-  return content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
+import { stripHtmlToPlainText } from "@/lib/utils";
 
 export function toPgVectorLiteral(values: number[]) {
   return `[${values.join(",")}]`;

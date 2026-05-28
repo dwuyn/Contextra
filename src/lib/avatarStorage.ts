@@ -24,10 +24,38 @@ const EXTENSION_TO_CONTENT_TYPE: Record<string, AvatarContentType> = {
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
 };
+const DEFAULT_AVATAR_STORAGE_SEGMENTS = ["data", "avatars"] as const;
+
+function parseAvatarStorageSegments(input: string) {
+  const normalized = input.replace(/\\/g, "/").replace(/^\.?\//, "");
+  const segments = normalized.split("/").filter(Boolean);
+
+  if (segments.length === 0) {
+    throw new Error("Invalid avatar storage path");
+  }
+
+  for (const segment of segments) {
+    assertSafeSegment(segment);
+  }
+
+  return segments;
+}
 
 function getAvatarStorageRoot() {
   const configuredRoot = process.env.AVATAR_STORAGE_DIR?.trim();
-  return path.resolve(configuredRoot || path.join(process.cwd(), "data", "avatars"));
+
+  if (!configuredRoot) {
+    return path.join(/* turbopackIgnore: true */ process.cwd(), ...DEFAULT_AVATAR_STORAGE_SEGMENTS);
+  }
+
+  if (path.isAbsolute(configuredRoot)) {
+    return configuredRoot;
+  }
+
+  return path.join(
+    /* turbopackIgnore: true */ process.cwd(),
+    ...parseAvatarStorageSegments(configuredRoot),
+  );
 }
 
 function assertSafeSegment(segment: string) {
@@ -41,7 +69,7 @@ function resolveAvatarPath(userId: string, filename: string) {
   assertSafeSegment(filename);
 
   const storageRoot = getAvatarStorageRoot();
-  const resolvedPath = path.resolve(storageRoot, userId, filename);
+  const resolvedPath = path.join(/* turbopackIgnore: true */ storageRoot, userId, filename);
   const storageRootWithSeparator = storageRoot.endsWith(path.sep)
     ? storageRoot
     : `${storageRoot}${path.sep}`;
@@ -83,8 +111,8 @@ export async function storeAvatarFile(input: {
   const filename = `${randomUUID()}${CONTENT_TYPE_TO_EXTENSION[input.contentType]}`;
   const filePath = resolveAvatarPath(input.userId, filename);
 
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, Buffer.from(input.bytes));
+  await mkdir(path.dirname(/* turbopackIgnore: true */ filePath), { recursive: true });
+  await writeFile(/* turbopackIgnore: true */ filePath, Buffer.from(input.bytes));
 
   return {
     filePath,
@@ -94,7 +122,7 @@ export async function storeAvatarFile(input: {
 
 export async function deleteStoredAvatarFile(filePath: string) {
   try {
-    await unlink(filePath);
+    await unlink(/* turbopackIgnore: true */ filePath);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
       throw error;
@@ -128,7 +156,7 @@ export async function readAvatarFile(userId: string, filename: string) {
   const contentType = getContentTypeForFilename(filename);
 
   try {
-    const buffer = await readFile(filePath);
+    const buffer = await readFile(/* turbopackIgnore: true */ filePath);
     return { buffer, contentType };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {

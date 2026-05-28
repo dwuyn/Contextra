@@ -35,7 +35,6 @@ export async function searchPeople(userId: string, query: string) {
 }
 
 export async function discoverPeople(userId: string) {
-  // Get users who are not friends and don't have pending requests
   const friends = await prisma.friendship.findMany({
     where: { OR: [{ userId }, { friendId: userId }] },
   });
@@ -51,9 +50,7 @@ export async function discoverPeople(userId: string) {
 
   const excludeIds = [userId, ...friendIds, ...pendingIds];
 
-  // Fetch a pool of users and shuffle them in-memory for randomness
-  // This is more portable than raw SQL and handles empty excludeIds perfectly
-  const users = await prisma.user.findMany({
+  return prisma.user.findMany({
     where: {
       id: { notIn: excludeIds },
     },
@@ -63,9 +60,6 @@ export async function discoverPeople(userId: string) {
       email: true,
       profileImageUrl: true,
     },
-    take: 50,
+    take: 6,
   });
-
-  // Shuffle and take 6
-  return users.sort(() => Math.random() - 0.5).slice(0, 6);
 }

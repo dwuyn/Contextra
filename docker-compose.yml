@@ -16,7 +16,11 @@ services:
     restart: unless-stopped
 
   migrate:
-    image: ghcr.io/dwuyn/contextra-migrate:latest
+    image: ${MIGRATE_IMAGE:-ghcr.io/dwuyn/contextra-migrate:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
     env_file:
       - .env
     environment:
@@ -27,7 +31,11 @@ services:
     restart: "no"
 
   next-app:
-    image: ghcr.io/dwuyn/contextra-app:latest
+    image: ${APP_IMAGE:-ghcr.io/dwuyn/contextra-app:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
     env_file:
       - .env
     environment:

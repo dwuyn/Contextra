@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { loadCanonPromptContext } from "@/services/canonService";
 import { generateEmbedding, toPgVectorLiteral } from "@/services/ragService";
+import { stripHtml, normalizeStringList } from "@/lib/utils";
 
 export interface PromptContext {
   projectName: string;
@@ -79,13 +80,7 @@ type ExportableProject = {
   chapters: Array<{ title: string; content: string }>;
 };
 
-function normalizeStringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
 
-function stripHtml(content: string) {
-  return content.replace(/<[^>]+>/g, " ").trim();
-}
 
 const CONTEXT_BUDGETS = {
   characterDigest: 10_000,
@@ -445,8 +440,15 @@ export async function composeContext(
   };
 
   if (contextCache.size >= MAX_CACHE_ENTRIES) {
-    const firstKey = contextCache.keys().next().value;
-    if (firstKey !== undefined) contextCache.delete(firstKey);
+    let oldestKey: string | undefined;
+    let oldestTime = Infinity;
+    for (const [key, entry] of contextCache.entries()) {
+      if (entry.cachedAt < oldestTime) {
+        oldestTime = entry.cachedAt;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey !== undefined) contextCache.delete(oldestKey);
   }
 
   contextCache.set(cacheKey, { context: result, cachedAt: Date.now() });

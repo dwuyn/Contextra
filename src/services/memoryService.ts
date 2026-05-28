@@ -2,12 +2,7 @@ import { generateText } from "ai";
 import { chatModel } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 
-function stripReasoning(text: string) {
-  return text
-    .replace(/<think>[\s\S]*?<\/think>/g, "")
-    .replace(/^```(?:\w+)?\s*([\s\S]*?)\s*```$/u, "$1")
-    .trim();
-}
+import { stripReasoning } from "@/lib/utils";
 
 type ChapterSummaryInput = {
   chapterId: string;
