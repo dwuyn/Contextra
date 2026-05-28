@@ -51,10 +51,10 @@ const MAX_TERM_LENGTH = 200;
 const MAX_REPLACEMENT_LENGTH = 500;
 
 // ---------------------------------------------------------------------------
-// Default abbreviation dictionary for vi-VN
+// Default abbreviation dictionaries
 // ---------------------------------------------------------------------------
 
-const DEFAULT_ABBREVIATIONS: PronunciationEntryData[] = [
+const DEFAULT_ABBREVIATIONS_VI: PronunciationEntryData[] = [
   {
     term: "TP.HCM",
     replacement: "thành phố Hồ Chí Minh",
@@ -88,6 +88,54 @@ const DEFAULT_ABBREVIATIONS: PronunciationEntryData[] = [
     renderMode: "say_as",
     matchMode: "whole_word",
     caseSensitive: true,
+    priority: -1,
+    enabled: true,
+  },
+];
+
+const DEFAULT_ABBREVIATIONS_EN: PronunciationEntryData[] = [
+  {
+    term: "Mr.",
+    replacement: "Mister",
+    renderMode: "plain",
+    matchMode: "literal",
+    caseSensitive: true,
+    priority: -1,
+    enabled: true,
+  },
+  {
+    term: "Mrs.",
+    replacement: "Misses",
+    renderMode: "plain",
+    matchMode: "literal",
+    caseSensitive: true,
+    priority: -1,
+    enabled: true,
+  },
+  {
+    term: "Dr.",
+    replacement: "Doctor",
+    renderMode: "plain",
+    matchMode: "literal",
+    caseSensitive: true,
+    priority: -1,
+    enabled: true,
+  },
+  {
+    term: "St.",
+    replacement: "Saint",
+    renderMode: "plain",
+    matchMode: "whole_word",
+    caseSensitive: true,
+    priority: -1,
+    enabled: true,
+  },
+  {
+    term: "vs.",
+    replacement: "versus",
+    renderMode: "plain",
+    matchMode: "literal",
+    caseSensitive: false,
     priority: -1,
     enabled: true,
   },
@@ -416,9 +464,11 @@ export function processSegmentForTTS(params: {
   // Step 1: Normalize text
   const normalized = normalizeText(text);
 
-  // Step 2: Merge default abbreviations with user entries (for vi-VN)
+  // Step 2: Merge default abbreviations with user entries
   const allEntries =
-    language === "vi-VN" ? [...DEFAULT_ABBREVIATIONS, ...entries] : entries;
+    language === "vi-VN"
+      ? [...DEFAULT_ABBREVIATIONS_VI, ...entries]
+      : [...DEFAULT_ABBREVIATIONS_EN, ...entries];
 
   // Step 3: Apply dictionary matching
   const matches = applyDictionary(normalized, allEntries);

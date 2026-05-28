@@ -322,9 +322,20 @@ export async function rewriteAction(projectId: string, branchId: string, input: 
   await requireBranchInProject(projectId, branchId);
 
   const context = await composeContext(projectId, branchId, input.instructions, semanticSearch);
-  const result = await rewriteSelection(input, context);
+  const { text, tokens, model } = await rewriteSelection(input, context);
 
-  return { result };
+  await prisma.usage.create({
+    data: {
+      projectId,
+      action: "rewrite",
+      tokens,
+      costUsd: 0,
+      model,
+      actor: session.email,
+    },
+  });
+
+  return { result: text };
 }
 
 export async function describeAction(projectId: string, branchId: string, input: { selection: string; sense: string }) {
@@ -334,7 +345,18 @@ export async function describeAction(projectId: string, branchId: string, input:
   await requireBranchInProject(projectId, branchId);
 
   const context = await composeContext(projectId, branchId, input.sense, semanticSearch);
-  const result = await describeSelection(input, context);
+  const { text, tokens, model } = await describeSelection(input, context);
 
-  return { result };
+  await prisma.usage.create({
+    data: {
+      projectId,
+      action: "describe",
+      tokens,
+      costUsd: 0,
+      model,
+      actor: session.email,
+    },
+  });
+
+  return { result: text };
 }

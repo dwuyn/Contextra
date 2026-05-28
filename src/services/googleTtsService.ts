@@ -247,87 +247,14 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
 
   const client = getTextToSpeechClient();
 
-  // vi-VN: SSML path with pronunciation processing
-  if (input.language === "vi-VN") {
-    const entries = await loadPronunciationEntries(input.projectId, input.language);
-    const { ssml, pronunciationProfileHash } = processSegmentForTTS({
-      projectId: input.projectId,
-      text: segmentText,
-      entries,
-      language: input.language,
-    });
+  const entries = await loadPronunciationEntries(input.projectId, input.language);
+  const { ssml, pronunciationProfileHash } = processSegmentForTTS({
+    projectId: input.projectId,
+    text: segmentText,
+    entries,
+    language: input.language,
+  });
 
-    const cachePath = buildCacheObjectPath({
-      projectId: input.projectId,
-      chapterId: input.chapterId,
-      chapterUpdatedAt: input.chapterUpdatedAt,
-      language: input.language,
-      voiceId: input.voiceId,
-      rate: input.rate,
-      segmentText: ssml,
-      pronunciationProfileHash,
-    });
-
-    const file = getCachedBucket().file(cachePath);
-    const [exists] = await file.exists();
-    if (exists) {
-      const [audioBuffer] = await file.download();
-      return {
-        audioBuffer,
-        contentType: "audio/mpeg",
-        segmentCount: speechSegments.length,
-        cacheHit: true,
-      };
-    }
-
-    // Try SSML synthesis
-    try {
-      const audioBuffer = await synthesizeWithSsml(
-        client,
-        ssml,
-        input.language,
-        input.voiceId,
-        input.rate,
-      );
-
-      await uploadToCache(file, audioBuffer);
-
-      return {
-        audioBuffer,
-        contentType: "audio/mpeg",
-        segmentCount: speechSegments.length,
-        cacheHit: false,
-      };
-    } catch (error) {
-      // SSML failed — log and fallback to plain text
-      console.error("SSML synthesis failed, falling back to plain text:", {
-        projectId: input.projectId,
-        chapterId: input.chapterId,
-        voiceId: input.voiceId,
-        segmentIndex: input.segmentIndex,
-        error: error instanceof Error ? error.message : String(error),
-      });
-
-      const normalizedText = normalizeText(segmentText);
-      const fallbackBuffer = await synthesizeWithText(
-        client,
-        normalizedText,
-        input.language,
-        input.voiceId,
-        input.rate,
-      );
-
-      // Do NOT cache fallback under SSML key
-      return {
-        audioBuffer: fallbackBuffer,
-        contentType: "audio/mpeg",
-        segmentCount: speechSegments.length,
-        cacheHit: false,
-      };
-    }
-  }
-
-  // en-US: preserve current behavior (plain text)
   const cachePath = buildCacheObjectPath({
     projectId: input.projectId,
     chapterId: input.chapterId,
@@ -335,7 +262,8 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
     language: input.language,
     voiceId: input.voiceId,
     rate: input.rate,
-    segmentText,
+    segmentText: ssml,
+    pronunciationProfileHash,
   });
 
   const file = getCachedBucket().file(cachePath);
@@ -350,26 +278,50 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
     };
   }
 
-  const [response] = await client.synthesizeSpeech({
-    input: { text: segmentText },
-    voice: {
-      languageCode: input.language,
-      name: input.voiceId,
-    },
-    audioConfig: {
-      audioEncoding: protos.google.cloud.texttospeech.v1.AudioEncoding.MP3,
-      speakingRate: input.rate,
-    },
-  });
+  // Try SSML synthesis
+  try {
+    const audioBuffer = await synthesizeWithSsml(
+      client,
+      ssml,
+      input.language,
+      input.voiceId,
+      input.rate,
+    );
 
-  const audioBuffer = toAudioBuffer(response.audioContent);
+    await uploadToCache(file, audioBuffer);
 
-  await uploadToCache(file, audioBuffer);
+    return {
+      audioBuffer,
+      contentType: "audio/mpeg",
+      segmentCount: speechSegments.length,
+      cacheHit: false,
+    };
+  } catch (error) {
+    // SSML failed — log and fallback to plain text
+    console.error("SSML synthesis failed, falling back to plain text:", {
+      projectId: input.projectId,
+      chapterId: input.chapterId,
+      voiceId: input.voiceId,
+      segmentIndex: input.segmentIndex,
+      language: input.language,
+      error: error instanceof Error ? error.message : String(error),
+    });
 
-  return {
-    audioBuffer,
-    contentType: "audio/mpeg",
-    segmentCount: speechSegments.length,
-    cacheHit: false,
-  };
+    const normalizedText = normalizeText(segmentText);
+    const fallbackBuffer = await synthesizeWithText(
+      client,
+      normalizedText,
+      input.language,
+      input.voiceId,
+      input.rate,
+    );
+
+    // Do NOT cache fallback under SSML key
+    return {
+      audioBuffer: fallbackBuffer,
+      contentType: "audio/mpeg",
+      segmentCount: speechSegments.length,
+      cacheHit: false,
+    };
+  }
 }

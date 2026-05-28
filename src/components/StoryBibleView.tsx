@@ -5,42 +5,28 @@ import * as Dialog from "@radix-ui/react-dialog";
 import {
   ChevronDown,
   ChevronRight,
-  Check,
   FileText,
   Globe,
   ListOrdered,
   Loader2,
   Palette,
   Pencil,
-  Play,
   Plus,
   Sparkles,
   Trash2,
   Type,
   Users,
-  Volume2,
   X,
 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
-import { usePreferencesStore } from "@/store/usePreferencesStore";
 import {
   deleteCharacter as deleteCharacterAction,
-  approveCanonProposal,
-  refreshProjectMemoryAction,
   updateContext,
   updateOutline as updateOutlineAction,
   updateSettings,
-  rejectCanonProposal,
   upsertCharacter,
 } from "@/actions/projects";
-import {
-  listPronunciationEntries,
-  createPronunciationEntry,
-  updatePronunciationEntry,
-  deletePronunciationEntry,
-  togglePronunciationEntry,
-  importPronunciationSuggestions,
-} from "@/actions/pronunciation";
+
 import { generateLongOutlineAction, generateOutlineAction, generateSynopsisAction } from "@/actions/ai";
 import { cn } from "@/lib/utils";
 import type {
@@ -62,9 +48,6 @@ type BusyAction =
   | "outline"
   | "generateOutline"
   | "generateLongOutline"
-  | "approveCanonProposal"
-  | "rejectCanonProposal"
-  | "refreshProjectMemory"
   | null;
 
 type CharacterDialogState =
@@ -87,25 +70,7 @@ type ChapterDialogState =
   | { mode: "edit"; actId: string; chapter: OutlineChapter }
   | null;
 
-type PronunciationEntry = {
-  id: string;
-  term: string;
-  replacement: string;
-  renderMode: "sub" | "phoneme" | "say_as" | "plain";
-  matchMode: "whole_word" | "literal";
-  caseSensitive: boolean;
-  priority: number;
-  enabled: boolean;
-  source: string;
-  notes: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
 
-type PronunciationDialogState =
-  | { mode: "create" }
-  | { mode: "edit"; entry: PronunciationEntry }
-  | null;
 
 type ConfirmDialogState =
   | { kind: "replaceSynopsis" }
@@ -128,15 +93,7 @@ type TextDraft = {
   summary: string;
 };
 
-type PronunciationDraft = {
-  term: string;
-  replacement: string;
-  renderMode: "sub" | "phoneme" | "say_as" | "plain";
-  matchMode: "whole_word" | "literal";
-  caseSensitive: boolean;
-  priority: number;
-  notes: string;
-};
+
 
 const EMPTY_OUTLINE: ProjectOutline = { acts: [] };
 
@@ -156,26 +113,7 @@ function getWorldRules(worldRules: unknown): string[] {
   return Array.isArray(worldRules) ? worldRules.filter((rule): rule is string => typeof rule === "string") : [];
 }
 
-function readPayloadString(payload: unknown, key: string) {
-  if (!payload || typeof payload !== "object" || !(key in payload)) return "";
-  const value = (payload as Record<string, unknown>)[key];
-  return typeof value === "string" ? value.trim() : "";
-}
 
-function formatCanonProposalPayload(payload: unknown) {
-  const type = readPayloadString(payload, "type");
-  const name = readPayloadString(payload, "name");
-  const entityName = readPayloadString(payload, "entityName");
-  const sourceName = readPayloadString(payload, "sourceName");
-  const targetName = readPayloadString(payload, "targetName");
-  const content = readPayloadString(payload, "content");
-  const summary = readPayloadString(payload, "summary");
-
-  if (name) return `${name}${type ? ` (${type})` : ""}${summary ? `: ${summary}` : ""}`;
-  if (sourceName || targetName) return `${sourceName || "Unknown"} -> ${targetName || "Unknown"}: ${summary || content}`;
-  if (entityName) return `${entityName}: ${content || summary}`;
-  return content || summary || "No proposal details.";
-}
 
 function hasOutlineContent(outline: ProjectOutline) {
   return outline.acts.length > 0;
@@ -196,17 +134,7 @@ function createEmptyTextDraft(): TextDraft {
   };
 }
 
-function createEmptyPronunciationDraft(): PronunciationDraft {
-  return {
-    term: "",
-    replacement: "",
-    renderMode: "sub",
-    matchMode: "whole_word",
-    caseSensitive: false,
-    priority: 0,
-    notes: "",
-  };
-}
+
 
 export function StoryBibleView() {
   const project = useProjectStore((state) => state.project);
@@ -235,19 +163,14 @@ export function StoryBibleView() {
   const braindumpRef = useRef<HTMLTextAreaElement | null>(null);
   const genreRef = useRef<HTMLTextAreaElement | null>(null);
   const synopsisRef = useRef<HTMLTextAreaElement | null>(null);
-  const [pronunciationDialog, setPronunciationDialog] = useState<PronunciationDialogState>(null);
-  const [pronunciationDraft, setPronunciationDraft] = useState<PronunciationDraft>(createEmptyPronunciationDraft);
-  const [pronunciationEntries, setPronunciationEntries] = useState<PronunciationEntry[]>([]);
-  const [pronunciationBusy, setPronunciationBusy] = useState(false);
-  const [previewingEntryId, setPreviewingEntryId] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+
 
   if (!project) return null;
 
   const currentProject = project;
   const outline = currentProject.outline ?? EMPTY_OUTLINE;
   const worldRules = getWorldRules(currentProject.contextMemory.worldRules);
-  const canonProposals = currentProject.canonProposals ?? [];
+
   const canEdit = currentProject.viewerAccess.canEdit;
   const canManage = currentProject.viewerAccess.canManage;
 
@@ -548,205 +471,6 @@ export function StoryBibleView() {
     );
   }
 
-  async function handleApproveCanonProposal(proposalId: string) {
-    if (!canEdit) return;
-    await syncProjectUpdate("approveCanonProposal", () => approveCanonProposal(currentProject.metadata.id, proposalId));
-  }
-
-  async function handleRejectCanonProposal(proposalId: string) {
-    if (!canEdit) return;
-    await syncProjectUpdate("rejectCanonProposal", () => rejectCanonProposal(currentProject.metadata.id, proposalId));
-  }
-
-  async function handleRefreshProjectMemory() {
-    if (!canEdit) return;
-    await syncProjectUpdate("refreshProjectMemory", () => refreshProjectMemoryAction(currentProject.metadata.id));
-  }
-
-  async function loadPronunciationEntries() {
-    try {
-      const entries = await listPronunciationEntries(currentProject.metadata.id, "vi-VN");
-      setPronunciationEntries(entries as unknown as PronunciationEntry[]);
-    } catch {
-      // entries stay empty
-    }
-  }
-
-  function openPronunciationCreate() {
-    setPronunciationDraft(createEmptyPronunciationDraft());
-    setPronunciationDialog({ mode: "create" });
-  }
-
-  function openPronunciationEdit(entry: PronunciationEntry) {
-    setPronunciationDraft({
-      term: entry.term,
-      replacement: entry.replacement,
-      renderMode: entry.renderMode,
-      matchMode: entry.matchMode,
-      caseSensitive: entry.caseSensitive,
-      priority: entry.priority,
-      notes: entry.notes,
-    });
-    setPronunciationDialog({ mode: "edit", entry });
-  }
-
-  async function handleSavePronunciationEntry() {
-    if (!canEdit || !pronunciationDialog) return;
-    const term = pronunciationDraft.term.trim();
-    const replacement = pronunciationDraft.replacement.trim();
-    if (!term || !replacement) {
-      setErrorMessage("Term and replacement are required.");
-      return;
-    }
-
-    setPronunciationBusy(true);
-    setErrorMessage(null);
-
-    try {
-      if (pronunciationDialog.mode === "create") {
-        await createPronunciationEntry({
-          projectId: currentProject.metadata.id,
-          language: "vi-VN",
-          term,
-          replacement,
-          renderMode: pronunciationDraft.renderMode,
-          matchMode: pronunciationDraft.matchMode,
-          caseSensitive: pronunciationDraft.caseSensitive,
-          priority: pronunciationDraft.priority,
-          notes: pronunciationDraft.notes,
-        });
-      } else {
-        await updatePronunciationEntry({
-          id: pronunciationDialog.entry.id,
-          term,
-          replacement,
-          renderMode: pronunciationDraft.renderMode,
-          matchMode: pronunciationDraft.matchMode,
-          caseSensitive: pronunciationDraft.caseSensitive,
-          priority: pronunciationDraft.priority,
-          notes: pronunciationDraft.notes,
-        });
-      }
-      setPronunciationDialog(null);
-      setPronunciationDraft(createEmptyPronunciationDraft());
-      await loadPronunciationEntries();
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setPronunciationBusy(false);
-    }
-  }
-
-  async function handleDeletePronunciationEntry(entry: PronunciationEntry) {
-    if (!canEdit) return;
-    setPronunciationBusy(true);
-    try {
-      await deletePronunciationEntry(entry.id, currentProject.metadata.id);
-      await loadPronunciationEntries();
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setPronunciationBusy(false);
-    }
-  }
-
-  async function handleTogglePronunciationEntry(entry: PronunciationEntry) {
-    if (!canEdit) return;
-    try {
-      await togglePronunciationEntry(entry.id, currentProject.metadata.id, !entry.enabled);
-      await loadPronunciationEntries();
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    }
-  }
-
-  async function handleImportPronunciationSuggestions() {
-    if (!canEdit) return;
-    setPronunciationBusy(true);
-    setErrorMessage(null);
-    try {
-      const result = await importPronunciationSuggestions(currentProject.metadata.id, "vi-VN");
-      await loadPronunciationEntries();
-      if (result.importedCount > 0) {
-        setErrorMessage(null);
-      }
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setPronunciationBusy(false);
-    }
-  }
-
-  async function previewEntry(entry: PronunciationEntry) {
-    const preferences = usePreferencesStore.getState();
-    const voiceId = preferences.readerVoiceVi || "";
-    if (!voiceId) {
-      setErrorMessage("No Vietnamese voice configured. Set a voice in reader preferences first.");
-      return;
-    }
-
-    setPreviewingEntryId(entry.id);
-    try {
-      const response = await fetch("/api/voice-reader/pronunciation-preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId: currentProject.metadata.id,
-          language: "vi-VN",
-          voiceId,
-          rate: preferences.readerRate,
-          text: entry.term,
-          entryOverride: [
-            {
-              term: entry.term,
-              replacement: entry.replacement,
-              renderMode: entry.renderMode,
-              matchMode: entry.matchMode,
-              caseSensitive: entry.caseSensitive,
-              priority: entry.priority,
-              enabled: true,
-            },
-          ],
-        }),
-      });
-      if (!response.ok) throw new Error("Preview failed");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        URL.revokeObjectURL(audioRef.current.src);
-      }
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      await audio.play();
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setPreviewingEntryId(null);
-    }
-  }
-
-  function getPronunciationWarnings(entries: PronunciationEntry[], draft: PronunciationDraft, dialog: PronunciationDialogState) {
-    const warnings: string[] = [];
-    if (!draft.replacement.trim()) {
-      warnings.push("Replacement text is empty.");
-    }
-    if (draft.renderMode === "phoneme" && draft.replacement.trim()) {
-      const ipaPattern = /^[\u0250-\u02AF\u1D00-\u1D7F\u02B0-\u02FF\u0300-\u036F\u02C0-\u02CF\s.ˈˌːˑ̥̬̪̺̟̃̈]+$/;
-      if (!ipaPattern.test(draft.replacement.trim())) {
-        warnings.push("Phoneme mode replacement text does not look like IPA.");
-      }
-    }
-    const editingId = dialog?.mode === "edit" ? dialog.entry.id : null;
-    const duplicateKey = `${draft.term.trim()}|${draft.matchMode}`;
-    const hasDuplicate = entries.some(
-      (e) => `${e.term}|${e.matchMode}` === duplicateKey && e.id !== editingId
-    );
-    if (hasDuplicate) {
-      warnings.push(`Duplicate entry: "${draft.term.trim()}" with match mode "${draft.matchMode}" already exists.`);
-    }
-    return warnings;
-  }
 
   async function handleConfirmDialog() {
     if (!confirmDialog) return;
@@ -965,185 +689,6 @@ export function StoryBibleView() {
                     )}
                   </div>
                 ))}
-              </div>
-            )}
-          </BibleSection>
-
-          <BibleSection
-            icon={<Sparkles size={18} />}
-            title="Pending Proposals (Legacy)"
-            actions={
-              canEdit ? (
-                <SectionActionButton
-                  onClick={() => void handleRefreshProjectMemory()}
-                  disabled={busyAction === "refreshProjectMemory"}
-                >
-                  {busyAction === "refreshProjectMemory" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  Scan Chapters
-                </SectionActionButton>
-              ) : undefined
-            }
-          >
-            <p className="text-xs text-[var(--color-text-muted)] mb-4">New canon entries are now auto-managed. The items below are pending proposals from the previous workflow.</p>
-            {canonProposals.length === 0 ? (
-              <EmptyState
-                title="No pending legacy proposals"
-                description="All previous canon updates have been reviewed. Going forward, new canon entries are automatically approved when chapters are saved."
-              />
-            ) : (
-              <div className="space-y-3">
-                {canonProposals.map((proposal) => (
-                  <div key={proposal.id} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-accent)]">
-                          {proposal.type.replace(/_/g, " ")}
-                        </p>
-                        <p className="mt-2 text-sm font-semibold leading-relaxed text-[var(--color-text)]">
-                          {formatCanonProposalPayload(proposal.payload)}
-                        </p>
-                        {proposal.rationale && (
-                          <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-muted)]">{proposal.rationale}</p>
-                        )}
-                      </div>
-                      {canEdit && (
-                        <div className="flex shrink-0 items-center gap-2">
-                          <IconActionButton
-                            label="Approve canon update"
-                            onClick={() => void handleApproveCanonProposal(proposal.id)}
-                          >
-                            {busyAction === "approveCanonProposal" ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                          </IconActionButton>
-                          <IconActionButton
-                            label="Reject canon update"
-                            variant="danger"
-                            onClick={() => void handleRejectCanonProposal(proposal.id)}
-                          >
-                            {busyAction === "rejectCanonProposal" ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
-                          </IconActionButton>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </BibleSection>
-
-          <BibleSection
-            icon={<Volume2 size={18} />}
-            title="Pronunciation"
-            defaultOpen={false}
-            actions={
-              canEdit ? (
-                <div className="flex gap-4">
-                  <SectionActionButton onClick={() => void loadPronunciationEntries()}>
-                    <Sparkles size={14} /> Refresh
-                  </SectionActionButton>
-                  <SectionActionButton onClick={() => void handleImportPronunciationSuggestions()} disabled={pronunciationBusy}>
-                    {pronunciationBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                    Import Suggestions
-                  </SectionActionButton>
-                  <SectionActionButton onClick={openPronunciationCreate}>
-                    <Plus size={14} /> Add Entry
-                  </SectionActionButton>
-                </div>
-              ) : undefined
-            }
-          >
-            {pronunciationEntries.length === 0 ? (
-              <EmptyState
-                title="No pronunciation entries"
-                description="Add pronunciation rules to control how the voice reader speaks specific terms, names, and words."
-                actionLabel={canEdit ? "Add Entry" : undefined}
-                onAction={canEdit ? openPronunciationCreate : undefined}
-              />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-[var(--color-border)]">
-                      <th className="text-left py-2 px-3 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Term</th>
-                      <th className="text-left py-2 px-3 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Replacement</th>
-                      <th className="text-left py-2 px-3 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Mode</th>
-                      <th className="text-left py-2 px-3 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Priority</th>
-                      <th className="text-center py-2 px-3 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">On</th>
-                      <th className="text-left py-2 px-3 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Source</th>
-                      <th className="text-right py-2 px-3 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pronunciationEntries.map((entry) => (
-                      <tr
-                        key={entry.id}
-                        className="border-b border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] transition-colors"
-                      >
-                        <td className="py-2.5 px-3 font-medium text-[var(--color-text)]">{entry.term}</td>
-                        <td className="py-2.5 px-3 text-[var(--color-text-secondary)] max-w-[200px] truncate" title={entry.replacement}>
-                          {entry.replacement}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)] font-medium">
-                            {entry.renderMode}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-[var(--color-text-secondary)]">{entry.priority}</td>
-                        <td className="py-2.5 px-3 text-center">
-                          {canEdit && (
-                            <button
-                              onClick={() => void handleTogglePronunciationEntry(entry)}
-                              className={cn(
-                                "inline-flex items-center justify-center w-8 h-5 rounded-full transition-colors",
-                                entry.enabled ? "bg-[var(--color-accent)]" : "bg-[var(--color-border)]"
-                              )}
-                              aria-label={entry.enabled ? "Disable entry" : "Enable entry"}
-                            >
-                              <span
-                                className={cn(
-                                  "inline-block w-3.5 h-3.5 rounded-full bg-[var(--color-surface)] shadow-sm transition-transform",
-                                  entry.enabled ? "translate-x-3" : "-translate-x-3"
-                                )}
-                              />
-                            </button>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3 text-[var(--color-text-muted)]">{entry.source}</td>
-                        <td className="py-2.5 px-3">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <IconActionButton
-                              label={`Preview ${entry.term}`}
-                              onClick={() => void previewEntry(entry)}
-                              disabled={previewingEntryId === entry.id}
-                            >
-                              {previewingEntryId === entry.id ? (
-                                <Loader2 size={14} className="animate-spin" />
-                              ) : (
-                                <Play size={14} />
-                              )}
-                            </IconActionButton>
-                            {canEdit && (
-                              <>
-                                <IconActionButton
-                                  label={`Edit ${entry.term}`}
-                                  onClick={() => openPronunciationEdit(entry)}
-                                >
-                                  <Pencil size={14} />
-                                </IconActionButton>
-                                <IconActionButton
-                                  label={`Delete ${entry.term}`}
-                                  variant="danger"
-                                  onClick={() => void handleDeletePronunciationEntry(entry)}
-                                >
-                                  <Trash2 size={14} />
-                                </IconActionButton>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             )}
           </BibleSection>
@@ -1428,116 +973,6 @@ export function StoryBibleView() {
         />
       </EntityDialog>
 
-      <EntityDialog
-        open={pronunciationDialog != null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPronunciationDialog(null);
-          }
-        }}
-        title={pronunciationDialog?.mode === "edit" ? "Edit Pronunciation" : "Add Pronunciation"}
-        description="Control how the voice reader speaks this term."
-        onSubmit={() => void handleSavePronunciationEntry()}
-        submitLabel={pronunciationDialog?.mode === "edit" ? "Save Pronunciation" : "Create Pronunciation"}
-        busy={pronunciationBusy}
-      >
-        <FormInput
-          label="Term"
-          value={pronunciationDraft.term}
-          onChange={(value) => setPronunciationDraft((draft) => ({ ...draft, term: value }))}
-          placeholder="Word or phrase as it appears in text"
-        />
-        <FormInput
-          label="Replacement"
-          value={pronunciationDraft.replacement}
-          onChange={(value) => setPronunciationDraft((draft) => ({ ...draft, replacement: value }))}
-          placeholder="How it should be spoken"
-        />
-        <div className="grid grid-cols-2 gap-4">
-          <FormSelect
-            label="Render Mode"
-            value={pronunciationDraft.renderMode}
-            onChange={(value) =>
-              setPronunciationDraft((draft) => ({
-                ...draft,
-                renderMode: value as PronunciationDraft["renderMode"],
-              }))
-            }
-            options={[
-              { value: "sub", label: "Substitute (sub)" },
-              { value: "phoneme", label: "Phoneme (IPA)" },
-              { value: "say_as", label: "Say-as (interpret)" },
-              { value: "plain", label: "Plain text" },
-            ]}
-          />
-          <FormSelect
-            label="Match Mode"
-            value={pronunciationDraft.matchMode}
-            onChange={(value) =>
-              setPronunciationDraft((draft) => ({
-                ...draft,
-                matchMode: value as PronunciationDraft["matchMode"],
-              }))
-            }
-            options={[
-              { value: "whole_word", label: "Whole word" },
-              { value: "literal", label: "Literal substring" },
-            ]}
-          />
-        </div>
-        <div className="flex items-center gap-3">
-          <input
-            type="checkbox"
-            id="pronunciation-case-sensitive"
-            checked={pronunciationDraft.caseSensitive}
-            onChange={(e) =>
-              setPronunciationDraft((draft) => ({
-                ...draft,
-                caseSensitive: e.target.checked,
-              }))
-            }
-            className="h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
-          />
-          <label htmlFor="pronunciation-case-sensitive" className="text-sm font-semibold text-[var(--color-text)]">
-            Case sensitive
-          </label>
-        </div>
-        <FormInput
-          label="Priority"
-          value={String(pronunciationDraft.priority)}
-          onChange={(value) =>
-            setPronunciationDraft((draft) => ({
-              ...draft,
-              priority: parseInt(value, 10) || 0,
-            }))
-          }
-          placeholder="0"
-        />
-        <FormTextarea
-          label="Notes"
-          value={pronunciationDraft.notes}
-          onChange={(value) => setPronunciationDraft((draft) => ({ ...draft, notes: value }))}
-          placeholder="Optional notes about this pronunciation rule"
-        />
-        {getPronunciationWarnings(
-          pronunciationEntries,
-          pronunciationDraft,
-          pronunciationDialog
-        ).length > 0 && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <p className="text-xs font-bold text-amber-700 mb-1">Warnings:</p>
-            <ul className="text-xs text-amber-600 space-y-0.5">
-              {getPronunciationWarnings(
-                pronunciationEntries,
-                pronunciationDraft,
-                pronunciationDialog
-              ).map((w, i) => (
-                <li key={i}>&bull; {w}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </EntityDialog>
 
       <ConfirmDialog
         open={confirmDialog != null}

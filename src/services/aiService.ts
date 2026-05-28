@@ -37,10 +37,12 @@ const LONG_OUTLINE_SEGMENT_SIZE = 200;
 type GeneratedLongOutline = ReturnType<typeof z.GeneratedLongOutlineSchema.parse>;
 type GeneratedLongOutlineArc = GeneratedLongOutline["arcs"][number];
 
+const AI_CHAT_MODEL = process.env.AI_CHAT_MODEL || "gemini-2.5-flash";
+
 export async function generateChapter(input: { title: string; instructions: string }, context: PromptContext) {
   const prompt = buildChapterGenerationPrompt(input, context);
 
-  const { text } = await generateText({
+  const { text, usage } = await generateText({
     model: chatModel(),
     prompt,
     temperature: 0.8,
@@ -54,9 +56,9 @@ export async function generateChapter(input: { title: string; instructions: stri
       title: json.title || input.title,
       summary: json.summary || "",
       content: json.content || "",
-      tokens: 0, // AI SDK provides usage, but let's keep it simple for now
+      tokens: usage.totalTokens ?? 0,
       costUsd: 0,
-      model: "custom-ai",
+      model: AI_CHAT_MODEL,
     };
   } catch (err) {
     console.error("Failed to parse AI response:", cleanText, err);
@@ -65,25 +67,25 @@ export async function generateChapter(input: { title: string; instructions: stri
 }
 
 export async function rewriteSelection(input: { selection: string; instructions: string }, context: PromptContext) {
-  const { text } = await generateText({
+  const { text, usage } = await generateText({
     model: chatModel(),
     prompt: buildRewritePrompt(input, context),
   });
 
-  return stripReasoning(text);
+  return { text: stripReasoning(text), tokens: usage.totalTokens ?? 0, model: AI_CHAT_MODEL };
 }
 
 export async function describeSelection(input: { selection: string; sense: string }, context: PromptContext) {
-  const { text } = await generateText({
+  const { text, usage } = await generateText({
     model: chatModel(),
     prompt: buildDescribePrompt(input, context),
   });
 
-  return stripReasoning(text);
+  return { text: stripReasoning(text), tokens: usage.totalTokens ?? 0, model: AI_CHAT_MODEL };
 }
 
 export async function generateSynopsisFromStoryBible(context: StoryBibleGenerationContext) {
-  const { text } = await generateText({
+  const { text, usage } = await generateText({
     model: chatModel(),
     prompt: buildSynopsisPrompt(context),
     temperature: 0.6,
@@ -91,14 +93,14 @@ export async function generateSynopsisFromStoryBible(context: StoryBibleGenerati
 
   return {
     synopsis: stripReasoning(text),
-    tokens: 0,
+    tokens: usage.totalTokens ?? 0,
     costUsd: 0,
-    model: "custom-ai",
+    model: AI_CHAT_MODEL,
   };
 }
 
 export async function generateOutlineFromStoryBible(context: StoryBibleGenerationContext) {
-  const { text } = await generateText({
+  const { text, usage } = await generateText({
     model: chatModel(),
     prompt: buildOutlinePrompt(context),
     temperature: 0.7,
@@ -111,9 +113,9 @@ export async function generateOutlineFromStoryBible(context: StoryBibleGeneratio
     const outline = z.GeneratedOutlineSchema.parse(json);
     return {
       outline,
-      tokens: 0,
+      tokens: usage.totalTokens ?? 0,
       costUsd: 0,
-      model: "custom-ai",
+      model: AI_CHAT_MODEL,
     };
   } catch (err) {
     console.error("Failed to parse outline JSON:", cleanText, err);
@@ -123,6 +125,7 @@ export async function generateOutlineFromStoryBible(context: StoryBibleGeneratio
 
 export async function generateLongOutlineFromStoryBible(context: StoryBibleGenerationContext, targetChapterCount: number) {
   const arcs: GeneratedLongOutlineArc[] = [];
+  let totalTokens = 0;
 
   for (let start = 1; start <= targetChapterCount; start += LONG_OUTLINE_SEGMENT_SIZE) {
     const end = Math.min(start + LONG_OUTLINE_SEGMENT_SIZE - 1, targetChapterCount);
@@ -133,13 +136,14 @@ export async function generateLongOutlineFromStoryBible(context: StoryBibleGener
 
     const segment = await generateLongOutlineSegment(context, targetChapterCount, start, end, previousArcDigest);
     arcs.push(...segment.arcs);
+    totalTokens += segment.tokens;
   }
 
   return {
     outline: { arcs },
-    tokens: 0,
+    tokens: totalTokens,
     costUsd: 0,
-    model: "custom-ai",
+    model: AI_CHAT_MODEL,
   };
 }
 
@@ -150,7 +154,7 @@ async function generateLongOutlineSegment(
   segmentEnd: number,
   previousArcDigest: string,
 ) {
-  const { text } = await generateText({
+  const { text, usage } = await generateText({
     model: chatModel(),
     prompt: buildLongOutlinePrompt(context, targetChapterCount, segmentStart, segmentEnd, previousArcDigest),
     temperature: 0.6,
@@ -161,7 +165,8 @@ async function generateLongOutlineSegment(
   try {
     const json = JSON.parse(cleanText);
     const outline = z.GeneratedLongOutlineSchema.parse(json);
-    return normalizeLongOutlineSegment(outline, segmentStart, segmentEnd);
+    const normalized = normalizeLongOutlineSegment(outline, segmentStart, segmentEnd);
+    return { arcs: normalized.arcs, tokens: usage.totalTokens ?? 0 };
   } catch (err) {
     console.error("Failed to parse long outline JSON:", cleanText, err);
     throw new Error("AI returned an invalid long outline. Please try again.");
@@ -188,13 +193,13 @@ function normalizeLongOutlineSegment(
 }
 
 export async function chatWithAi(messages: ModelMessage[], context: PromptContext) {
-  const { text } = await generateText({
+  const { text, usage } = await generateText({
     model: chatModel(),
     system: buildChatSystemPrompt(context, extractLatestUserText(messages)),
     messages,
   });
 
-  return stripReasoning(text);
+  return { text: stripReasoning(text), tokens: usage.totalTokens ?? 0, model: AI_CHAT_MODEL };
 }
 
 function buildSynopsisPrompt(context: StoryBibleGenerationContext) {

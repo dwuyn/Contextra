@@ -3,6 +3,7 @@ import * as z from "@/lib/validations";
 import type { ProjectOutline } from "@/types/project";
 import { refreshChapterContinuityStatus } from "@/services/continuityService";
 import { requireFriendship } from "@/services/chatService";
+import { writeCharacterVector } from "@/services/contextService";
 import type { Prisma } from "@prisma/client";
 import type {
   CreateChapterResult,
@@ -871,6 +872,8 @@ export async function mergeBranch(projectId: string, userId: string, branchId: s
 export async function upsertCharacter(projectId: string, userId: string, input: UpsertCharacterInput, characterId?: string) {
   await requireProjectPermission(projectId, userId, "edit");
 
+  let savedId = characterId;
+
   if (characterId) {
     const result = await prisma.character.updateMany({
       where: { id: characterId, projectId },
@@ -882,7 +885,7 @@ export async function upsertCharacter(projectId: string, userId: string, input: 
     });
     if (result.count === 0) throw new Error("Character not found");
   } else {
-    await prisma.character.create({
+    const created = await prisma.character.create({
       data: {
         projectId,
         name: input.name,
@@ -890,7 +893,10 @@ export async function upsertCharacter(projectId: string, userId: string, input: 
         memory: input.memory,
       },
     });
+    savedId = created.id;
   }
+
+  await writeCharacterVector(savedId!, input.name, input.role, input.memory);
 
   return getProject(projectId, userId);
 }

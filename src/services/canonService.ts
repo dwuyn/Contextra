@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { chatModel } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 import { generateEmbedding, toPgVectorLiteral } from "@/services/ragService";
@@ -40,6 +40,7 @@ type CanonProposalPayload = Record<string, unknown>;
 
 type CanonPromptContextInput = {
   projectId: string;
+  branchId: string;
   currentChapterIndex: number;
   userInstructions: string;
 };
@@ -50,6 +51,8 @@ const CANON_CONTEXT_BUDGETS = {
   relations: 6_000,
 };
 
+const CANON_SIMILARITY_THRESHOLD = 0.45;
+
 function stripReasoning(text: string) {
   return text
     .replace(/<think>[\s\S]*?<\/think>/g, "")
@@ -59,6 +62,14 @@ function stripReasoning(text: string) {
 
 function stripHtml(content: string) {
   return content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+const CANON_EXTRACT_CHUNK = 48_000;
+const CANON_EXTRACT_HEAD_TAIL = 24_000;
+
+function prepareCanonExtractContent(fullText: string) {
+  if (fullText.length <= CANON_EXTRACT_CHUNK) return fullText;
+  return fullText.slice(0, CANON_EXTRACT_HEAD_TAIL) + "\n\n[...]\n\n" + fullText.slice(-CANON_EXTRACT_HEAD_TAIL);
 }
 
 function toStringList(value: unknown): string[] {
@@ -191,7 +202,7 @@ ${project.characters.map((c) => `- ${c.name} (${c.role}): ${c.memory}`).join("\n
 [CHAPTER]
 Title: ${input.title}
 Content:
-${stripHtml(input.content).slice(0, 24000)}
+${prepareCanonExtractContent(stripHtml(input.content))}
 
 Return JSON with:
 {
@@ -331,6 +342,7 @@ export async function createCanonProposalsForChapter(input: ChapterCanonInput) {
       } else if (row.type === "relation") {
         await approveRelation(input.projectId, {
           chapterId: row.chapterId,
+          branchId: row.branchId,
           payload: row.payload,
         });
       }
@@ -382,20 +394,6 @@ async function getOrCreateEntity(projectId: string, name: string, type = "concep
   return entity;
 }
 
-async function syncCharacterMemory(projectId: string, entityName: string, content: string) {
-  if (!entityName || !content) return;
-  const character = await prisma.character.findFirst({
-    where: { projectId, name: { equals: entityName, mode: "insensitive" } },
-    select: { id: true, memory: true },
-  });
-  if (!character || character.memory.includes(content)) return;
-
-  await prisma.character.update({
-    where: { id: character.id },
-    data: { memory: `${character.memory.trim()}\nCanon: ${content}`.trim() },
-  });
-}
-
 async function approveEntity(projectId: string, payload: CanonProposalPayload) {
   const name = normalizeName(payload.name);
   if (!name) return;
@@ -424,26 +422,56 @@ async function approveFact(projectId: string, proposal: { chapterId: string | nu
     select: { id: true },
   });
 
-  if (!duplicate) {
-    const fact = await prisma.canonFact.create({
-      data: {
-        projectId,
-        entityId: entity?.id,
-        kind: normalizeText(payload.kind) || "plot",
-        content,
-        sourceChapterId: proposal.chapterId,
-        branchId: proposal.branchId,
-        confidence: clampConfidence(payload.confidence),
-        importance: clampImportance(payload.importance),
-      },
-    });
-    await writeVector("CanonFact", fact.id, content);
+  if (duplicate) return;
+
+  try {
+    const newEmbedding = await generateEmbedding(content);
+    const newVectorLiteral = toPgVectorLiteral(newEmbedding);
+    const similar = await prisma.$queryRaw<Array<{ id: string; importance: number }>>`
+      SELECT id, importance
+      FROM "CanonFact"
+      WHERE "projectId" = ${projectId}
+        AND status = 'approved'
+        AND "vector" IS NOT NULL
+        AND (vector <=> ${newVectorLiteral}::vector) < 0.15
+      ORDER BY vector <=> ${newVectorLiteral}::vector ASC
+      LIMIT 1
+    `;
+
+    if (similar.length > 0) {
+      await prisma.canonFact.update({
+        where: { id: similar[0].id },
+        data: {
+          content,
+          sourceChapterId: proposal.chapterId,
+          branchId: proposal.branchId,
+          confidence: clampConfidence(payload.confidence),
+          importance: Math.max(clampImportance(payload.importance), similar[0].importance),
+        },
+      });
+      await writeVector("CanonFact", similar[0].id, content);
+      return;
+    }
+  } catch (error) {
+    console.error("Canon fact semantic dedup failed; falling back to create.", { projectId }, error);
   }
 
-  await syncCharacterMemory(projectId, entityName, content);
+  const fact = await prisma.canonFact.create({
+    data: {
+      projectId,
+      entityId: entity?.id,
+      kind: normalizeText(payload.kind) || "plot",
+      content,
+      sourceChapterId: proposal.chapterId,
+      branchId: proposal.branchId,
+      confidence: clampConfidence(payload.confidence),
+      importance: clampImportance(payload.importance),
+    },
+  });
+  await writeVector("CanonFact", fact.id, content);
 }
 
-async function approveRelation(projectId: string, proposal: { chapterId: string | null; payload: unknown }) {
+async function approveRelation(projectId: string, proposal: { chapterId: string | null; branchId: string | null; payload: unknown }) {
   const payload = proposal.payload as CanonProposalPayload;
   const summary = normalizeText(payload.summary);
   if (!summary) return;
@@ -467,6 +495,7 @@ async function approveRelation(projectId: string, proposal: { chapterId: string 
       relationType: normalizeText(payload.relationType) || "other",
       summary,
       sourceChapterId: proposal.chapterId,
+      branchId: proposal.branchId,
       confidence: clampConfidence(payload.confidence),
     },
   });
@@ -514,7 +543,7 @@ export async function rejectCanonProposal(projectId: string, proposalId: string,
   });
 }
 
-async function semanticCanonHits(projectId: string, query: string, limit = 12) {
+async function semanticCanonHits(projectId: string, branchIds: string[], query: string, limit = 12) {
   if (!query.trim()) return [];
 
   try {
@@ -523,7 +552,11 @@ async function semanticCanonHits(projectId: string, query: string, limit = 12) {
     const facts = await prisma.$queryRaw<Array<{ content: string; distance: number }>>`
       SELECT "content", "vector" <=> ${vectorLiteral}::vector as distance
       FROM "CanonFact"
-      WHERE "projectId" = ${projectId} AND "status" = 'approved' AND "vector" IS NOT NULL AND ("vector" <=> ${vectorLiteral}::vector) < 0.35
+      WHERE "projectId" = ${projectId}
+        AND "status" = 'approved'
+        AND "branchId" IN (${Prisma.join(branchIds)})
+        AND "vector" IS NOT NULL
+        AND ("vector" <=> ${vectorLiteral}::vector) < ${CANON_SIMILARITY_THRESHOLD}
       ORDER BY distance ASC
       LIMIT ${limit}
     `;
@@ -534,7 +567,36 @@ async function semanticCanonHits(projectId: string, query: string, limit = 12) {
   }
 }
 
+async function getAncestorBranchIds(projectId: string, branchId: string): Promise<string[]> {
+  const branchIds = new Set<string>([branchId]);
+  let currentId: string | null = branchId;
+
+  for (let i = 0; i < 10; i++) {
+    if (!currentId) break;
+
+    const branch: { basedOnChapterId: string | null } | null = await prisma.branch.findUnique({
+      where: { id: currentId },
+      select: { basedOnChapterId: true },
+    });
+
+    if (!branch?.basedOnChapterId || branch.basedOnChapterId === "root") break;
+
+    const anchorChapter: { branchId: string | null } | null = await prisma.chapter.findFirst({
+      where: { id: branch.basedOnChapterId, projectId },
+      select: { branchId: true },
+    });
+
+    if (!anchorChapter?.branchId) break;
+    currentId = anchorChapter.branchId;
+    branchIds.add(currentId as string);
+  }
+
+  return [...branchIds];
+}
+
 export async function loadCanonPromptContext(input: CanonPromptContextInput) {
+  const ancestorBranchIds = await getAncestorBranchIds(input.projectId, input.branchId);
+
   const [entities, currentArc, currentBeat, semanticFacts] = await Promise.all([
     prisma.canonEntity.findMany({
       where: { projectId: input.projectId, status: "active" },
@@ -565,7 +627,7 @@ export async function loadCanonPromptContext(input: CanonPromptContextInput) {
     prisma.outlineBeat.findFirst({
       where: { projectId: input.projectId, chapterIndex: input.currentChapterIndex },
     }),
-    semanticCanonHits(input.projectId, input.userInstructions, 16),
+    semanticCanonHits(input.projectId, ancestorBranchIds, input.userInstructions, 16),
   ]);
 
   const loweredInstructions = input.userInstructions.toLowerCase();
@@ -593,6 +655,7 @@ export async function loadCanonPromptContext(input: CanonPromptContextInput) {
       where: {
         projectId: input.projectId,
         status: "approved",
+        branchId: { in: ancestorBranchIds },
         OR: selectedEntityIds.length ? [{ entityId: { in: selectedEntityIds } }, { importance: { gte: 4 } }] : undefined,
       },
       orderBy: [{ importance: "desc" }, { updatedAt: "desc" }],
@@ -602,6 +665,7 @@ export async function loadCanonPromptContext(input: CanonPromptContextInput) {
       where: {
         projectId: input.projectId,
         status: "approved",
+        branchId: { in: ancestorBranchIds },
         OR: selectedEntityIds.length
           ? [{ sourceEntityId: { in: selectedEntityIds } }, { targetEntityId: { in: selectedEntityIds } }]
           : undefined,

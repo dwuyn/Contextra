@@ -38,7 +38,13 @@ export function getReaderLanguageLabel(language: ReaderLanguage) {
 }
 
 export function detectChapterLanguage(text: string): ReaderLanguage {
-  return VIETNAMESE_CHARACTER_PATTERN.test(text) ? "vi-VN" : "en-US";
+  const alphaChars = text.replace(/[^a-zA-ZÀ-ỹ]/g, "");
+  if (alphaChars.length === 0) return "en-US";
+
+  const vietnameseMatches = alphaChars.match(VIETNAMESE_CHARACTER_PATTERN);
+  const ratio = (vietnameseMatches?.length ?? 0) / alphaChars.length;
+
+  return ratio >= 0.05 ? "vi-VN" : "en-US";
 }
 
 function splitByWhitespaceLimit(text: string) {

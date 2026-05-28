@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 const CHUNK_SIZE = 500;
 const OVERLAP = 50;
 const EMBEDDING_DIMENSIONS = 768;
+const COSINE_DISTANCE_THRESHOLD = 0.45;
 
 function stripHtmlToPlainText(content: string) {
   return content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -168,7 +169,7 @@ export async function semanticSearch(
       sc.vector <=> ${queryVector}::vector as distance
     FROM "SceneChunk" sc
     JOIN "Chapter" c ON sc."chapterId" = c.id
-    WHERE c."projectId" = ${projectId} AND ${chapterFilter} AND (sc.vector <=> ${queryVector}::vector) < 0.35
+    WHERE c."projectId" = ${projectId} AND ${chapterFilter} AND (sc.vector <=> ${queryVector}::vector) < ${COSINE_DISTANCE_THRESHOLD}
     ORDER BY distance ASC
     LIMIT ${limit}
   `;

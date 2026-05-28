@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { loadCanonPromptContext } from "@/services/canonService";
+import { generateEmbedding, toPgVectorLiteral } from "@/services/ragService";
 
 export interface PromptContext {
   projectName: string;
@@ -37,7 +38,12 @@ type ContextChapter = {
   summary: string;
   index: number;
   createdAt: Date;
-  summaryObj: { summary: string } | null;
+  summaryObj: {
+    summary: string;
+    keyEvents: unknown;
+    factsLearned: unknown;
+    characters: unknown;
+  } | null;
 };
 
 type ContextBranch = {
@@ -132,10 +138,19 @@ function extractSearchTerms(input: string) {
 
 function getRecentChapterSummaries(lineage: ContextChapter[]) {
   const summaries = lineage
-    .map((chapter) => ({
-      chapterTitle: chapter.title,
-      summary: chapter.summaryObj?.summary?.trim() || chapter.summary.trim(),
-    }))
+    .map((chapter) => {
+      const summaryText = chapter.summaryObj?.summary?.trim() || chapter.summary.trim();
+      const keyEvents = normalizeStringList(chapter.summaryObj?.keyEvents);
+      const factsLearned = normalizeStringList(chapter.summaryObj?.factsLearned);
+      const characters = normalizeStringList(chapter.summaryObj?.characters);
+
+      let richSummary = summaryText;
+      if (keyEvents.length > 0) richSummary += ` Key events: ${keyEvents.join("; ")}.`;
+      if (factsLearned.length > 0) richSummary += ` Facts: ${factsLearned.join("; ")}.`;
+      if (characters.length > 0) richSummary += ` Characters: ${characters.join(", ")}.`;
+
+      return { chapterTitle: chapter.title, summary: richSummary };
+    })
     .filter((chapter) => chapter.summary.length > 0);
   const selected: Array<{ chapterTitle: string; summary: string }> = [];
   let used = 0;
@@ -212,15 +227,42 @@ async function loadCharacterDigest(projectId: string, userInstructions: string) 
     where: { projectId, ...searchWhere },
     orderBy: { updatedAt: "desc" },
     take: terms.length > 0 ? 80 : 40,
-    select: { name: true, role: true, memory: true, updatedAt: true },
+    select: { id: true, name: true, role: true, memory: true, updatedAt: true },
   });
+
+  const seenIds = new Set(characters.map((c) => c.id));
+
+  if (terms.length > 0 && userInstructions.trim()) {
+    try {
+      const embedding = await generateEmbedding(userInstructions);
+      const vectorLiteral = toPgVectorLiteral(embedding);
+      const semanticResults = await prisma.$queryRaw<Array<{ id: string; name: string; role: string; memory: string; updatedAt: Date }>>`
+        SELECT id, name, role, memory, "updatedAt"
+        FROM "Character"
+        WHERE "projectId" = ${projectId}
+          AND "vector" IS NOT NULL
+          AND ("vector" <=> ${vectorLiteral}::vector) < 0.45
+        ORDER BY "vector" <=> ${vectorLiteral}::vector ASC
+        LIMIT 40
+      `;
+
+      for (const result of semanticResults) {
+        if (!seenIds.has(result.id)) {
+          seenIds.add(result.id);
+          characters.push(result);
+        }
+      }
+    } catch (error) {
+      console.error("Character semantic search failed; using keyword-only.", { projectId }, error);
+    }
+  }
 
   if (characters.length === 0 && terms.length > 0) {
     characters = await prisma.character.findMany({
       where: { projectId },
       orderBy: { updatedAt: "desc" },
       take: 40,
-      select: { name: true, role: true, memory: true, updatedAt: true },
+      select: { id: true, name: true, role: true, memory: true, updatedAt: true },
     });
   }
 
@@ -243,16 +285,25 @@ async function loadCharacterDigest(projectId: string, userInstructions: string) 
   return lines.length ? lines.join("\n") : "No characters defined yet.";
 }
 
-async function loadMostRecentChapterText(chapterId?: string) {
-  if (!chapterId) return "No immediate previous text.";
+async function loadSlidingWindowText(lineage: ContextChapter[]) {
+  if (lineage.length === 0) return "No immediate previous text.";
 
-  const chapter = await prisma.chapter.findUnique({
-    where: { id: chapterId },
-    select: { content: true },
+  const chapters = await prisma.chapter.findMany({
+    where: { id: { in: lineage.map((c) => c.id) } },
+    select: { id: true, content: true },
   });
+  const contentMap = new Map(chapters.map((c) => [c.id, stripHtml(c.content)]));
 
-  const text = stripHtml(chapter?.content ?? "");
-  return text ? text.slice(-CONTEXT_BUDGETS.slidingWindow) : "No immediate previous text.";
+  let accumulated = "";
+  for (let i = lineage.length - 1; i >= 0; i--) {
+    if (accumulated.length >= CONTEXT_BUDGETS.slidingWindow) break;
+    const text = contentMap.get(lineage[i].id) ?? "";
+    if (!text) continue;
+    const remaining = CONTEXT_BUDGETS.slidingWindow - accumulated.length;
+    accumulated = text.slice(-Math.min(remaining, text.length)) + accumulated;
+  }
+
+  return accumulated || "No immediate previous text.";
 }
 
 type CachedEntry = {
@@ -262,6 +313,7 @@ type CachedEntry = {
 
 const contextCache = new Map<string, CachedEntry>();
 const CACHE_TTL_MS = 30_000;
+const MAX_CACHE_ENTRIES = 100;
 
 function buildCacheKey(projectId: string, branchId: string, userInstructions?: string): string {
   if (userInstructions) {
@@ -352,13 +404,12 @@ export async function composeContext(
   const lineageChapterIds = lineage.map((chapter) => chapter.id);
   const currentChapterIndex = lineage.length + 1;
   const recentChapterSummaries = getRecentChapterSummaries(lineage);
-  const mostRecentChapter = lineage[lineage.length - 1];
 
   const [ragContext, canonContext, characterDigest, slidingWindowText, arcs] = await Promise.all([
     loadRagContext(projectId, branch.id, userInstructions, fromRagService, lineageChapterIds),
-    loadCanonPromptContext({ projectId, currentChapterIndex, userInstructions }),
+    loadCanonPromptContext({ projectId, branchId: branch.id, currentChapterIndex, userInstructions }),
     loadCharacterDigest(projectId, userInstructions),
-    loadMostRecentChapterText(mostRecentChapter?.id),
+    loadSlidingWindowText(lineage),
     prisma.storyArc.findMany({
       where: {
         projectId,
@@ -392,6 +443,11 @@ export async function composeContext(
     canonContext,
     arcSummaries,
   };
+
+  if (contextCache.size >= MAX_CACHE_ENTRIES) {
+    const firstKey = contextCache.keys().next().value;
+    if (firstKey !== undefined) contextCache.delete(firstKey);
+  }
 
   contextCache.set(cacheKey, { context: result, cachedAt: Date.now() });
   return result;
@@ -433,7 +489,7 @@ async function buildContinuity(
       summary: true,
       index: true,
       createdAt: true,
-      summaryObj: { select: { summary: true } },
+      summaryObj: { select: { summary: true, keyEvents: true, factsLearned: true, characters: true } },
     },
   });
 
@@ -463,4 +519,16 @@ export function exportProject(project: ExportableProject) {
     "Chapters",
     chapterBlock || "No chapters yet.",
   ].join("\n");
+}
+
+export async function writeCharacterVector(characterId: string, name: string, role: string, memory: string) {
+  try {
+    const text = `${name} (${role}). ${memory}`.trim();
+    if (!text) return;
+    const embedding = await generateEmbedding(text, "RETRIEVAL_DOCUMENT");
+    const vectorLiteral = toPgVectorLiteral(embedding);
+    await prisma.$executeRaw`UPDATE "Character" SET "vector" = ${vectorLiteral}::vector WHERE "id" = ${characterId}`;
+  } catch (error) {
+    console.error("Character vector write failed", { characterId }, error);
+  }
 }
