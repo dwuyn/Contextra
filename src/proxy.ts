@@ -6,8 +6,20 @@ import { updateSession } from "@/lib/auth";
 
 const intlMiddleware = createMiddleware(routing);
 
+function applyCookies(target: NextResponse, source?: NextResponse) {
+  if (!source) {
+    return target;
+  }
+
+  for (const cookie of source.cookies.getAll()) {
+    target.cookies.set(cookie);
+  }
+
+  return target;
+}
+
 export async function proxy(request: NextRequest) {
-  const response = await intlMiddleware(request);
+  const response = (await intlMiddleware(request)) ?? NextResponse.next();
 
   const session = request.cookies.get("session")?.value;
   const pathname = request.nextUrl.pathname;
@@ -25,21 +37,35 @@ export async function proxy(request: NextRequest) {
   }
 
   let refreshedSession: NextResponse | undefined;
-  try {
-    refreshedSession = await updateSession(request);
-  } catch {
-    const res = isPublic
-      ? (response || NextResponse.next())
-      : NextResponse.redirect(new URL(`/${dl}/login`, request.url));
-    res.cookies.delete("session");
-    return res;
+  if (session) {
+    let sessionUpdate;
+    try {
+      sessionUpdate = await updateSession(request);
+    } catch {
+      return response;
+    }
+
+    if (sessionUpdate.kind === "invalid" || sessionUpdate.kind === "missing") {
+      const res = isPublic || isAuth
+        ? response
+        : NextResponse.redirect(new URL(`/${dl}/login`, request.url));
+      res.cookies.delete("session");
+      return res;
+    }
+
+    if (sessionUpdate.kind === "refreshed") {
+      refreshedSession = sessionUpdate.response;
+    }
   }
 
-  if (session && isAuth) {
-    return NextResponse.redirect(new URL(`/${dl}`, request.url));
+  if (refreshedSession && isAuth) {
+    return applyCookies(
+      NextResponse.redirect(new URL(`/${dl}`, request.url)),
+      refreshedSession,
+    );
   }
 
-  return refreshedSession || response;
+  return applyCookies(response, refreshedSession);
 }
 
 export const config = {

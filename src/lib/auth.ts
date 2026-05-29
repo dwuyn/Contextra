@@ -13,6 +13,12 @@ export interface SessionPayload {
   [key: string]: unknown;
 }
 
+export type SessionUpdateResult =
+  | { kind: "none" }
+  | { kind: "invalid" }
+  | { kind: "missing" }
+  | { kind: "refreshed"; response: NextResponse };
+
 function getJwtKey() {
   const secretKey = process.env.JWT_SECRET;
 
@@ -65,21 +71,26 @@ export async function getSession() {
   }
 }
 
-export async function updateSession(request: NextRequest) {
+export async function updateSession(
+  request: NextRequest,
+): Promise<SessionUpdateResult> {
   const session = request.cookies.get("session")?.value;
-  if (!session) return;
+  if (!session) return { kind: "none" };
 
-  const parsed = await decrypt(session);
-
+  let parsed: SessionPayload;
   try {
-    const { prisma } = await import("@/lib/prisma");
-    const user = await prisma.user.findUnique({
-      where: { id: parsed.userId },
-      select: { id: true },
-    });
-    if (!user) return;
+    parsed = await decrypt(session);
   } catch {
-    return;
+    return { kind: "invalid" };
+  }
+
+  const { prisma } = await import("@/lib/prisma");
+  const user = await prisma.user.findUnique({
+    where: { id: parsed.userId },
+    select: { id: true },
+  });
+  if (!user) {
+    return { kind: "missing" };
   }
 
   parsed.expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -92,5 +103,5 @@ export async function updateSession(request: NextRequest) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
   });
-  return res;
+  return { kind: "refreshed", response: res };
 }
