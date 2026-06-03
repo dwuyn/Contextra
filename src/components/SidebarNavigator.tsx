@@ -234,6 +234,14 @@ export function SidebarNavigator() {
   const visibleChapters = project.chapters.filter((c: ChapterMeta) => c.branchId === activeBranchId);
   const activeBranches = project.branches.filter((branch) => branch.status === "active");
   const activeBranch = activeBranches.find((branch) => branch.id === activeBranchId);
+  const baseChapterId = typeof activeBranch?.basedOnChapterId === "string" ? activeBranch.basedOnChapterId : "root";
+  const baseChapter = baseChapterId !== "root"
+    ? project.chapters.find((chapter: ChapterMeta) => chapter.id === baseChapterId)
+    : null;
+  const branchLineageLabel =
+    baseChapterId === "root"
+      ? st("independentBranch")
+      : st("forkedFromChapter", { chapter: baseChapter?.title ?? st("unknownChapter") });
 
   const handleBranchChange = (branchId: string) => {
     const nextChapter = project.chapters.find((chapter: ChapterMeta) => chapter.branchId === branchId);
@@ -491,6 +499,11 @@ export function SidebarNavigator() {
             </button>
           )}
         </div>
+        {activeBranch && (
+          <p className="mt-2 truncate text-[11px] font-medium text-[var(--color-text-muted)]" title={branchLineageLabel}>
+            {branchLineageLabel}
+          </p>
+        )}
         {createBranchError && (
           <div className="mt-3 rounded-xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-3 py-2 text-[11px] font-medium text-[var(--color-destructive)]">
             {createBranchError}

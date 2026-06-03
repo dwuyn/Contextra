@@ -25,9 +25,12 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-contextra}:${POSTGRES_PASSWORD:-contextra}@postgres:5432/${POSTGRES_DB:-contextra}?schema=public
+      GOOGLE_APPLICATION_CREDENTIALS: /app/google-key.json
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ./google-key.json:/app/google-key.json:ro
     restart: "no"
 
   next-app:
@@ -40,6 +43,7 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-contextra}:${POSTGRES_PASSWORD:-contextra}@postgres:5432/${POSTGRES_DB:-contextra}?schema=public
+      GOOGLE_APPLICATION_CREDENTIALS: /app/google-key.json
       HOSTNAME: 0.0.0.0
       NODE_ENV: production
       PORT: 3000
@@ -52,6 +56,7 @@ services:
       - "${APP_PORT:-3000}:3000"
     volumes:
       - avatar-data:/app/data
+      - ./google-key.json:/app/google-key.json:ro
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
