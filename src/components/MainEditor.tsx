@@ -65,6 +65,46 @@ type PendingCommentDraft = {
   originalContent: string;
 };
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function toRichTextHtml(text: string) {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return "<p></p>";
+
+  return normalized
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => {
+      if (/^#{1,6}\s+/.test(block)) {
+        const match = block.match(/^(#{1,6})\s+(.*)$/);
+        if (!match) return `<p>${escapeHtml(block)}</p>`;
+        const level = Math.min(match[1].length, 6);
+        return `<h${level}>${escapeHtml(match[2].trim())}</h${level}>`;
+      }
+
+      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+
+      if (lines.length > 0 && lines.every((line) => /^[-*]\s+/.test(line))) {
+        return `<ul>${lines.map((line) => `<li>${escapeHtml(line.replace(/^[-*]\s+/, ""))}</li>`).join("")}</ul>`;
+      }
+
+      if (lines.length > 0 && lines.every((line) => /^\d+\.\s+/.test(line))) {
+        return `<ol>${lines.map((line) => `<li>${escapeHtml(line.replace(/^\d+\.\s+/, ""))}</li>`).join("")}</ol>`;
+      }
+
+      return `<p>${lines.map((line) => escapeHtml(line)).join("<br>")}</p>`;
+    })
+    .join("");
+}
+
 function createEmptyDraftSnapshot(): DraftSnapshot {
   return {
     projectId: "",
@@ -774,7 +814,7 @@ export function MainEditor({
 
   useEffect(() => {
     if (editor && pendingInsertion) {
-      editor.chain().focus().insertContent(pendingInsertion).setAiGenerated().run();
+      editor.chain().focus().insertContent(toRichTextHtml(pendingInsertion)).setAiGenerated().run();
       clearPendingInsertion();
     }
   }, [editor, pendingInsertion, clearPendingInsertion]);
