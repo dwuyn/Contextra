@@ -1,3 +1,5 @@
+import "server-only";
+
 import { createHash } from "node:crypto";
 import { Storage } from "@google-cloud/storage";
 import { TextToSpeechClient, protos } from "@google-cloud/text-to-speech";

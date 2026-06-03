@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth";
 import { addConnection } from "@/lib/realtime";
+import { sseConnectionCheck, sseConnectionRelease } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,10 @@ export async function GET(req: NextRequest) {
   }
 
   const userId = session.userId;
+
+  if (!sseConnectionCheck(userId, 20)) {
+    return new Response("Too many SSE connections", { status: 429 });
+  }
 
   const stream = new ReadableStream({
     start(controller) {
@@ -28,6 +33,7 @@ export async function GET(req: NextRequest) {
       req.signal.addEventListener("abort", () => {
         clearInterval(heartbeat);
         remove();
+        sseConnectionRelease(userId);
       });
     },
   });

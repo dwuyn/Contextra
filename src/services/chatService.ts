@@ -1,3 +1,5 @@
+import "server-only";
+
 import { prisma } from "@/lib/prisma";
 
 export async function getDirectMessages(userId: string, friendId: string, cursor?: string, take = 100) {

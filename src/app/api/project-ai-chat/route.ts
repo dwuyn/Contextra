@@ -1,6 +1,7 @@
 import { streamText } from "ai";
 import { chatModel } from "@/lib/ai";
 import { getSession } from "@/lib/auth";
+import { createRateLimiter } from "@/lib/rateLimit";
 import { ProjectAiChatRequestSchema } from "@/lib/validations";
 import { composeContext } from "@/services/contextService";
 import { semanticSearch } from "@/services/ragService";
@@ -15,9 +16,20 @@ import { buildChatSystemPrompt } from "@/services/writingPromptService";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
+const aiRateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxRequests: 300,
+  keyPrefix: "ai:",
+});
+
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return new Response("Unauthorized", { status: 401 });
+
+  const rateCheck = await aiRateLimiter(req);
+  if (!rateCheck.allowed) {
+    return new Response("Too many requests", { status: 429 });
+  }
 
   const payload = ProjectAiChatRequestSchema.safeParse(await req.json());
   if (!payload.success) {

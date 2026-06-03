@@ -37,6 +37,23 @@ if (redisUrl) {
 
   // Set up subscriber listening logic only once
   if (!globalThis.__redis_subscriber_active) {
+    subscriber.on("error", (err) => {
+      console.error("[realtime] Redis subscriber error:", err.message);
+      if (process.env.NODE_ENV === "development") {
+        globalThis.__redis_subscriber_active = false;
+      }
+    });
+
+    subscriber.on("reconnecting", () => {
+      console.log("[realtime] Redis subscriber reconnecting");
+    });
+
+    subscriber.on("end", () => {
+      if (process.env.NODE_ENV === "development") {
+        globalThis.__redis_subscriber_active = false;
+      }
+    });
+
     subscriber.subscribe("contextra_events", (err) => {
       if (err) console.error("Failed to subscribe to Redis contextra_events", err);
     });

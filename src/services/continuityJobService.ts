@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { deleteChapterSummary, upsertArcSummary, upsertChapterSummary } from "@/services/memoryService";
 import { processAndSaveChapterChunks } from "@/services/ragService";
 import { createCanonProposalsForChapter } from "@/services/canonService";
+import "server-only";
+
 import { prisma } from "@/lib/prisma";
 
 export type ChapterContinuityInput = {

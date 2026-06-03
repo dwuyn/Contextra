@@ -1,3 +1,5 @@
+import "server-only";
+
 import { generateText } from "ai";
 import { chatModel } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";

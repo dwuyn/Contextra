@@ -23,3 +23,11 @@ export const prisma =
   });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+
+if (process.env.NODE_ENV === "production") {
+  const onShutdown = () => {
+    pool.end().catch((err) => console.error("[prisma] pool.end failed:", err));
+  };
+  process.on("SIGTERM", onShutdown);
+  process.on("SIGINT", onShutdown);
+}

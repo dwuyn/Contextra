@@ -1,3 +1,6 @@
+import "server-only";
+
+import { createHash } from "crypto";
 import { generateText } from "ai";
 import { Prisma } from "@prisma/client";
 import { chatModel } from "@/lib/ai";
@@ -53,7 +56,7 @@ const CANON_CONTEXT_BUDGETS = {
 
 const CANON_SIMILARITY_THRESHOLD = 0.45;
 
-import { stripReasoning, stripHtml, toStringList } from "@/lib/utils";
+import { stripReasoning, stripHtml, normalizeStringList } from "@/lib/utils";
 
 const CANON_EXTRACT_CHUNK = 48_000;
 const CANON_EXTRACT_HEAD_TAIL = 24_000;
@@ -181,7 +184,7 @@ Return only JSON. Do not invent facts that are not supported by the chapter.
 Title: ${project.name}
 Summary: ${project.summary}
 Synopsis: ${project.sharedNotes || "None"}
-World rules: ${toStringList(project.worldRules).join(" | ") || "None"}
+World rules: ${normalizeStringList(project.worldRules).join(" | ") || "None"}
 
 [KNOWN CHARACTERS]
 ${project.characters.map((c) => `- ${c.name} (${c.role}): ${c.memory}`).join("\n") || "- None"}
@@ -243,7 +246,7 @@ function buildProposalRows(input: ChapterCanonInput, extraction: CanonExtraction
       payload: proposalPayload({
         type: normalizeText(entity.type) || "concept",
         name,
-        aliases: toStringList(entity.aliases),
+        aliases: normalizeStringList(entity.aliases),
         summary: normalizeText(entity.summary),
       }),
       rationale: "Entity extracted from saved chapter.",
@@ -305,7 +308,22 @@ function buildProposalRows(input: ChapterCanonInput, extraction: CanonExtraction
 }
 
 export async function createCanonProposalsForChapter(input: ChapterCanonInput) {
-  if (!stripHtml(input.content)) {
+  const chapterContent = stripHtml(input.content);
+  const contentHash = createHash("md5").update(chapterContent).digest("hex");
+
+  const latestJob = await prisma.continuityJob.findFirst({
+    where: {
+      chapterId: input.chapterId,
+      type: { not: "continuity_warning" },
+      status: "completed",
+    },
+    orderBy: { updatedAt: "desc" },
+    select: { contentHash: true },
+  });
+
+  if (latestJob?.contentHash === contentHash) return;
+
+  if (!chapterContent) {
     await prisma.canonProposal.deleteMany({ where: { chapterId: input.chapterId, status: "pending", type: { not: "continuity_warning" } } });
     return;
   }
@@ -386,7 +404,7 @@ async function approveEntity(projectId: string, payload: CanonProposalPayload) {
   if (!name) return;
   const type = normalizeText(payload.type) || "concept";
   const summary = normalizeText(payload.summary);
-  const aliases = toStringList(payload.aliases);
+  const aliases = normalizeStringList(payload.aliases);
 
   const entity = await getOrCreateEntity(projectId, name, type, summary);
   if (aliases.length > 0) {
@@ -620,7 +638,7 @@ export async function loadCanonPromptContext(input: CanonPromptContextInput) {
   const loweredInstructions = input.userInstructions.toLowerCase();
   const rankedEntities = entities
     .map((entity) => {
-      const aliases = toStringList(entity.aliases);
+      const aliases = normalizeStringList(entity.aliases);
       const exactAliasHit = [entity.name, ...aliases].some((name) => loweredInstructions.includes(name.toLowerCase()));
       const score = (exactAliasHit ? 10 : 0) + scoreTextMatch(`${entity.name} ${aliases.join(" ")} ${entity.summary}`, loweredInstructions);
       return { ...entity, score };
@@ -630,7 +648,7 @@ export async function loadCanonPromptContext(input: CanonPromptContextInput) {
   const entitySelection = selectByCharBudget(
     rankedEntities,
     (entity) => {
-      const aliases = toStringList(entity.aliases);
+      const aliases = normalizeStringList(entity.aliases);
       return `${entity.name} [${entity.type}]${aliases.length ? ` aka ${aliases.join(", ")}` : ""}: ${entity.summary || "No summary."}`;
     },
     CANON_CONTEXT_BUDGETS.entities,

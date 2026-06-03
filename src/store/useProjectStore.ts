@@ -62,6 +62,7 @@ interface ProjectState {
   upsertCommentThread: (thread: ProjectCommentThread) => void;
   setSelectedCommentThreadId: (threadId: string | null) => void;
   removeCollaboratorLocally: (userId: string) => void;
+  renameProjectLocally: (name: string) => void;
 }
 
 function updateChapterCommentCounts(
@@ -302,6 +303,15 @@ export const useProjectStore = create<ProjectState>((set) => ({
         ...state.project,
         collaborators: state.project.collaborators.filter((collaborator) => collaborator.userId !== userId),
         presence: state.project.presence.filter((presence) => presence.userId !== userId),
+      },
+    };
+  }),
+  renameProjectLocally: (name) => set((state) => {
+    if (!state.project) return state;
+    return {
+      project: {
+        ...state.project,
+        metadata: { ...state.project.metadata, name },
       },
     };
   }),

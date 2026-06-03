@@ -5,8 +5,8 @@ import { useProjectStore } from "@/store/useProjectStore";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, Plus, Download, BookOpen, Trash2, Globe, Lock, GripVertical, Loader2, X } from "lucide-react";
 import { Link } from "@/lib/i18n-client";
-import { createChapter, updateSettings, reorderChapters, deleteChapter } from "@/actions/projects";
-import { useRef, useState, type ChangeEvent } from "react";
+import { createChapter, renameProject, updateSettings, reorderChapters, deleteChapter } from "@/actions/projects";
+import { useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import type { ChapterMeta } from "@/types/project";
 import {
   DndContext,
@@ -164,10 +164,42 @@ export function SidebarNavigator() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  const renameProjectLocally = useProjectStore((state) => state.renameProjectLocally);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
   if (!project) return null;
 
   const canManage = project.viewerAccess?.canManage;
   const canEdit = project.viewerAccess?.canEdit;
+
+  const handleStartRename = () => {
+    if (!canEdit) return;
+    setRenameValue(project.metadata.name);
+    setIsRenaming(true);
+    setTimeout(() => renameInputRef.current?.select(), 0);
+  };
+
+  const handleSubmitRename = async () => {
+    const trimmed = renameValue.trim();
+    if (!trimmed || trimmed === project.metadata.name) {
+      setIsRenaming(false);
+      return;
+    }
+    renameProjectLocally(trimmed);
+    setIsRenaming(false);
+    try {
+      await renameProject(project.metadata.id, { name: trimmed });
+    } catch {
+      renameProjectLocally(project.metadata.name);
+    }
+  };
+
+  const handleRenameKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") handleSubmitRename();
+    if (e.key === "Escape") setIsRenaming(false);
+  };
   const selectedChapter = selectedChapterId
     ? project.chapters.find((chapter: ChapterMeta) => chapter.id === selectedChapterId) ?? null
     : null;
@@ -341,7 +373,27 @@ export function SidebarNavigator() {
           <ChevronLeft size={12} />
           Dashboard
         </Link>
-        <h1 className="text-lg font-bold text-[var(--color-text)] leading-tight truncate">{project.metadata.name}</h1>
+        {isRenaming ? (
+          <input
+            ref={renameInputRef}
+            type="text"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onBlur={handleSubmitRename}
+            onKeyDown={handleRenameKeyDown}
+            className="w-full text-lg font-bold text-[var(--color-text)] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-2 py-1 outline-none focus:border-[var(--color-accent)]"
+            maxLength={200}
+          />
+        ) : (
+          <h1
+            className="text-lg font-bold text-[var(--color-text)] leading-tight truncate"
+            onClick={canEdit ? handleStartRename : undefined}
+            title={canEdit ? "Click to rename" : undefined}
+            style={canEdit ? { cursor: "pointer" } : undefined}
+          >
+            {project.metadata.name}
+          </h1>
+        )}
       </div>
 
       {/* Action Buttons */}

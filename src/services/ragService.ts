@@ -1,3 +1,5 @@
+import "server-only";
+
 import { embed } from "ai";
 import { Prisma } from "@prisma/client";
 import { embeddingModel } from "@/lib/ai";
@@ -8,7 +10,7 @@ const OVERLAP = 50;
 const EMBEDDING_DIMENSIONS = 768;
 const COSINE_DISTANCE_THRESHOLD = 0.45;
 
-import { stripHtmlToPlainText } from "@/lib/utils";
+import { stripHtml } from "@/lib/utils";
 
 export function toPgVectorLiteral(values: number[]) {
   return `[${values.join(",")}]`;
@@ -107,7 +109,7 @@ export async function generateEmbedding(
  * Chunks a chapter's content, generates embeddings for each chunk, and saves them to the database.
  */
 export async function processAndSaveChapterChunks(chapterId: string, content: string) {
-  const cleanContent = stripHtmlToPlainText(content);
+  const cleanContent = stripHtml(content);
   if (!cleanContent) {
     await prisma.$transaction(async tx => {
       await tx.sceneChunk.deleteMany({ where: { chapterId } });
@@ -116,9 +118,16 @@ export async function processAndSaveChapterChunks(chapterId: string, content: st
   }
 
   const chunks = chunkText(cleanContent);
-  const embeddings = await Promise.all(
-    chunks.map((chunkContent) => generateEmbedding(chunkContent, "RETRIEVAL_DOCUMENT")),
-  );
+  const embeddings: number[][] = [];
+  const BATCH_SIZE = 5;
+
+  for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+    const batch = chunks.slice(i, i + BATCH_SIZE);
+    const batchEmbeddings = await Promise.all(
+      batch.map((chunkContent) => generateEmbedding(chunkContent, "RETRIEVAL_DOCUMENT")),
+    );
+    embeddings.push(...batchEmbeddings);
+  }
 
   const embeddedChunks: Array<{ chunkContent: string; vectorLiteral: string; index: number }> = [];
   for (let i = 0; i < embeddings.length; i++) {

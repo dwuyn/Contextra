@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { getProject } from "@/actions/projects";
+import * as projectService from "@/services/projectService";
 import { ProjectWorkspace } from "@/components/ProjectWorkspace";
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
@@ -10,7 +10,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   }
 
   const { id } = await params;
-  const project = await getProject(id);
+  const project = await projectService.getProject(id, session.userId);
   if (!project) {
     redirect("/");
   }

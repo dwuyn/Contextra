@@ -16,6 +16,19 @@ export const ChangePasswordSchema = z.object({
   newPassword: z.string().min(8, "Password must be at least 8 characters"),
 });
 
+export const ChatRequestSchema = z.object({
+  messages: z.array(z.object({
+    role: z.enum(["user", "assistant"]),
+    content: z.string().min(1),
+  })).min(1).max(100),
+  projectId: z.string().uuid(),
+  branchId: z.string().uuid(),
+});
+
+export const RenameProjectSchema = z.object({
+  name: z.string().min(1).max(200),
+});
+
 export const CreateProjectSchema = z.object({
   name: z.string().min(1).max(200),
   mode: z.string(),

@@ -1,3 +1,5 @@
+import "server-only";
+
 import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { loadCanonPromptContext } from "@/services/canonService";
@@ -309,6 +311,32 @@ type CachedEntry = {
 const contextCache = new Map<string, CachedEntry>();
 const CACHE_TTL_MS = 30_000;
 const MAX_CACHE_ENTRIES = 100;
+const MAX_CACHE_SIZE_BYTES = 10 * 1024 * 1024;
+
+function estimatedEntrySize(entry: CachedEntry): number {
+  return JSON.stringify(entry.context).length;
+}
+
+function enforceCacheSize(): void {
+  let totalSize = 0;
+  for (const entry of contextCache.values()) {
+    totalSize += estimatedEntrySize(entry);
+  }
+
+  if (totalSize <= MAX_CACHE_SIZE_BYTES && contextCache.size <= MAX_CACHE_ENTRIES) return;
+
+  let oldestKey: string | undefined;
+  let oldestTime = Infinity;
+  for (const [key, entry] of contextCache.entries()) {
+    if (entry.cachedAt < oldestTime) {
+      oldestTime = entry.cachedAt;
+      oldestKey = key;
+    }
+  }
+  if (oldestKey !== undefined) contextCache.delete(oldestKey);
+
+  enforceCacheSize();
+}
 
 function buildCacheKey(projectId: string, branchId: string, userInstructions?: string): string {
   if (userInstructions) {
@@ -439,17 +467,7 @@ export async function composeContext(
     arcSummaries,
   };
 
-  if (contextCache.size >= MAX_CACHE_ENTRIES) {
-    let oldestKey: string | undefined;
-    let oldestTime = Infinity;
-    for (const [key, entry] of contextCache.entries()) {
-      if (entry.cachedAt < oldestTime) {
-        oldestTime = entry.cachedAt;
-        oldestKey = key;
-      }
-    }
-    if (oldestKey !== undefined) contextCache.delete(oldestKey);
-  }
+  enforceCacheSize();
 
   contextCache.set(cacheKey, { context: result, cachedAt: Date.now() });
   return result;

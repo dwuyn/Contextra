@@ -2,12 +2,16 @@ import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+
+const SESSION_REVERIFY_INTERVAL_MS = 5 * 60 * 1000;
 
 export interface SessionPayload {
   userId: string;
   email: string;
   name: string;
   expires?: string | Date;
+  lastVerifiedAt?: number;
   iat?: number;
   exp?: number;
   [key: string]: unknown;
@@ -84,7 +88,23 @@ export async function updateSession(
     return { kind: "invalid" };
   }
 
-  const { prisma } = await import("@/lib/prisma");
+  const now = Date.now();
+  const lastVerified = typeof parsed.lastVerifiedAt === "number" ? parsed.lastVerifiedAt : 0;
+
+  if (now - lastVerified < SESSION_REVERIFY_INTERVAL_MS) {
+    parsed.expires = new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const res = NextResponse.next();
+    res.cookies.set({
+      name: "session",
+      value: await encrypt(parsed),
+      httpOnly: true,
+      expires: new Date(parsed.expires),
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
+    return { kind: "refreshed", response: res };
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: parsed.userId },
     select: { id: true },
@@ -93,7 +113,8 @@ export async function updateSession(
     return { kind: "missing" };
   }
 
-  parsed.expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  parsed.lastVerifiedAt = now;
+  parsed.expires = new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString();
   const res = NextResponse.next();
   res.cookies.set({
     name: "session",

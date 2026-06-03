@@ -1,5 +1,7 @@
 import { chatModel } from "@/lib/ai";
 import * as z from "@/lib/validations";
+import "server-only";
+
 import { generateText } from "ai";
 import type { ModelMessage } from "ai";
 import type { PromptContext } from "./contextService";

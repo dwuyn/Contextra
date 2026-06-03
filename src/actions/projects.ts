@@ -186,6 +186,15 @@ export async function updateSettings(projectId: string, input: unknown) {
   return result;
 }
 
+export async function renameProject(projectId: string, input: unknown) {
+  const session = await getSession();
+  if (!session) throw new Error("Unauthorized");
+  const parsed = z.RenameProjectSchema.parse(input);
+  await projectService.renameProject(projectId, session.userId, parsed.name);
+  revalidatePath("/");
+  revalidatePath(`/project/${projectId}`);
+}
+
 export async function addCollaborator(projectId: string, input: unknown) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");

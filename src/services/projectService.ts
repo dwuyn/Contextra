@@ -1,9 +1,11 @@
+import "server-only";
+
 import { prisma } from "@/lib/prisma";
 import * as z from "@/lib/validations";
 import type { ProjectOutline } from "@/types/project";
 import { refreshChapterContinuityStatus } from "@/services/continuityService";
 import { requireFriendship } from "@/services/chatService";
-import { writeCharacterVector } from "@/services/contextService";
+import { writeCharacterVector, invalidateContextCache } from "@/services/contextService";
 import { Prisma } from "@prisma/client";
 import type {
   CreateChapterResult,
@@ -157,14 +159,14 @@ function hasMeaningfulChapterContent(content?: string) {
   return Boolean(content?.replace(/<[^>]+>/g, " ").trim());
 }
 
-import { stripHtmlToPlainText } from "@/lib/utils";
+import { stripHtml } from "@/lib/utils";
 
 function getPresenceCutoff() {
   return new Date(Date.now() - ACTIVE_PRESENCE_TTL_MS);
 }
 
 function isStoryContentEqual(left: string, right: string) {
-  return stripHtmlToPlainText(left) === stripHtmlToPlainText(right);
+  return stripHtml(left) === stripHtml(right);
 }
 
 function toIsoDate(value: Date | null) {
@@ -376,7 +378,7 @@ export async function requireProjectPermission(projectId: string, userId: string
     },
   });
 
-  if (!project) throw new Error("Unauthorized");
+  if (!project) throw new Error("Project not found");
 
   const viewerAccess = getViewerAccess(project, userId);
   const allowed =
@@ -956,6 +958,15 @@ export async function updateSettings(projectId: string, userId: string, input: U
   });
 
   return getProject(projectId, userId);
+}
+
+export async function renameProject(projectId: string, userId: string, name: string) {
+  await requireProjectPermission(projectId, userId, "manage");
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { name },
+  });
+  invalidateContextCache(projectId);
 }
 
 export async function createProjectInvite(projectId: string, userId: string, input: CreateProjectInviteInput) {

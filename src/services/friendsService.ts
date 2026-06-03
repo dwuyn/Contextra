@@ -1,3 +1,5 @@
+import "server-only";
+
 import { prisma } from "@/lib/prisma";
 
 export async function listFriends(userId: string) {
@@ -6,8 +8,8 @@ export async function listFriends(userId: string) {
       OR: [{ userId }, { friendId: userId }],
     },
     include: {
-      user: true,
-      friend: true,
+      user: { select: { id: true, name: true, email: true, profileImageUrl: true, createdAt: true } },
+      friend: { select: { id: true, name: true, email: true, profileImageUrl: true, createdAt: true } },
     },
   });
 
@@ -30,8 +32,8 @@ export async function listFriendRequests(userId: string, mode: "incoming" | "out
       ...(mode === "incoming" ? { receiverId: userId } : { senderId: userId }),
     },
     include: {
-      sender: true,
-      receiver: true,
+      sender: { select: { id: true, name: true, email: true } },
+      receiver: { select: { id: true, name: true, email: true } },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -87,8 +89,8 @@ export async function respondToFriendRequest(userId: string, requestId: string, 
       where: { id: requestId },
       data: { status: action },
       include: {
-        sender: true,
-        receiver: true,
+        sender: { select: { id: true, name: true, email: true } },
+        receiver: { select: { id: true, name: true, email: true } },
       }
     });
 

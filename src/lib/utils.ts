@@ -13,10 +13,6 @@ export function stripHtml(content: string) {
   return content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-export function stripHtmlToPlainText(content: string) {
-  return content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
-
 export function stripReasoning(text: string) {
   return text
     .replace(/<think>[\s\S]*?<\/think>/g, "")
@@ -25,9 +21,5 @@ export function stripReasoning(text: string) {
 }
 
 export function normalizeStringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-export function toStringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }

@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/auth";
-import { getHomeOverview } from "@/actions/projects";
-import { getUser } from "@/actions/auth";
+import * as authService from "@/services/authService";
+import * as projectService from "@/services/projectService";
 import { DashboardView } from "@/components/DashboardView";
 import { LandingView } from "@/components/LandingView";
 
@@ -11,8 +11,8 @@ export default async function HomePage() {
   }
 
   const [overview, user] = await Promise.all([
-    getHomeOverview(),
-    getUser()
+    projectService.getHomeOverview(session.userId),
+    authService.getUser(session.userId),
   ]);
 
   if (!user) {

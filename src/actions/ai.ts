@@ -1,6 +1,8 @@
 "use server";
 
+import { headers } from "next/headers";
 import { getSession } from "@/lib/auth";
+import { createRateLimiter } from "@/lib/rateLimit";
 import { composeContext } from "@/services/contextService";
 import {
   generateChapter,
@@ -25,6 +27,12 @@ import {
 import type { Prisma } from "@prisma/client";
 import type { ProjectOutline } from "@/types/project";
 import { normalizeStringList } from "@/lib/utils";
+
+const aiRateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxRequests: 300,
+  keyPrefix: "ai:action:",
+});
 
 const STORY_BIBLE_CONTEXT_BUDGETS = {
   characters: 10_000,
@@ -162,6 +170,12 @@ function attachLongOutlineIds(outline: Awaited<ReturnType<typeof generateLongOut
 export async function generateChapterAction(projectId: string, branchId: string, input: { title: string; instructions: string }) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
+
+  const headersList = await headers();
+  const req = new Request("http://localhost", { headers: headersList });
+  const rateCheck = await aiRateLimiter(req);
+  if (!rateCheck.allowed) throw new Error("Too many requests");
+
   await requireProjectPermission(projectId, session.userId, "edit");
   await requireBranchInProject(projectId, branchId);
 
@@ -210,6 +224,12 @@ export async function generateChapterAction(projectId: string, branchId: string,
 export async function generateSynopsisAction(projectId: string) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
+
+  const headersList = await headers();
+  const req = new Request("http://localhost", { headers: headersList });
+  const rateCheck = await aiRateLimiter(req);
+  if (!rateCheck.allowed) throw new Error("Too many requests");
+
   await requireProjectPermission(projectId, session.userId, "edit");
 
   const result = await generateSynopsisFromStoryBible(await buildStoryBibleContext(projectId));
@@ -234,6 +254,12 @@ export async function generateSynopsisAction(projectId: string) {
 export async function generateOutlineAction(projectId: string) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
+
+  const headersList = await headers();
+  const req = new Request("http://localhost", { headers: headersList });
+  const rateCheck = await aiRateLimiter(req);
+  if (!rateCheck.allowed) throw new Error("Too many requests");
+
   await requireProjectPermission(projectId, session.userId, "edit");
 
   const result = await generateOutlineFromStoryBible(await buildStoryBibleContext(projectId));
@@ -256,6 +282,12 @@ export async function generateOutlineAction(projectId: string) {
 export async function generateLongOutlineAction(projectId: string, input: unknown = {}) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
+
+  const headersList = await headers();
+  const req = new Request("http://localhost", { headers: headersList });
+  const rateCheck = await aiRateLimiter(req);
+  if (!rateCheck.allowed) throw new Error("Too many requests");
+
   const parsed = z.LongOutlineRequestSchema.parse(input);
   await requireProjectPermission(projectId, session.userId, "edit");
 
@@ -317,6 +349,12 @@ export async function generateLongOutlineAction(projectId: string, input: unknow
 export async function rewriteAction(projectId: string, branchId: string, input: { selection: string; instructions: string }) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
+
+  const headersList = await headers();
+  const req = new Request("http://localhost", { headers: headersList });
+  const rateCheck = await aiRateLimiter(req);
+  if (!rateCheck.allowed) throw new Error("Too many requests");
+
   await requireProjectPermission(projectId, session.userId, "view");
   await requireBranchInProject(projectId, branchId);
 
@@ -340,6 +378,12 @@ export async function rewriteAction(projectId: string, branchId: string, input: 
 export async function describeAction(projectId: string, branchId: string, input: { selection: string; sense: string }) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
+
+  const headersList = await headers();
+  const req = new Request("http://localhost", { headers: headersList });
+  const rateCheck = await aiRateLimiter(req);
+  if (!rateCheck.allowed) throw new Error("Too many requests");
+
   await requireProjectPermission(projectId, session.userId, "view");
   await requireBranchInProject(projectId, branchId);
 
