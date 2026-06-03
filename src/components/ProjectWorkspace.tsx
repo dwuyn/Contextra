@@ -12,7 +12,6 @@ import { LoadingState } from "@/components/LoadingState";
 import type { AiCardsPaneTab } from "@/components/AiCardsPane";
 import { useSSE } from "@/lib/hooks/useSSE";
 import { cn } from "@/lib/utils";
-import { useTranslations } from "next-intl";
 import { Menu, Bot, History, Users } from "lucide-react";
 import type { ProjectCommentThread, ProjectData, ProjectInvite, ProjectPresence } from "@/types/project";
 
@@ -71,13 +70,12 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isCollabOpen, setIsCollabOpen] = useState(false);
   const [presenceNow, setPresenceNow] = useState(() => Date.now());
-  const t = useTranslations();
 
   const { isZenMode, exitZen } = useZenStore();
   const [showChrome, setShowChrome] = useState(false);
   const chromeTimer = useRef<number | null>(null);
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
+  const handleMouseMove = useCallback(() => {
     if (!isZenMode) return;
     setShowChrome(true);
     if (chromeTimer.current) window.clearTimeout(chromeTimer.current);
@@ -85,14 +83,18 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
   }, [isZenMode]);
 
   useEffect(() => {
-    if (!isZenMode) {
-      setShowChrome(true);
-      return;
+    let resetTimer: number | null = null;
+
+    if (isZenMode) {
+      resetTimer = window.setTimeout(() => setShowChrome(false), 0);
+      window.addEventListener("mousemove", handleMouseMove);
     }
-    setShowChrome(false);
-    window.addEventListener("mousemove", handleMouseMove);
+
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
+      if (resetTimer) window.clearTimeout(resetTimer);
+      if (isZenMode) {
+        window.removeEventListener("mousemove", handleMouseMove);
+      }
       if (chromeTimer.current) window.clearTimeout(chromeTimer.current);
     };
   }, [isZenMode, handleMouseMove]);
@@ -204,6 +206,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
   const activePresence = hydratedProject.presence.filter((presence) => {
     return presenceNow - new Date(presence.lastActiveAt).getTime() < 60_000;
   });
+  const chromeVisible = !isZenMode || showChrome;
 
   const handleAiPaneToggle = () => {
     if (!isAiPaneOpen) {
@@ -245,8 +248,8 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
         {/* Desktop Top Bar */}
         <div className={cn(
           "hidden lg:flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface)]",
-          isZenMode && !showChrome && "opacity-0 pointer-events-none -translate-y-full",
-          isZenMode && showChrome && "opacity-100",
+          isZenMode && !chromeVisible && "opacity-0 pointer-events-none -translate-y-full",
+          isZenMode && chromeVisible && "opacity-100",
           "transition-all duration-500",
         )}>
           <div className="min-w-0">
@@ -283,8 +286,8 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
         {/* Mobile Top Bar */}
         <div className={cn(
           "flex lg:hidden items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]",
-          isZenMode && !showChrome && "opacity-0 pointer-events-none -translate-y-full",
-          isZenMode && showChrome && "opacity-100",
+          isZenMode && !chromeVisible && "opacity-0 pointer-events-none -translate-y-full",
+          isZenMode && chromeVisible && "opacity-100",
           "transition-all duration-500",
         )}>
           <button
@@ -398,7 +401,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
         />
       )}
 
-      {isZenMode && showChrome && (
+      {isZenMode && chromeVisible && (
         <button
           onClick={exitZen}
           className="fixed bottom-6 right-6 z-50 rounded-full bg-[var(--color-surface)] px-4 py-2
@@ -457,5 +460,4 @@ function PresenceStack({ count }: { count: number }) {
     </div>
   );
 }
-
 

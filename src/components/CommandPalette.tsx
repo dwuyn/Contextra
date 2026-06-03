@@ -8,7 +8,7 @@ import { usePreferencesStore } from "@/store/usePreferencesStore";
 import { useZenStore } from "@/store/useZenStore";
 import { toggleThemeDark } from "@/lib/appearance";
 import {
-  Search, FileText, Settings, Sun, Moon,
+  Search, FileText, Sun, Moon,
   Maximize2, Minimize2, Home,
 } from "lucide-react";
 
@@ -90,8 +90,6 @@ export function CommandPalette({ chapters }: CommandPaletteProps) {
     return () => window.removeEventListener("keydown", handler);
   }, [open, filtered, selectedIndex]);
 
-  useEffect(() => { setSelectedIndex(0); }, [query]);
-
   if (!open) return null;
 
   const groups = new Map<string, CommandItem[]>();
@@ -112,7 +110,10 @@ export function CommandPalette({ chapters }: CommandPaletteProps) {
           <input
             autoFocus
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSelectedIndex(0);
+            }}
             placeholder={t("placeholder")}
             className="flex-1 bg-transparent text-sm text-[var(--color-text)] outline-none
               placeholder:text-[var(--color-text-muted)]"
