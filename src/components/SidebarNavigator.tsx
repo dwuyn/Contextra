@@ -3,11 +3,11 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useProjectStore } from "@/store/useProjectStore";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, Plus, Download, BookOpen, Trash2, Globe, Lock, GripVertical, Loader2, X } from "lucide-react";
+import { ChevronLeft, Plus, Download, BookOpen, Trash2, Globe, Lock, GripVertical, Loader2, X, GitBranch } from "lucide-react";
 import { Link } from "@/lib/i18n-client";
 import { useTranslations } from "next-intl";
-import { createChapter, renameProject, updateSettings, reorderChapters, deleteChapter } from "@/actions/projects";
-import { useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { createBranch, createChapter, renameProject, updateSettings, reorderChapters, deleteChapter } from "@/actions/projects";
+import { useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 import type { ChapterMeta } from "@/types/project";
 import {
   DndContext,
@@ -141,6 +141,7 @@ export function SidebarNavigator() {
   const st = useTranslations("sidebar");
   const project = useProjectStore((state) => state.project);
   const activeBranchId = useProjectStore((state) => state.activeBranchId);
+  const setActiveBranchId = useProjectStore((state) => state.setActiveBranchId);
   const setSelectedChapterId = useProjectStore((state) => state.setSelectedChapterId);
   const selectedChapterId = useProjectStore((state) => state.selectedChapterId);
   const isStoryBibleOpen = useProjectStore((state) => state.isStoryBibleOpen);
@@ -155,8 +156,11 @@ export function SidebarNavigator() {
   const [isImporting, setIsImporting] = useState(false);
   const [isDeletingChapter, setIsDeletingChapter] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isCreateBranchDialogOpen, setIsCreateBranchDialogOpen] = useState(false);
+  const [isCreatingBranch, setIsCreatingBranch] = useState(false);
   const [createChapterError, setCreateChapterError] = useState<string | null>(null);
   const [createChapterWarning, setCreateChapterWarning] = useState<string | null>(null);
+  const [createBranchError, setCreateBranchError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importWarning, setImportWarning] = useState<string | null>(null);
   const [deleteChapterError, setDeleteChapterError] = useState<string | null>(null);
@@ -228,7 +232,63 @@ export function SidebarNavigator() {
   };
 
   const visibleChapters = project.chapters.filter((c: ChapterMeta) => c.branchId === activeBranchId);
-  const activeBranch = project.branches.find((branch) => branch.id === activeBranchId);
+  const activeBranches = project.branches.filter((branch) => branch.status === "active");
+  const activeBranch = activeBranches.find((branch) => branch.id === activeBranchId);
+
+  const handleBranchChange = (branchId: string) => {
+    const nextChapter = project.chapters.find((chapter: ChapterMeta) => chapter.branchId === branchId);
+    setActiveBranchId(branchId);
+    setSelectedChapterId(nextChapter?.id ?? null);
+    setIsStoryBibleOpen(false);
+    setCreateChapterError(null);
+    setCreateChapterWarning(null);
+    setCreateBranchError(null);
+    setImportError(null);
+    setImportWarning(null);
+    setDeleteChapterError(null);
+  };
+
+  const handleCreateBranch = async (input: { name: string; description: string }) => {
+    if (!canEdit || isCreatingBranch) return false;
+
+    setIsCreatingBranch(true);
+    setCreateBranchError(null);
+    setCreateChapterError(null);
+    setCreateChapterWarning(null);
+    setImportError(null);
+    setImportWarning(null);
+    setDeleteChapterError(null);
+
+    const beforeBranchIds = new Set(project.branches.map((branch) => branch.id));
+    const basedOnChapterId = selectedChapter?.branchId === activeBranchId ? selectedChapter.id : "root";
+
+    try {
+      const updatedProject = await createBranch(project.metadata.id, {
+        name: input.name,
+        description: input.description || undefined,
+        basedOnChapterId,
+      });
+      if (!updatedProject) {
+        throw new Error("Project not found after branch create.");
+      }
+      const createdBranch = updatedProject.branches.find((branch) => !beforeBranchIds.has(branch.id));
+      const nextBranchId = createdBranch?.id ?? activeBranchId;
+      const nextChapter = updatedProject.chapters.find((chapter: ChapterMeta) => chapter.branchId === nextBranchId);
+
+      setProject(updatedProject);
+      setActiveBranchId(nextBranchId);
+      setSelectedChapterId(nextChapter?.id ?? null);
+      setIsStoryBibleOpen(false);
+      setIsCreateBranchDialogOpen(false);
+      return true;
+    } catch (error) {
+      console.error("Failed to create branch:", error);
+      setCreateBranchError(st("createBranchError"));
+      return false;
+    } finally {
+      setIsCreatingBranch(false);
+    }
+  };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -396,6 +456,45 @@ export function SidebarNavigator() {
           >
             {project.metadata.name}
           </h1>
+        )}
+      </div>
+
+      {/* Branch Selector */}
+      <div className="border-b border-[var(--color-border)] p-4">
+        <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
+          <GitBranch size={12} />
+          {st("branchLabel")}
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={activeBranchId}
+            onChange={(event) => handleBranchChange(event.target.value)}
+            className="min-w-0 flex-1 cursor-pointer rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text)] outline-none transition-all hover:bg-[var(--color-surface-alt)] focus:border-[var(--color-accent)]"
+            aria-label={st("branchLabel")}
+          >
+            {activeBranches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setIsCreateBranchDialogOpen(true)}
+              disabled={isCreatingBranch}
+              className="flex h-10 w-10 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm transition-all hover:bg-[var(--color-surface-alt)] disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label={st("createBranch")}
+              title={st("createBranch")}
+            >
+              {isCreatingBranch ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            </button>
+          )}
+        </div>
+        {createBranchError && (
+          <div className="mt-3 rounded-xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-3 py-2 text-[11px] font-medium text-[var(--color-destructive)]">
+            {createBranchError}
+          </div>
         )}
       </div>
 
@@ -596,7 +695,134 @@ export function SidebarNavigator() {
         busy={isDeletingChapter}
         onConfirm={() => void handleDeleteSelectedChapter()}
       />
+      <CreateBranchDialog
+        open={isCreateBranchDialogOpen}
+        onOpenChange={setIsCreateBranchDialogOpen}
+        busy={isCreatingBranch}
+        onSubmit={handleCreateBranch}
+      />
     </aside>
+  );
+}
+
+function CreateBranchDialog({
+  open,
+  onOpenChange,
+  busy,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  busy: boolean;
+  onSubmit: (input: { name: string; description: string }) => Promise<boolean>;
+}) {
+  const st = useTranslations("sidebar");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+
+  const resetForm = () => {
+    setName("");
+    setDescription("");
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && !busy) resetForm();
+    onOpenChange(nextOpen);
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const trimmedName = name.trim();
+    if (!trimmedName || busy) return;
+
+    const didCreate = await onSubmit({
+      name: trimmedName,
+      description: description.trim(),
+    });
+    if (didCreate) resetForm();
+  };
+
+  return (
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--color-text)]/15 backdrop-blur-sm" />
+        <Dialog.Content className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleSubmit} className="w-full max-w-md rounded-[28px] bg-[var(--color-surface)] p-8 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--color-accent)]/10 text-[var(--color-accent)]">
+                  <GitBranch size={18} />
+                </div>
+                <div>
+                  <Dialog.Title className="text-xl font-bold text-[var(--color-text)]">{st("createBranchDialogTitle")}</Dialog.Title>
+                  <Dialog.Description className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+                    {st("createBranchDialogDescription")}
+                  </Dialog.Description>
+                </div>
+              </div>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="rounded-xl p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label={st("closeCreateBranchDialog")}
+                >
+                  <X size={16} />
+                </button>
+              </Dialog.Close>
+            </div>
+
+            <div className="mt-8 space-y-5">
+              <label className="block">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">{st("branchName")}</span>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  disabled={busy}
+                  maxLength={200}
+                  required
+                  className="mt-2 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-bold text-[var(--color-text)] outline-none transition-all placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+                  placeholder={st("branchNamePlaceholder")}
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">{st("branchDescription")}</span>
+                <textarea
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  disabled={busy}
+                  rows={4}
+                  className="mt-2 w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)] outline-none transition-all placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+                  placeholder={st("branchDescriptionPlaceholder")}
+                />
+              </label>
+            </div>
+
+            <div className="mt-8 flex items-center justify-end gap-3">
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-alt)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {st("cancel")}
+                </button>
+              </Dialog.Close>
+              <button
+                type="submit"
+                disabled={busy || !name.trim()}
+                className="inline-flex items-center gap-2 rounded-2xl bg-[var(--color-accent)] px-5 py-3 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {busy && <Loader2 size={16} className="animate-spin" />}
+                {busy ? st("creatingBranch") : st("createBranchAction")}
+              </button>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
