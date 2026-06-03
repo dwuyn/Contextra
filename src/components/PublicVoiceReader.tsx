@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronUp, Loader2, Pause, Play, Square, Volume2, X } from "lucide-react";
+import { useLocale } from "next-intl";
 import { cn } from "@/lib/utils";
 import {
   buildSpeechSegments,
   detectChapterLanguage,
-  getReaderLanguageLabel,
   type ReaderLanguage,
   type ReaderLanguageMode,
   type VoiceOption,
@@ -42,12 +42,12 @@ function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
 }
 
-function getPlaybackErrorMessage(error: unknown) {
+function getPlaybackErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message.trim()) {
     return error.message;
   }
 
-  return "Voice playback failed. Please try again.";
+  return fallback;
 }
 
 export function PublicVoiceReader({
@@ -57,6 +57,7 @@ export function PublicVoiceReader({
   chapterContent,
   isLoading,
 }: PublicVoiceReaderProps) {
+  const isVietnamese = useLocale() === "vi";
   const readerLanguageMode = usePreferencesStore((state) => state.readerLanguageMode);
   const readerRate = usePreferencesStore((state) => state.readerRate);
   const readerVoiceEn = usePreferencesStore((state) => state.readerVoiceEn);
@@ -85,35 +86,60 @@ export function PublicVoiceReader({
 
   const speechSegments = buildSpeechSegments(chapterTitle, chapterContent);
   const detectedLanguage = detectChapterLanguage(speechSegments.join(" "));
+  const languageLabel = (language: ReaderLanguage) =>
+    language === "vi-VN"
+      ? (isVietnamese ? "Tiếng Việt" : "Vietnamese")
+      : (isVietnamese ? "Tiếng Anh" : "English");
+  const playbackErrorFallback = isVietnamese
+    ? "Không thể phát giọng đọc. Vui lòng thử lại."
+    : "Voice playback failed. Please try again.";
   const activeLanguage: ReaderLanguage =
     readerLanguageMode === "auto" ? detectedLanguage : readerLanguageMode;
   const availableVoices = voicesByLanguage[activeLanguage] ?? [];
   const preferredVoiceId = activeLanguage === "vi-VN" ? readerVoiceVi : readerVoiceEn;
   const activeVoice = availableVoices.find((voice) => voice.id === preferredVoiceId) ?? availableVoices[0] ?? null;
   const helperStatusLabel =
-    playbackState === "paused" ? "Paused" : playbackState === "playing" ? "Reading" : "Ready";
+    playbackState === "paused"
+      ? (isVietnamese ? "Tạm dừng" : "Paused")
+      : playbackState === "playing"
+        ? (isVietnamese ? "Đang đọc" : "Reading")
+        : (isVietnamese ? "Sẵn sàng" : "Ready");
 
   const unavailableReason =
     isLoading
-      ? "Loading the current chapter before playback can start."
+      ? (isVietnamese
+          ? "Đang tải chương hiện tại trước khi có thể bắt đầu phát."
+          : "Loading the current chapter before playback can start.")
       : speechSegments.length === 0
-        ? "This chapter does not have readable body content yet."
+        ? (isVietnamese
+            ? "Chương này chưa có nội dung có thể đọc."
+            : "This chapter does not have readable body content yet.")
         : isLoadingVoices
-          ? "Loading curated Google Cloud voices..."
+          ? (isVietnamese
+              ? "Đang tải các giọng đọc Google Cloud đã tuyển chọn..."
+              : "Loading curated Google Cloud voices...")
           : voiceLoadError
             ? voiceLoadError
             : !activeVoice
-              ? `No curated ${getReaderLanguageLabel(activeLanguage)} Google voice is configured.`
+              ? (isVietnamese
+                  ? `Chưa cấu hình giọng đọc Google ${languageLabel(activeLanguage)} đã tuyển chọn.`
+                  : `No curated ${languageLabel(activeLanguage)} Google voice is configured.`)
               : null;
 
   const helperText =
     runtimeError ??
     unavailableReason ??
     (playbackState === "paused"
-      ? `Paused at section ${currentSegmentNumber} of ${speechSegments.length}.`
+      ? (isVietnamese
+          ? `Đã tạm dừng ở đoạn ${currentSegmentNumber} trên ${speechSegments.length}.`
+          : `Paused at section ${currentSegmentNumber} of ${speechSegments.length}.`)
       : playbackState === "playing"
-        ? `Reading section ${currentSegmentNumber} of ${speechSegments.length}.`
-        : `Ready to read ${speechSegments.length} section${speechSegments.length === 1 ? "" : "s"} from this chapter.`);
+        ? (isVietnamese
+            ? `Đang đọc đoạn ${currentSegmentNumber} trên ${speechSegments.length}.`
+            : `Reading section ${currentSegmentNumber} of ${speechSegments.length}.`)
+        : (isVietnamese
+            ? `Sẵn sàng đọc ${speechSegments.length} đoạn từ chương này.`
+            : `Ready to read ${speechSegments.length} section${speechSegments.length === 1 ? "" : "s"} from this chapter.`));
 
   const updatePlaybackState = useCallback((nextState: PlaybackState) => {
     playbackStateRef.current = nextState;
@@ -298,7 +324,7 @@ export function PublicVoiceReader({
           return;
         }
 
-        stopPlayback(getPlaybackErrorMessage(error));
+        stopPlayback(getPlaybackErrorMessage(error, playbackErrorFallback));
       }
     },
     [
@@ -307,6 +333,7 @@ export function PublicVoiceReader({
       prefetchSegment,
       requestSegmentAudio,
       revokeObjectUrl,
+      playbackErrorFallback,
       speechSegments.length,
       stopPlayback,
       updatePlaybackState,
@@ -387,7 +414,7 @@ export function PublicVoiceReader({
       } catch (error) {
         if (!isAbortError(error)) {
           setVoicesByLanguage(EMPTY_VOICE_OPTIONS);
-          setVoiceLoadError(getPlaybackErrorMessage(error));
+          setVoiceLoadError(getPlaybackErrorMessage(error, playbackErrorFallback));
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -398,7 +425,7 @@ export function PublicVoiceReader({
 
     void loadVoices();
     return () => controller.abort();
-  }, [projectId]);
+  }, [playbackErrorFallback, projectId]);
 
   useEffect(() => {
     return () => {
@@ -444,7 +471,7 @@ export function PublicVoiceReader({
         updatePlaybackState("playing");
         setRuntimeError(null);
       } catch (error) {
-        stopPlayback(getPlaybackErrorMessage(error));
+        stopPlayback(getPlaybackErrorMessage(error, playbackErrorFallback));
       }
       return;
     }
@@ -459,7 +486,7 @@ export function PublicVoiceReader({
       {isPanelOpen && (
         <button
           type="button"
-          aria-label="Close voice reader"
+          aria-label={isVietnamese ? "Đóng trình đọc giọng nói" : "Close voice reader"}
           onClick={() => setIsPanelOpen(false)}
           className="fixed inset-0 z-40 bg-[var(--color-text)]/20 sm:hidden"
         />
@@ -479,11 +506,13 @@ export function PublicVoiceReader({
                 <div className="flex items-center gap-2 text-[var(--color-text)]">
                   <Volume2 size={18} className="text-[var(--color-accent)]" />
                   <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
-                    Voice Reader
+                    {isVietnamese ? "Trình đọc giọng nói" : "Voice Reader"}
                   </h3>
                 </div>
                 <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
-                  Google Cloud speech for the selected chapter only.
+                  {isVietnamese
+                    ? "Giọng đọc Google Cloud chỉ áp dụng cho chương đang chọn."
+                    : "Google Cloud speech for the selected chapter only."}
                 </p>
               </div>
 
@@ -491,7 +520,7 @@ export function PublicVoiceReader({
                 type="button"
                 onClick={() => setIsPanelOpen(false)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-text)]"
-                aria-label="Close voice reader panel"
+                aria-label={isVietnamese ? "Đóng bảng trình đọc giọng nói" : "Close voice reader panel"}
               >
                 <X size={16} />
               </button>
@@ -512,13 +541,13 @@ export function PublicVoiceReader({
               </span>
               <span className="rounded-full bg-[var(--color-accent-muted)] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--color-accent)]">
                 {readerLanguageMode === "auto"
-                  ? `Auto ${getReaderLanguageLabel(detectedLanguage)}`
-                  : getReaderLanguageLabel(activeLanguage)}
+                  ? `${isVietnamese ? "Tự động" : "Auto"} ${languageLabel(detectedLanguage)}`
+                  : languageLabel(activeLanguage)}
               </span>
               {isLoadingVoices && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-canvas)] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
                   <Loader2 size={12} className="animate-spin" />
-                  Syncing
+                  {isVietnamese ? "Đang đồng bộ" : "Syncing"}
                 </span>
               )}
             </div>
@@ -526,22 +555,22 @@ export function PublicVoiceReader({
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="flex min-w-0 flex-col gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
-                  Language
+                  {isVietnamese ? "Ngôn ngữ" : "Language"}
                 </span>
                 <select
                   value={readerLanguageMode}
                   onChange={(event) => setReaderLanguageMode(event.target.value as ReaderLanguageMode)}
                   className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-text)]"
                 >
-                  <option value="auto">Auto detect</option>
-                  <option value="en-US">English</option>
-                  <option value="vi-VN">Vietnamese</option>
+                  <option value="auto">{isVietnamese ? "Tự động phát hiện" : "Auto detect"}</option>
+                  <option value="en-US">{isVietnamese ? "Tiếng Anh" : "English"}</option>
+                  <option value="vi-VN">{isVietnamese ? "Tiếng Việt" : "Vietnamese"}</option>
                 </select>
               </label>
 
               <label className="flex min-w-0 flex-col gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
-                  Voice
+                  {isVietnamese ? "Giọng đọc" : "Voice"}
                 </span>
                 <select
                   value={activeVoice?.id ?? ""}
@@ -550,7 +579,7 @@ export function PublicVoiceReader({
                   className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-text)] disabled:cursor-not-allowed disabled:bg-[var(--color-canvas)] disabled:text-[var(--color-text-muted)]"
                 >
                   {availableVoices.length === 0 ? (
-                    <option value="">No curated voice</option>
+                    <option value="">{isVietnamese ? "Chưa có giọng đọc tuyển chọn" : "No curated voice"}</option>
                   ) : (
                     availableVoices.map((voice) => (
                       <option key={voice.id} value={voice.id}>
@@ -563,7 +592,7 @@ export function PublicVoiceReader({
 
               <label className="flex min-w-0 flex-col gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
-                  Speed
+                  {isVietnamese ? "Tốc độ" : "Speed"}
                 </span>
                 <select
                   value={String(readerRate)}
@@ -586,7 +615,7 @@ export function PublicVoiceReader({
                   className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[var(--color-text)] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[var(--color-text)] disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-secondary)]"
                 >
                   <Play size={16} />
-                  Play
+                  {isVietnamese ? "Phát" : "Play"}
                 </button>
                 <button
                   type="button"
@@ -595,7 +624,9 @@ export function PublicVoiceReader({
                   className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:bg-[var(--color-canvas)] disabled:text-[var(--color-text-muted)]"
                 >
                   <Pause size={16} />
-                  {playbackState === "paused" ? "Resume" : "Pause"}
+                  {playbackState === "paused"
+                    ? (isVietnamese ? "Tiếp tục" : "Resume")
+                    : (isVietnamese ? "Tạm dừng" : "Pause")}
                 </button>
                 <button
                   type="button"
@@ -604,7 +635,7 @@ export function PublicVoiceReader({
                   className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:bg-[var(--color-canvas)] disabled:text-[var(--color-text-muted)]"
                 >
                   <Square size={14} />
-                  Stop
+                  {isVietnamese ? "Dừng" : "Stop"}
                 </button>
               </div>
             </div>
@@ -612,7 +643,7 @@ export function PublicVoiceReader({
             <div className="flex flex-col gap-2 rounded-2xl bg-[var(--color-canvas)] px-4 py-3">
               <p className="text-sm text-[var(--color-text-secondary)]">{helperText}</p>
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
-                Selected chapter only
+                {isVietnamese ? "Chỉ chương đã chọn" : "Selected chapter only"}
               </p>
             </div>
           </div>

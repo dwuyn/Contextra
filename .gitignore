@@ -12,9 +12,6 @@ node_modules/
 /.next/
 /out/
 
-# Production
-/build
-
 # Misc
 .DS_Store
 *.pem
@@ -56,6 +53,8 @@ next-env.d.ts
 *.swo
 
 # AI/Tool local state
+.agents/
+.codex/
 .omo/
 .superpowers/
 

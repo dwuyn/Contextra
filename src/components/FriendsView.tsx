@@ -7,6 +7,7 @@ import { getFriends } from "@/actions/friends";
 import { getDirectMessages, sendDirectMessage } from "@/actions/chat";
 import { useSSE } from "@/lib/hooks/useSSE";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 type FriendSummary = {
   id: string;
@@ -49,6 +50,7 @@ function toDirectMessage(data: Record<string, unknown>): DirectMessageSummary | 
 }
 
 export function FriendsView() {
+  const t = useTranslations("friendsView");
   const [friends, setFriends] = useState<FriendSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFriend, setSelectedFriend] = useState<FriendSummary | null>(null);
@@ -94,15 +96,15 @@ export function FriendsView() {
     <div className="flex flex-col h-full animate-in fade-in duration-300">
       <header className="flex items-center justify-between mb-8">
         <div>
-          <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2">Workspace</p>
-          <h2 className="text-4xl font-extrabold text-[var(--color-text)] tracking-tight">Friends</h2>
+          <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2">{t("workspaceLabel")}</p>
+          <h2 className="text-4xl font-extrabold text-[var(--color-text)] tracking-tight">{t("title")}</h2>
         </div>
         {selectedFriend ? (
           <button 
             onClick={() => setSelectedFriend(null)}
             className="flex h-10 items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm font-bold text-[var(--color-text)] hover:bg-[var(--color-canvas)] transition-colors shadow-sm"
           >
-            Close
+            {t("close")}
           </button>
         ) : null}
       </header>
@@ -112,13 +114,13 @@ export function FriendsView() {
         <div className="w-64 flex flex-col space-y-6 min-h-0">
           <div className="relative shrink-0">
             <label htmlFor="friends-search" className="sr-only">
-              Search friends
+              {t("searchLabel")}
             </label>
             <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" size={14} />
             <input 
               id="friends-search"
               type="text" 
-              placeholder="Search friends" 
+              placeholder={t("searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-xl bg-[var(--color-canvas)] border-none px-9 py-2.5 text-sm outline-none placeholder:text-[var(--color-text-muted)]"
@@ -126,9 +128,9 @@ export function FriendsView() {
           </div>
 
           <div className="flex-1 overflow-y-auto min-h-0 pr-2">
-            <div className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)] sticky top-0 bg-[var(--color-canvas)]">Private messages</div>
+            <div className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)] sticky top-0 bg-[var(--color-canvas)]">{t("privateMessages")}</div>
             {filteredFriends.length === 0 ? (
-              <p className="px-2 py-4 text-xs text-[var(--color-text-muted)] italic">No friends yet. Use People to send friend requests.</p>
+              <p className="px-2 py-4 text-xs text-[var(--color-text-muted)] italic">{t("noFriends")}</p>
             ) : (
               <nav className="space-y-1 pb-4">
                 {filteredFriends.map((friend) => (
@@ -166,8 +168,8 @@ export function FriendsView() {
               <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-[var(--color-canvas)] text-[var(--color-text-muted)]">
                 <MessageSquare size={40} />
               </div>
-              <h3 className="text-2xl font-bold text-[var(--color-text)] mb-3">Choose a friend</h3>
-              <p className="text-[var(--color-text-muted)] leading-relaxed">Select one of your connected friends from the sidebar to open a private chat.</p>
+              <h3 className="text-2xl font-bold text-[var(--color-text)] mb-3">{t("chooseFriend")}</h3>
+              <p className="text-[var(--color-text-muted)] leading-relaxed">{t("chooseFriendDescription")}</p>
             </div>
           ) : (
             <EmbeddedChat friend={selectedFriend} latestMessage={latestMessage} />
@@ -179,6 +181,7 @@ export function FriendsView() {
 }
 
 function EmbeddedChat({ friend, latestMessage }: { friend: FriendSummary, latestMessage: DirectMessageSummary | null }) {
+  const t = useTranslations("friendsView");
   const [messages, setMessages] = useState<DirectMessageSummary[]>([]);
   const [inputValue, setInputValue] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -258,8 +261,8 @@ function EmbeddedChat({ friend, latestMessage }: { friend: FriendSummary, latest
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-[var(--color-canvas)]">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center opacity-40">
-            <p className="text-sm font-medium text-[var(--color-text-secondary)]">No messages yet.</p>
-            <p className="text-xs text-[var(--color-text-secondary)] mt-1">Say hello to {friend.name}!</p>
+            <p className="text-sm font-medium text-[var(--color-text-secondary)]">{t("noMessages")}</p>
+            <p className="text-xs text-[var(--color-text-secondary)] mt-1">{t("sayHello", { name: friend.name })}</p>
           </div>
         ) : (
           messages.map((msg, idx) => (
@@ -290,19 +293,19 @@ function EmbeddedChat({ friend, latestMessage }: { friend: FriendSummary, latest
       <div className="p-4 bg-[var(--color-surface)] border-t border-[var(--color-border)] shrink-0">
         <form onSubmit={handleSendMessage} className="relative flex items-center gap-3">
           <label htmlFor="friend-message-input" className="sr-only">
-            Message {friend.name}
+            {t("messageLabel", { name: friend.name })}
           </label>
           <input 
             id="friend-message-input"
             type="text" 
-            placeholder="Type a message..."
+            placeholder={t("messagePlaceholder")}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             className="flex-1 bg-[var(--color-canvas)] border border-[var(--color-border)] rounded-2xl px-5 py-3.5 text-sm outline-none focus:border-[var(--color-accent)] focus:bg-[var(--color-surface)] transition-colors"
           />
           <button 
             type="submit"
-            aria-label={`Send message to ${friend.name}`}
+            aria-label={t("sendMessageTo", { name: friend.name })}
             disabled={!inputValue.trim()}
             className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent)] disabled:opacity-50 disabled:hover:bg-[var(--color-accent)] transition-all shadow-sm shrink-0"
           >

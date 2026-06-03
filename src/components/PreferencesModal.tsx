@@ -25,11 +25,6 @@ interface PreferencesModalProps {
   };
 }
 
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  return "Something went wrong. Please try again.";
-}
-
 export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
   const [activeTab, setActiveTab] = useState<"appearance" | "account">("appearance");
   const { theme, font, setTheme, setFont } = usePreferencesStore();
@@ -41,6 +36,11 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
   const ct = useTranslations("common");
   const pt = useTranslations("preferences");
   const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  function getErrorMessage(error: unknown) {
+    if (error instanceof Error) return error.message;
+    return pt("somethingWentWrong");
+  }
 
   // Account Form State
   const [name, setName] = useState(user.name);
@@ -128,13 +128,13 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
       });
 
       if (!response.ok) {
-        throw new Error((await response.text()) || "Failed to upload avatar.");
+        throw new Error(pt("avatarUploadFailed"));
       }
 
       const result = (await response.json()) as { profileImageUrl?: string };
 
       if (!result.profileImageUrl) {
-        throw new Error("Failed to upload avatar.");
+        throw new Error(pt("avatarUploadFailed"));
       }
 
       setProfileImageUrl(result.profileImageUrl);
@@ -155,7 +155,7 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--color-text)]/30 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed inset-4 z-50 mx-auto max-w-3xl overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-2xl flex flex-col md:inset-10 focus:outline-none">
+        <Dialog.Content className="fixed inset-4 z-50 mx-auto max-w-5xl overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-2xl flex flex-col md:inset-10 focus:outline-none">
           <Dialog.Title className="sr-only">{pt("modalTitle")}</Dialog.Title>
           <div className="flex flex-col md:flex-row h-full">
             {/* Tabs */}
@@ -234,11 +234,11 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
                               ? "border-[var(--color-accent)] ring-2 ring-[var(--color-accent-muted)]"
                               : "border-[var(--color-border)] hover:border-[var(--color-text-muted)]"
                           )}
-                          aria-label={`${opt.family} theme`}
+                          aria-label={`${opt.name} ${pt("theme")}`}
                           aria-pressed={theme === opt.id || theme === (opt.id + "-dark")}
                         >
                           <div className="flex flex-col gap-1.5">
-                            <span className="text-xs font-medium">{opt.family}</span>
+                            <span className="text-xs font-medium">{opt.name}</span>
                             <div className="flex gap-1">
                               {opt.swatches.map((color) => (
                                 <div

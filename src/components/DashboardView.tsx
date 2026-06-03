@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import { usePathname, useSearchParams } from "next/navigation";
 import { CreateProjectModal } from "./CreateProjectModal";
+import { ProjectDeleteDialog } from "./ProjectDeleteDialog";
 import { LoadingState } from "@/components/LoadingState";
 import { Link, useRouter } from "@/lib/i18n-client";
 import {
@@ -18,18 +19,20 @@ import {
   Clock,
   MoreHorizontal,
   X,
+  Trash2,
 } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { cn } from "@/lib/utils";
 import { getSocialOverview } from "@/actions/auth";
-import { respondToProjectInvite } from "@/actions/projects";
+import { respondToProjectInvite, deleteProject } from "@/actions/projects";
 import { useSSE } from "@/lib/hooks/useSSE";
-import type { HomeOverviewData, PendingProjectInviteCard } from "@/types/project";
+import type { HomeOverviewData, PendingProjectInviteCard, ProjectListItem } from "@/types/project";
 
 const PreferencesModal = dynamic(
   () => import("./PreferencesModal").then((mod) => mod.PreferencesModal),
   {
     ssr: false,
-    loading: () => <LoadingState variant="fullscreen" message="Loading settings..." />,
+    loading: () => <LoadingState variant="fullscreen" />,
   }
 );
 
@@ -37,7 +40,7 @@ const AllProjectsModal = dynamic(
   () => import("./AllProjectsModal").then((mod) => mod.AllProjectsModal),
   {
     ssr: false,
-    loading: () => <LoadingState variant="fullscreen" message="Loading projects..." />,
+    loading: () => <LoadingState variant="fullscreen" />,
   }
 );
 
@@ -45,7 +48,7 @@ const PeopleView = dynamic(
   () => import("./PeopleView").then((mod) => mod.PeopleView),
   {
     ssr: false,
-    loading: () => <LoadingState variant="inline" message="Loading people..." />,
+    loading: () => <LoadingState variant="inline" />,
   }
 );
 
@@ -53,7 +56,7 @@ const FriendsView = dynamic(
   () => import("./FriendsView").then((mod) => mod.FriendsView),
   {
     ssr: false,
-    loading: () => <LoadingState variant="inline" message="Loading friends..." />,
+    loading: () => <LoadingState variant="inline" />,
   }
 );
 
@@ -94,6 +97,9 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
   const [hasRequestedSocialData, setHasRequestedSocialData] = useState(false);
   const [pendingProjectInvites, setPendingProjectInvites] = useState<PendingProjectInviteCard[]>(overview.pendingProjectInvites);
   const [inviteActionId, setInviteActionId] = useState<string | null>(null);
+  const [recentProjects, setRecentProjects] = useState<ProjectListItem[]>(overview.recentProjects);
+  const [deleteProjectState, setDeleteProjectState] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const t = useTranslations();
   const dt = useTranslations("dashboard");
   const membershipKind = searchParams.get("membership");
@@ -194,6 +200,20 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? dt("greeting_morning") : hour < 17 ? dt("greeting_afternoon") : hour < 21 ? dt("greeting_evening") : dt("greeting_night");
   const visibleMembershipBanner = isMembershipBannerDismissed ? null : membershipBanner;
+
+  async function handleDeleteProject() {
+    if (!deleteProjectState) return;
+    setIsDeleting(true);
+    try {
+      await deleteProject(deleteProjectState.id);
+      setRecentProjects((current) => current.filter((p) => p.id !== deleteProjectState.id));
+      setDeleteProjectState(null);
+    } catch (error) {
+      console.error("Failed to delete project", error);
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   async function handleProjectInvite(inviteId: string, status: "accepted" | "declined") {
     setInviteActionId(inviteId);
@@ -308,20 +328,54 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
                   </div>
                   <div className="text-center px-8">
                     <h4 className="text-lg font-bold text-[var(--color-text)] mb-2">{t("project.new")}</h4>
-                    <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">{overview.recentProjects.length > 0 ? t("project.startNew") : t("project.createFirst")}</p>
+                    <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">{recentProjects.length > 0 ? t("project.startNew") : t("project.createFirst")}</p>
                   </div>
                 </button>
 
-                {overview.recentProjects.map((project) => (
-                  <Link key={project.id} href={`/project/${project.id}`}>
-                    <div className="group relative flex aspect-[4/3] flex-col rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-sm transition-all hover:shadow-md hover:-translate-y-1">
+                {recentProjects.map((project) => {
+                  const isOwner = project.role === "owner";
+                  return (
+                    <div
+                      key={project.id}
+                      onClick={() => router.push(`/project/${project.id}`)}
+                      onKeyDown={(e) => { if (e.key === "Enter") router.push(`/project/${project.id}`); }}
+                      role="link"
+                      tabIndex={0}
+                      className="group relative flex aspect-[4/3] flex-col rounded-[32px] border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-sm transition-all hover:shadow-md hover:-translate-y-1 cursor-pointer"
+                    >
                       <div className="mb-auto flex items-start justify-between">
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent-muted)] text-[var(--color-accent)] font-bold text-lg">
                           {project.name[0].toUpperCase()}
                         </div>
-                        <button title="Coming soon" disabled className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] p-1 rounded-md hover:bg-[var(--color-surface)]/50 transition-colors disabled:opacity-50">
-                          <MoreHorizontal size={20} />
-                        </button>
+                        {isOwner && (
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu.Root>
+                              <DropdownMenu.Trigger asChild>
+                                <button
+                                  aria-label={dt("deleteProject")}
+                                  className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] p-1 rounded-md hover:bg-[var(--color-surface)]/50 transition-colors"
+                                >
+                                  <MoreHorizontal size={20} />
+                                </button>
+                              </DropdownMenu.Trigger>
+                              <DropdownMenu.Portal>
+                                <DropdownMenu.Content
+                                  align="end"
+                                  sideOffset={4}
+                                  className="min-w-[160px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 shadow-xl"
+                                >
+                                  <DropdownMenu.Item
+                                    onClick={() => setDeleteProjectState({ id: project.id, name: project.name })}
+                                    className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-[var(--color-destructive)] outline-none cursor-pointer hover:bg-[var(--color-destructive)]/10"
+                                  >
+                                    <Trash2 size={14} />
+                                    {dt("deleteProject")}
+                                  </DropdownMenu.Item>
+                                </DropdownMenu.Content>
+                              </DropdownMenu.Portal>
+                            </DropdownMenu.Root>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <h4 className="text-xl font-bold text-[var(--color-text)] mb-2 truncate">{project.name}</h4>
@@ -332,8 +386,8 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
                         </div>
                       </div>
                     </div>
-                  </Link>
-                ))}
+                  );
+                })}
               </div>
             </section>
 
@@ -364,7 +418,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
                               loading="lazy"
                             />
                           ) : (
-                            <div className="h-full w-full flex items-center justify-center text-[var(--color-border)] font-bold">IMAGE</div>
+                            <div className="h-full w-full flex items-center justify-center text-[var(--color-border)] font-bold">{dt("imagePlaceholder")}</div>
                           )}
                         </div>
                         <h5 className="font-bold text-[var(--color-text)] truncate">{project.name}</h5>
@@ -390,7 +444,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
           </div>
           <div>
             <h1 className="text-sm font-bold text-[var(--color-text)] leading-none">Contextra</h1>
-            <p className="text-[10px] text-[var(--color-text-muted)] mt-1">AI writing space</p>
+            <p className="text-[10px] text-[var(--color-text-muted)] mt-1">{dt("brandTagline")}</p>
           </div>
         </div>
 
@@ -454,6 +508,13 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
           }} 
         />
       )}
+      <ProjectDeleteDialog
+        open={deleteProjectState !== null}
+        onOpenChange={(open) => { if (!open) setDeleteProjectState(null); }}
+        projectName={deleteProjectState?.name ?? ""}
+        busy={isDeleting}
+        onConfirm={handleDeleteProject}
+      />
     </div>
   );
 }
@@ -484,4 +545,3 @@ function NavItem({ icon, label, active, badge, disabled, onClick }: { icon: Reac
     </button>
   );
 }
-

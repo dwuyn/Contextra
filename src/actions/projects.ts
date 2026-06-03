@@ -422,6 +422,26 @@ export async function reorderChapters(projectId: string, orderedIds: string[]) {
   return result;
 }
 
+export async function deleteProject(projectId: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Unauthorized");
+
+  const result = await projectService.deleteProject(projectId, session.userId);
+
+  for (const userId of result.collaboratorUserIds) {
+    sendEvent(userId, "project_access_revoked", {
+      projectId,
+      projectName: result.projectName,
+      kind: "removed",
+    });
+  }
+
+  revalidatePath("/");
+  revalidatePath(`/project/${projectId}`);
+
+  return { projectId };
+}
+
 export async function deleteChapter(projectId: string, chapterId: string) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");

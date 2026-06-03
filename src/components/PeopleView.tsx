@@ -7,6 +7,7 @@ import { searchPeople, discoverPeople } from "@/actions/people";
 import { sendFriendRequest, getFriendRequests, respondToFriendRequest } from "@/actions/friends";
 import { useSSE } from "@/lib/hooks/useSSE";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 type PersonSummary = {
   id: string;
@@ -35,6 +36,7 @@ function asString(value: unknown) {
 }
 
 export function PeopleView({ onClose }: { onClose: () => void }) {
+  const t = useTranslations("peopleView");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<PersonSummary[]>([]);
   const [discoveredPeople, setDiscoveredPeople] = useState<PersonSummary[]>([]);
@@ -145,14 +147,14 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
     <div className="flex flex-col h-full animate-in fade-in duration-300" aria-busy={loading}>
       <header className="flex items-center justify-between mb-8">
         <div>
-          <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2">Workspace</p>
-          <h2 className="text-4xl font-extrabold text-[var(--color-text)] tracking-tight">People</h2>
+          <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2">{t("workspaceLabel")}</p>
+          <h2 className="text-4xl font-extrabold text-[var(--color-text)] tracking-tight">{t("title")}</h2>
         </div>
         <button 
           onClick={onClose}
           className="flex h-10 items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm font-bold text-[var(--color-text)] hover:bg-[var(--color-canvas)] transition-colors shadow-sm"
         >
-          Close
+          {t("close")}
         </button>
       </header>
 
@@ -161,13 +163,13 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
         <div className="w-64 space-y-6">
           <form onSubmit={handleSearch} className="relative">
             <label htmlFor="people-search" className="sr-only">
-              Find people by email
+              {t("searchLabel")}
             </label>
             <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" size={14} />
             <input 
               id="people-search"
               type="text" 
-              placeholder="Find by email" 
+              placeholder={t("searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-xl bg-[var(--color-canvas)] border-none px-9 py-2.5 text-sm outline-none placeholder:text-[var(--color-text-muted)]"
@@ -176,19 +178,19 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
 
           <nav className="space-y-1">
             <SidebarItem 
-              label="Directory" 
+              label={t("directory")} 
               count={discoveredPeople.length} 
               active={activeTab === "directory"} 
               onClick={() => setActiveTab("directory")} 
             />
             <SidebarItem 
-              label="Incoming requests" 
+              label={t("incoming")} 
               count={incomingRequests.length} 
               active={activeTab === "incoming"} 
               onClick={() => setActiveTab("incoming")} 
             />
             <SidebarItem 
-              label="Outgoing requests" 
+              label={t("outgoing")} 
               count={outgoingRequests.length} 
               active={activeTab === "outgoing"} 
               onClick={() => setActiveTab("outgoing")} 
@@ -203,8 +205,8 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
               {searchResults.length > 0 && (
                 <section>
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-[var(--color-text)]">Search results</h3>
-                    <button onClick={() => setSearchResults([])} className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">Clear</button>
+                    <h3 className="text-xl font-bold text-[var(--color-text)]">{t("searchResults")}</h3>
+                    <button onClick={() => setSearchResults([])} className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">{t("clear")}</button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {searchResults.map((person) => (
@@ -220,16 +222,16 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
 
               <section>
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold text-[var(--color-text)]">Discover people</h3>
+                  <h3 className="text-xl font-bold text-[var(--color-text)]">{t("discoverPeople")}</h3>
                   <span className="text-[10px] font-bold uppercase tracking-wider bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)] px-2 py-1 rounded-md">
-                    {discoveredPeople.length} users
+                    {t("usersCount", { count: discoveredPeople.length })}
                   </span>
                 </div>
                 
                 {discoveredPeople.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 rounded-[32px] border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)]">
                     <UsersIcon size={40} className="text-[var(--color-border)] mb-4" />
-                    <p className="text-sm text-[var(--color-text-muted)]">No new people to discover right now.</p>
+                    <p className="text-sm text-[var(--color-text-muted)]">{t("noDiscovered")}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -248,10 +250,10 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
 
           {activeTab === "incoming" && (
             <section>
-              <h3 className="text-xl font-bold text-[var(--color-text)] mb-6">Incoming requests</h3>
+              <h3 className="text-xl font-bold text-[var(--color-text)] mb-6">{t("incoming")}</h3>
               {incomingRequests.length === 0 ? (
                 <div className="p-8 rounded-[32px] border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)] text-center text-sm text-[var(--color-text-muted)]">
-                  No incoming requests right now.
+                  {t("noIncoming")}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -262,7 +264,7 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
                           {(req.senderName || "?")[0].toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-bold text-[var(--color-text)]">{req.senderName || "Unknown"}</p>
+                          <p className="font-bold text-[var(--color-text)]">{req.senderName || t("unknown")}</p>
                           <p className="text-sm text-[var(--color-text-muted)]">{req.senderEmail}</p>
                         </div>
                       </div>
@@ -271,10 +273,11 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
                           onClick={() => handleAccept(req.id)}
                           className="bg-[var(--color-accent)] text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-[var(--color-accent)] transition-colors shadow-sm"
                         >
-                          Accept
+                          {t("accept")}
                         </button>
                         <button 
                           onClick={() => handleReject(req.id)}
+                          aria-label={t("reject")}
                           className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] p-2"
                         >
                           <X size={20} />
@@ -289,10 +292,10 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
 
           {activeTab === "outgoing" && (
             <section>
-              <h3 className="text-xl font-bold text-[var(--color-text)] mb-6">Outgoing requests</h3>
+              <h3 className="text-xl font-bold text-[var(--color-text)] mb-6">{t("outgoing")}</h3>
               {outgoingRequests.length === 0 ? (
                 <div className="p-8 rounded-[32px] border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)] text-center text-sm text-[var(--color-text-muted)]">
-                  No outgoing requests right now.
+                  {t("noOutgoing")}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -306,12 +309,14 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
                           <p className="font-bold text-[var(--color-text)]">{req.receiverName || req.receiverEmail}</p>
                           <p className="text-sm text-[var(--color-text-muted)]">{req.receiverEmail}</p>
                           <p className="text-[10px] text-[var(--color-text-muted)] italic mt-1">
-                            Sent on {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : "recently"}
+                            {t("sentOn", {
+                              date: req.createdAt ? new Date(req.createdAt).toLocaleDateString() : t("recently"),
+                            })}
                           </p>
                         </div>
                       </div>
                       <span className="text-xs font-bold text-[var(--color-text-muted)] bg-[var(--color-canvas)] px-3 py-1.5 rounded-lg">
-                        PENDING
+                        {t("pending")}
                       </span>
                     </div>
                   ))}
@@ -340,6 +345,8 @@ function SidebarItem({ label, count, active, onClick }: { label: string, count: 
 }
 
 function PersonCard({ person, onSendRequest }: { person: PersonSummary, onSendRequest: () => void }) {
+  const t = useTranslations("peopleView");
+
   return (
     <div className="group flex flex-col p-6 rounded-[28px] bg-[var(--color-surface)] border border-[var(--color-border)] shadow-sm transition-all hover:shadow-md">
       <div className="flex items-center gap-4 mb-6">
@@ -364,18 +371,18 @@ function PersonCard({ person, onSendRequest }: { person: PersonSummary, onSendRe
       
       {person.isFriend ? (
         <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-success)] bg-[var(--color-success)]/10 px-4 py-2.5 rounded-xl justify-center">
-          Already friends
+          {t("alreadyFriends")}
         </div>
       ) : person.hasPendingRequest ? (
         <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-text-muted)] bg-[var(--color-canvas)] px-4 py-2.5 rounded-xl justify-center">
-          Request pending
+          {t("requestPending")}
         </div>
       ) : (
         <button 
           onClick={onSendRequest}
           className="flex items-center justify-center gap-2 bg-[var(--color-accent)] text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[var(--color-accent)] transition-colors shadow-sm"
         >
-          Send request
+          {t("sendRequest")}
         </button>
       )}
     </div>

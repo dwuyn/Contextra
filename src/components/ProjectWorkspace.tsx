@@ -258,7 +258,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
 
       {/* Sidebar — fixed drawer on mobile, static on desktop */}
       {!isZenMode && (
-      <nav aria-label="Project navigation" className={[
+      <nav aria-label={t("projectNavigation")} className={[
         "fixed lg:static inset-y-0 left-0 z-40 lg:z-auto transition-transform duration-300",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
       ].join(" ")}>

@@ -1482,6 +1482,36 @@ export async function listProjectAudience(projectId: string, excludeUserIds: str
   return listProjectAudienceUserIds(projectId, excludeUserIds);
 }
 
+export async function deleteProject(projectId: string, userId: string) {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      ownerId: true,
+      name: true,
+      collaborators: {
+        select: { userId: true },
+      },
+    },
+  });
+
+  if (!project) throw new Error("Project not found");
+  if (project.ownerId !== userId) throw new Error("Only the project owner can delete the project");
+
+  const collaboratorUserIds = project.collaborators.map((c) => c.userId);
+
+  await prisma.project.delete({
+    where: { id: projectId },
+  });
+
+  invalidateContextCache(projectId);
+
+  return {
+    projectId,
+    projectName: project.name,
+    collaboratorUserIds,
+  };
+}
+
 export async function sendProjectChat(projectId: string, userId: string, input: SendProjectChatInput) {
   await requireProjectPermission(projectId, userId, "edit");
 

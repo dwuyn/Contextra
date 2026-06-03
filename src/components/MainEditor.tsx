@@ -14,14 +14,6 @@ import {
   Wand2,
   Sparkles,
   MessageSquare,
-  Bold,
-  Italic,
-  Underline as UnderlineIcon,
-  List,
-  ListOrdered,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
   Zap,
   Globe,
   Search,
@@ -38,6 +30,7 @@ import { createCommentThread, getChapterContent, updateChapter } from "@/actions
 import { AiGenerated } from "@/lib/tiptap/AiGenerated";
 import { CommentAnchor } from "@/lib/tiptap/CommentAnchor";
 import { cn } from "@/lib/utils";
+import { EditorFormattingToolbar } from "@/components/EditorFormattingToolbar";
 import { PublicVoiceReader } from "@/components/PublicVoiceReader";
 import { resolvePromptLanguage, type PromptLanguage } from "@/services/promptLanguageService";
 import { useProjectStore } from "@/store/useProjectStore";
@@ -1048,22 +1041,6 @@ export function MainEditor({
     if (event.key === "s") {
       event.preventDefault();
       handleManualSave();
-      return;
-    }
-
-    if (!event.shiftKey) return;
-
-    if (event.key === "W" || event.key === "w") {
-      event.preventDefault();
-      void handleWrite();
-    }
-    if (event.key === "R" || event.key === "r") {
-      event.preventDefault();
-      void handleRewrite();
-    }
-    if (event.key === "D" || event.key === "d") {
-      event.preventDefault();
-      void handleDescribe();
     }
   });
 
@@ -1140,101 +1117,47 @@ export function MainEditor({
     <div className="flex flex-col h-full bg-[var(--color-canvas)]">
       <div className="flex items-center gap-2 px-6 py-2 border-b border-[var(--color-border)]/50 bg-[var(--color-canvas)]">
         <div className="flex items-center gap-1 bg-[var(--color-canvas)] rounded-xl p-1">
-          <Tooltip.Provider delayDuration={300}>
-            <Tooltip.Root>
-              <Tooltip.Trigger asChild>
-                <button
-                  type="button"
-                  onClick={() => void handleWrite()}
-                  disabled={isGenerating || !canEdit}
-                  className="flex cursor-pointer items-center gap-2 px-4 py-1.5 bg-[var(--color-surface)] text-[var(--color-text)] rounded-lg text-sm font-bold shadow-sm border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Wand2 size={16} className="text-[var(--color-accent)]" />
-                  {t("editor.ai.write")}
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="rounded-lg bg-[var(--color-text)] px-3 py-2 text-xs text-[var(--color-canvas)] shadow-lg"
-                  sideOffset={5}
-                >
-                  {t("editor.ai.writeShortcut")}
-                  <Tooltip.Arrow className="fill-[var(--color-text)]" />
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
+          <button
+            type="button"
+            onClick={() => void handleWrite()}
+            disabled={isGenerating || !canEdit}
+            className="flex cursor-pointer items-center gap-2 px-4 py-1.5 bg-[var(--color-surface)] text-[var(--color-text)] rounded-lg text-sm font-bold shadow-sm border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Wand2 size={16} className="text-[var(--color-accent)]" />
+            {t("editor.ai.write")}
+          </button>
 
-            <Tooltip.Root>
-              <Tooltip.Trigger asChild>
-                <button
-                  type="button"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => void handleRewrite()}
-                  disabled={isGenerating || !hasSelection || !canEdit}
-                  className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-[var(--color-text-secondary)] rounded-lg text-sm font-bold hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Sparkles size={16} className="text-[var(--color-accent)]" />
-                  {t("editor.ai.rewrite")}
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="rounded-lg bg-[var(--color-text)] px-3 py-2 text-xs text-[var(--color-canvas)] shadow-lg"
-                  sideOffset={5}
-                >
-                  {t("editor.ai.rewriteShortcut")}
-                  <Tooltip.Arrow className="fill-[var(--color-text)]" />
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void handleRewrite()}
+            disabled={isGenerating || !hasSelection || !canEdit}
+            className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-[var(--color-text-secondary)] rounded-lg text-sm font-bold hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Sparkles size={16} className="text-[var(--color-accent)]" />
+            {t("editor.ai.rewrite")}
+          </button>
 
-            <Tooltip.Root>
-              <Tooltip.Trigger asChild>
-                <button
-                  type="button"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => void handleDescribe()}
-                  disabled={isGenerating || !hasSelection || !canEdit}
-                  className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-[var(--color-text-secondary)] rounded-lg text-sm font-bold hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <MessageSquare size={16} className="text-[var(--color-accent)]" />
-                  {t("editor.ai.describe")}
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="rounded-lg bg-[var(--color-text)] px-3 py-2 text-xs text-[var(--color-canvas)] shadow-lg"
-                  sideOffset={5}
-                >
-                  {t("editor.ai.describeShortcut")}
-                  <Tooltip.Arrow className="fill-[var(--color-text)]" />
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void handleDescribe()}
+            disabled={isGenerating || !hasSelection || !canEdit}
+            className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-[var(--color-text-secondary)] rounded-lg text-sm font-bold hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <MessageSquare size={16} className="text-[var(--color-accent)]" />
+            {t("editor.ai.describe")}
+          </button>
 
-            <Tooltip.Root>
-              <Tooltip.Trigger asChild>
-                <button
-                  type="button"
-                  onClick={() => void handleBrainstorm()}
-                  disabled={isGenerating || !canEdit}
-                  className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-[var(--color-text-secondary)] rounded-lg text-sm font-bold hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Zap size={16} className="text-[var(--color-accent)]" />
-                  {t("editor.ai.brainstorm")}
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="rounded-lg bg-[var(--color-text)] px-3 py-2 text-xs text-[var(--color-canvas)] shadow-lg"
-                  sideOffset={5}
-                >
-                  {t("editor.ai.brainstormShortcut")}
-                  <Tooltip.Arrow className="fill-[var(--color-text)]" />
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
+          <button
+            type="button"
+            onClick={() => void handleBrainstorm()}
+            disabled={isGenerating || !canEdit}
+            className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-[var(--color-text-secondary)] rounded-lg text-sm font-bold hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Zap size={16} className="text-[var(--color-accent)]" />
+            {t("editor.ai.brainstorm")}
+          </button>
         </div>
 
         <div className="ml-auto flex items-center gap-3">
@@ -1308,7 +1231,7 @@ export function MainEditor({
                 setIsExporting(false);
               }
             }}
-            title="Export project as Markdown"
+            title={t("workspace.exportMarkdown")}
             disabled={isExporting}
             className="cursor-pointer p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -1320,7 +1243,7 @@ export function MainEditor({
                 <button
                   onClick={toggleZen}
                   className="cursor-pointer p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors"
-                  aria-label="Enter zen mode"
+                  aria-label={t("zen.enter")}
                 >
                   <Maximize2 size={16} />
                 </button>
@@ -1330,7 +1253,7 @@ export function MainEditor({
                   className="rounded-lg bg-[var(--color-text)] px-3 py-2 text-xs text-[var(--color-canvas)] shadow-lg"
                   sideOffset={5}
                 >
-                  Enter zen mode
+                  {t("zen.enter")}
                   <Tooltip.Arrow className="fill-[var(--color-text)]" />
                 </Tooltip.Content>
               </Tooltip.Portal>
@@ -1339,40 +1262,20 @@ export function MainEditor({
         </div>
       </div>
 
-      <div className="flex items-center gap-4 px-6 py-1.5 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
-        <div className="flex items-center gap-1">
-          <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} disabled={!canEdit}>
-            <Bold size={16} />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} disabled={!canEdit}>
-            <Italic size={16} />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} disabled={!canEdit}>
-            <UnderlineIcon size={16} />
-          </ToolbarButton>
-        </div>
-        <div className="w-px h-4 bg-[var(--color-border)]" />
-        <div className="flex items-center gap-1">
-          <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive("bulletList")} disabled={!canEdit}>
-            <List size={16} />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive("orderedList")} disabled={!canEdit}>
-            <ListOrdered size={16} />
-          </ToolbarButton>
-        </div>
-        <div className="w-px h-4 bg-[var(--color-border)]" />
-        <div className="flex items-center gap-1">
-          <ToolbarButton onClick={() => editor.chain().focus().setTextAlign("left").run()} active={editor.isActive({ textAlign: "left" })} disabled={!canEdit}>
-            <AlignLeft size={16} />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().setTextAlign("center").run()} active={editor.isActive({ textAlign: "center" })} disabled={!canEdit}>
-            <AlignCenter size={16} />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().setTextAlign("right").run()} active={editor.isActive({ textAlign: "right" })} disabled={!canEdit}>
-            <AlignRight size={16} />
-          </ToolbarButton>
-        </div>
-      </div>
+      <EditorFormattingToolbar
+        editor={editor}
+        canEdit={canEdit}
+        labels={{
+          bold: t("editor.toolbar.bold"),
+          italic: t("editor.toolbar.italic"),
+          underline: t("editor.toolbar.underline"),
+          bulletList: t("editor.toolbar.bulletList"),
+          orderedList: t("editor.toolbar.orderedList"),
+          alignLeft: t("editor.toolbar.alignLeft"),
+          alignCenter: t("editor.toolbar.alignCenter"),
+          alignRight: t("editor.toolbar.alignRight"),
+        }}
+      />
 
       <BubbleMenu
         editor={editor}
@@ -1551,31 +1454,5 @@ export function MainEditor({
         </Dialog.Portal>
       </Dialog.Root>
     </div>
-  );
-}
-
-function ToolbarButton({
-  children,
-  onClick,
-  active,
-  disabled = false,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  active?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "cursor-pointer p-1.5 rounded-lg transition-all disabled:cursor-not-allowed disabled:opacity-45",
-        active ? "bg-[var(--color-text)] text-white shadow-md" : "text-[var(--color-text-muted)] hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)]",
-      )}
-    >
-      {children}
-    </button>
   );
 }

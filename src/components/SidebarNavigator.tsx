@@ -416,7 +416,7 @@ export function SidebarNavigator() {
               onClick={() => void handleCreateChapter()}
               disabled={isCreatingChapter || !activeBranchId}
               className="flex cursor-pointer items-center justify-center gap-2 px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-bold text-[var(--color-text)] hover:bg-[var(--color-surface-alt)] transition-all shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Create new chapter"
+              aria-label={st("addChapter")}
             >
               {isCreatingChapter ? (
                 <Loader2 size={14} className="animate-spin" />

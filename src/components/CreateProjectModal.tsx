@@ -7,8 +7,10 @@ import { X, Globe, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/useProjectStore";
 import * as Dialog from "@radix-ui/react-dialog";
+import { useTranslations } from "next-intl";
 
 export function CreateProjectModal({ onClose }: { onClose: () => void }) {
+  const t = useTranslations("createProject");
   const [title, setTitle] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -33,17 +35,17 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
       if (project) {
         const starterChapterId = project.chapters[0]?.id;
         if (!starterChapterId) {
-          throw new Error("Project creation returned no starter chapter.");
+          throw new Error(t("missingStarterChapter"));
         }
 
         requestTitleFocus(starterChapterId);
         router.push(`/project/${project.metadata.id}`);
       } else {
-        throw new Error("Project creation returned no data.");
+        throw new Error(t("missingData"));
       }
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "Failed to create project.");
+      setError(err instanceof Error ? err.message : t("createFailed"));
       setLoading(false);
     }
   };
@@ -58,35 +60,35 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
         >
           <div className="w-full max-w-md rounded-[28px] bg-[var(--color-surface)] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-6">
-              <Dialog.Title className="text-2xl font-bold text-[var(--color-text)]">New Project</Dialog.Title>
+              <Dialog.Title className="text-2xl font-bold text-[var(--color-text)]">{t("modalTitle")}</Dialog.Title>
               <Dialog.Close asChild>
-                <button aria-label="Close dialog" className="p-2 hover:bg-[var(--color-surface-alt)] rounded-full transition-colors">
+                <button aria-label={t("closeDialog")} className="p-2 hover:bg-[var(--color-surface-alt)] rounded-full transition-colors">
                   <X size={20} className="text-[var(--color-text-muted)]" />
                 </button>
               </Dialog.Close>
             </div>
 
             <Dialog.Description id="create-project-description" className="sr-only">
-              Create a new writing project by entering a title and choosing its visibility.
+              {t("description")}
             </Dialog.Description>
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label htmlFor="project-title" className="block text-sm font-semibold text-[var(--color-text)] mb-2">Project Title</label>
+                <label htmlFor="project-title" className="block text-sm font-semibold text-[var(--color-text)] mb-2">{t("titleLabel")}</label>
                 <input
                   id="project-title"
                   autoFocus
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="What's the name of your story?"
+                  placeholder={t("titlePlaceholder")}
                   className="w-full rounded-2xl border border-[var(--color-border)] px-4 py-3 outline-none focus:border-[var(--color-text)] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-text)] focus-visible:ring-offset-1"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-[var(--color-text)] mb-4">Project Visibility</label>
+                <label className="block text-sm font-semibold text-[var(--color-text)] mb-4">{t("visibilityLabel")}</label>
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     type="button"
@@ -99,8 +101,8 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                     )}
                   >
                     <Lock size={20} className={!isPublic ? "text-[var(--color-text)]" : "text-[var(--color-text-muted)]"} />
-                    <span className="block mt-2 font-bold text-[var(--color-text)]">Private</span>
-                    <span className="text-[10px] text-[var(--color-text-secondary)] mt-1 leading-tight">Only you and collaborators can view this project.</span>
+                    <span className="block mt-2 font-bold text-[var(--color-text)]">{t("privateTitle")}</span>
+                    <span className="text-[10px] text-[var(--color-text-secondary)] mt-1 leading-tight">{t("privateDescription")}</span>
                   </button>
 
                   <button
@@ -114,8 +116,8 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                     )}
                   >
                     <Globe size={20} className={isPublic ? "text-[var(--color-accent)]" : "text-[var(--color-text-muted)]"} />
-                    <span className="block mt-2 font-bold text-[var(--color-text)]">Public</span>
-                    <span className="text-[10px] text-[var(--color-text-secondary)] mt-1 leading-tight">Anyone with the link can read this project.</span>
+                    <span className="block mt-2 font-bold text-[var(--color-text)]">{t("publicTitle")}</span>
+                    <span className="text-[10px] text-[var(--color-text-secondary)] mt-1 leading-tight">{t("publicDescription")}</span>
                   </button>
                 </div>
               </div>
@@ -125,7 +127,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                 disabled={loading}
                 className="w-full rounded-2xl bg-[var(--color-text)] py-4 font-bold text-white transition-transform active:scale-95 disabled:opacity-50 shadow-lg shadow-[var(--color-text)]/10"
               >
-                {loading ? "Creating..." : "Create Project"}
+                {loading ? t("creating") : t("createAction")}
               </button>
               {error && <p className="rounded-xl bg-[var(--color-destructive)]/10 p-3 text-sm font-medium text-[var(--color-destructive)]">{error}</p>}
             </form>

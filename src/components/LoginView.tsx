@@ -1,32 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "@/lib/i18n-client";
 import { login } from "@/actions/auth";
 import { cn } from "@/lib/utils";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/lib/i18n-client";
-
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Something went wrong. Please try again.";
-}
 
 export function LoginView() {
   const t = useTranslations("auth");
   const ct = useTranslations("common");
+  const locale = useLocale();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  const router = useRouter();
+
+  function getErrorMessage(err: unknown) {
+    return err instanceof Error ? err.message : ct("somethingWentWrong");
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setPending(true);
     try {
-      await login(email, password);
-      router.push("/");
+      const result = await login(email, password);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+
+      window.location.replace(`/${locale}`);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -64,7 +68,7 @@ export function LoginView() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder={t("emailPlaceholder")}
                 required
                 className={cn(
                   "w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-canvas)] px-3 py-2",
@@ -82,7 +86,7 @@ export function LoginView() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder={t("passwordPlaceholder")}
                 required
                 className={cn(
                   "w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-canvas)] px-3 py-2",

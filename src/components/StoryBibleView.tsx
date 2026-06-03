@@ -576,7 +576,7 @@ export function StoryBibleView() {
               key={`summary-${currentProject.metadata.updatedAt}`}
               ref={braindumpRef}
               placeholder={t("placeholders.braindump")}
-              className="w-full min-h-[120px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
+              className="w-full min-h-[180px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
               defaultValue={currentProject.metadata.summary}
               onBlur={() => void handleUpdateSummary()}
               disabled={!canManage || busyAction === "summary"}
@@ -588,7 +588,7 @@ export function StoryBibleView() {
               key={`genre-${currentProject.metadata.updatedAt}`}
               ref={genreRef}
               placeholder={t("placeholders.genre")}
-              className="w-full min-h-[80px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
+              className="w-full min-h-[120px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
               defaultValue={currentProject.metadata.genre}
               onBlur={() => void handleUpdateGenre()}
               disabled={!canManage || busyAction === "genre"}
@@ -601,7 +601,7 @@ export function StoryBibleView() {
                 key={`synopsis-${currentProject.metadata.updatedAt}`}
                 ref={synopsisRef}
                 placeholder={t("placeholders.synopsis")}
-                className="w-full min-h-[100px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 pr-40 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
+                className="w-full min-h-[160px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 pr-40 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
                 defaultValue={currentProject.contextMemory.sharedNotes}
                 onBlur={() => void handleUpdateSynopsis()}
                 disabled={!canEdit || busyAction === "synopsis" || busyAction === "generateSynopsis"}
@@ -821,16 +821,13 @@ export function StoryBibleView() {
                       </div>
                     ) : (
                       <div className="mt-4 space-y-3">
-                        {act.chapters.map((chapter, chapterIndex) => (
+                        {act.chapters.map((chapter) => (
                           <div
                             key={chapter.id}
                             className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 flex items-start justify-between gap-4"
                           >
                             <div>
-                              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
-                                {t("labels.chapter", { number: chapterIndex + 1 })}
-                              </p>
-                              <h5 className="mt-1 text-sm font-bold text-[var(--color-text)]">{chapter.title}</h5>
+                              <h5 className="text-sm font-bold text-[var(--color-text)]">{chapter.title}</h5>
                               {chapter.summary && (
                                 <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
                                   {chapter.summary}

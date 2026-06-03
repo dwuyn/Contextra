@@ -7,12 +7,16 @@
     "loading": "Loading...",
     "saveChanges": "Save changes",
     "saved": "Saved",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "somethingWentWrong": "Something went wrong. Please try again."
   },
   "auth": {
     "email": "Email address",
     "password": "Password",
     "name": "Full name",
+    "emailPlaceholder": "you@example.com",
+    "namePlaceholder": "Contextra User",
+    "passwordPlaceholder": "••••••••",
     "login": "Log in",
     "loginAction": "Log in",
     "register": "Create account",
@@ -57,17 +61,18 @@
       "write": "Write",
       "rewrite": "Rewrite",
       "describe": "Describe",
-      "brainstorm": "Brainstorm",
-      "writeShortcut": "Write (\u2318\u21E7W)",
-      "rewriteShortcut": "Rewrite (\u2318\u21E7R)",
-      "describeShortcut": "Describe (\u2318\u21E7D)",
-      "brainstormShortcut": "Brainstorm (\u2318\u21E7B)"
+      "brainstorm": "Brainstorm"
     },
     "toolbar": {
       "bold": "Bold",
       "italic": "Italic",
       "underline": "Underline",
-      "heading": "Heading"
+      "heading": "Heading",
+      "bulletList": "Bullet list",
+      "orderedList": "Numbered list",
+      "alignLeft": "Align left",
+      "alignCenter": "Align center",
+      "alignRight": "Align right"
     },
     "status": {
       "saved": "Saved",
@@ -183,6 +188,7 @@
     "greeting_evening": "Good evening",
     "greeting_night": "Good night",
     "workspaceOverview": "Workspace overview",
+    "brandTagline": "AI writing space",
     "membershipUpdate": "Membership update",
     "removedAccess": "You no longer have access to \u201c{projectName}\u201d.",
     "leftProject": "You left \u201c{projectName}\u201d.",
@@ -197,13 +203,23 @@
     "working": "Working...",
     "publicProjectHelper": "Projects shared by other members",
     "noPublicProjects": "No public projects yet. Publish one from the Projects panel to share it.",
-    "by": "by {name}"
+    "by": "by {name}",
+    "comingSoon": "Coming soon",
+    "imagePlaceholder": "IMAGE",
+    "deleteProject": "Delete project",
+    "deleteProjectTitle": "Delete {name}?",
+    "deleteProjectDescription": "This permanently deletes the workspace and all of its chapters, characters, outlines, and AI history. Collaborators will lose access immediately. This action cannot be undone.",
+    "deleteProjectConfirm": "Delete workspace",
+    "deleting": "Deleting...",
+    "deleteFailed": "Failed to delete project. Please try again."
   },
   "workspace": {
     "projectLabel": "Project",
     "collaborate": "Collaborate",
     "history": "History",
     "aiAssistant": "AI Assistant",
+    "projectNavigation": "Project navigation",
+    "exportMarkdown": "Export project as Markdown",
     "openSidebar": "Open sidebar",
     "toggleCollaboration": "Toggle collaboration panel",
     "toggleHistory": "Toggle version history",
@@ -443,6 +459,94 @@
       "updateThread": "Could not update this thread."
     }
   },
+  "allProjects": {
+    "title": "Explore Projects",
+    "subtitle": "Manage your workspaces and discover stories",
+    "myProjects": "My Projects",
+    "publicLibrary": "Public Library",
+    "searchLabel": "Search projects",
+    "searchPlaceholder": "Search...",
+    "emptyMyProjects": "No personal projects found.",
+    "emptyPublicProjects": "No public projects found.",
+    "emptyHelp": "Try adjusting your filters or creating something new.",
+    "loadMore": "Load more",
+    "loadingMore": "Loading...",
+    "endOfLibrary": "You've reached the end of the public library.",
+    "roles": {
+      "owner": "owner",
+      "editor": "editor",
+      "viewer": "viewer",
+      "publicViewer": "public viewer"
+    }
+  },
+  "peopleView": {
+    "workspaceLabel": "Workspace",
+    "title": "People",
+    "close": "Close",
+    "searchLabel": "Find people by email",
+    "searchPlaceholder": "Find by email",
+    "directory": "Directory",
+    "incoming": "Incoming requests",
+    "outgoing": "Outgoing requests",
+    "searchResults": "Search results",
+    "clear": "Clear",
+    "discoverPeople": "Discover people",
+    "usersCount": "{count} users",
+    "noDiscovered": "No new people to discover right now.",
+    "noIncoming": "No incoming requests right now.",
+    "noOutgoing": "No outgoing requests right now.",
+    "unknown": "Unknown",
+    "accept": "Accept",
+    "reject": "Reject",
+    "sentOn": "Sent on {date}",
+    "recently": "recently",
+    "pending": "PENDING",
+    "alreadyFriends": "Already friends",
+    "requestPending": "Request pending",
+    "sendRequest": "Send request"
+  },
+  "friendsView": {
+    "workspaceLabel": "Workspace",
+    "title": "Friends",
+    "close": "Close",
+    "searchLabel": "Search friends",
+    "searchPlaceholder": "Search friends",
+    "privateMessages": "Private messages",
+    "noFriends": "No friends yet. Use People to send friend requests.",
+    "chooseFriend": "Choose a friend",
+    "chooseFriendDescription": "Select one of your connected friends from the sidebar to open a private chat.",
+    "noMessages": "No messages yet.",
+    "sayHello": "Say hello to {name}!",
+    "messageLabel": "Message {name}",
+    "messagePlaceholder": "Type a message...",
+    "sendMessageTo": "Send message to {name}"
+  },
+  "createProject": {
+    "modalTitle": "New Project",
+    "closeDialog": "Close dialog",
+    "description": "Create a new writing project by entering a title and choosing its visibility.",
+    "titleLabel": "Project Title",
+    "titlePlaceholder": "What's the name of your story?",
+    "visibilityLabel": "Project Visibility",
+    "privateTitle": "Private",
+    "privateDescription": "Only you and collaborators can view this project.",
+    "publicTitle": "Public",
+    "publicDescription": "Anyone with the link can read this project.",
+    "creating": "Creating...",
+    "createAction": "Create Project",
+    "createFailed": "Failed to create project.",
+    "missingStarterChapter": "Project creation returned no starter chapter.",
+    "missingData": "Project creation returned no data."
+  },
+  "routeErrors": {
+    "projectNotFoundTitle": "Project not found",
+    "projectNotFoundDescription": "We couldn't find the workspace you're looking for. It may have been deleted or you don't have access.",
+    "backToDashboard": "Back to Dashboard",
+    "workspaceErrorTitle": "Something went wrong!",
+    "workspaceErrorDescription": "An unexpected error occurred in the workspace.",
+    "tryAgain": "Try again",
+    "goHome": "Go home"
+  },
   "preferences": {
     "modalTitle": "Preferences",
     "appearance": "Appearance",
@@ -458,6 +562,7 @@
     "profileUpdated": "Account updated.",
     "passwordUpdated": "Password updated successfully.",
     "passwordsDontMatch": "Passwords do not match",
-    "somethingWentWrong": "Something went wrong. Please try again."
+    "somethingWentWrong": "Something went wrong. Please try again.",
+    "avatarUploadFailed": "Failed to upload avatar."
   }
 }
