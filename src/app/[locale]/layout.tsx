@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { hasLocale, NextIntlClientProvider } from "next-intl";
-import { getMessages } from "next-intl/server";
+import { getMessages, getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/lib/i18n-client";
 
@@ -54,6 +54,7 @@ export default async function LocaleLayout({
   }
 
   const messages = await getMessages();
+  const a11y = await getTranslations("a11y");
 
   return (
     <>
@@ -62,7 +63,7 @@ export default async function LocaleLayout({
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-xl focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:bg-[var(--color-text)] focus:text-[var(--color-canvas)] focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
       >
-        Skip to content
+        {a11y("skipToContent")}
       </a>
       <NextIntlClientProvider locale={locale} messages={messages}>
         <PreferencesProvider>

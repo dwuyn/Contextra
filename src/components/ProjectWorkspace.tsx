@@ -13,13 +13,34 @@ import type { AiCardsPaneTab } from "@/components/AiCardsPane";
 import { useSSE } from "@/lib/hooks/useSSE";
 import { cn } from "@/lib/utils";
 import { Menu, Bot, History, Users } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { ProjectCommentThread, ProjectData, ProjectInvite, ProjectPresence } from "@/types/project";
+
+function EditorLoadingOverlay() {
+  const t = useTranslations("workspace");
+  return <LoadingState variant="overlay" message={t("loadingEditor")} />;
+}
+
+function AiAssistantLoadingOverlay() {
+  const t = useTranslations("workspace");
+  return <LoadingState variant="overlay" message={t("loadingAiAssistant")} />;
+}
+
+function StoryBibleLoadingState() {
+  const t = useTranslations("workspace");
+  return <LoadingState variant="inline" message={t("loadingStoryBible")} />;
+}
+
+function VersionHistoryLoadingOverlay() {
+  const t = useTranslations("workspace");
+  return <LoadingState variant="overlay" message={t("loadingVersionHistory")} />;
+}
 
 const MainEditor = dynamic(
   () => import("@/components/MainEditor").then((mod) => mod.MainEditor),
   {
     ssr: false,
-    loading: () => <LoadingState variant="overlay" message="Loading editor..." />,
+    loading: () => <EditorLoadingOverlay />,
   }
 );
 
@@ -27,7 +48,7 @@ const AiCardsPane = dynamic(
   () => import("@/components/AiCardsPane").then((mod) => mod.AiCardsPane),
   {
     ssr: false,
-    loading: () => <LoadingState variant="overlay" message="Loading AI assistant..." />,
+    loading: () => <AiAssistantLoadingOverlay />,
   }
 );
 
@@ -35,7 +56,7 @@ const StoryBibleView = dynamic(
   () => import("@/components/StoryBibleView").then((mod) => mod.StoryBibleView),
   {
     ssr: false,
-    loading: () => <LoadingState variant="inline" message="Loading story bible..." />,
+    loading: () => <StoryBibleLoadingState />,
   }
 );
 
@@ -43,12 +64,14 @@ const VersionHistoryPanel = dynamic(
   () => import("@/components/VersionHistoryPanel").then((mod) => mod.VersionHistoryPanel),
   {
     ssr: false,
-    loading: () => <LoadingState variant="overlay" message="Loading version history..." />,
+    loading: () => <VersionHistoryLoadingOverlay />,
   }
 );
 
 export function ProjectWorkspace({ project }: { project: ProjectData }) {
   const router = useRouter();
+  const t = useTranslations("workspace");
+  const zenT = useTranslations("zen");
   const setProject = useProjectStore((state) => state.setProject);
   const syncProjectInvite = useProjectStore((state) => state.syncProjectInvite);
   const syncProjectPresence = useProjectStore((state) => state.syncProjectPresence);
@@ -253,7 +276,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
           "transition-all duration-500",
         )}>
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Project</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("projectLabel")}</p>
             <h1 className="text-lg font-bold text-[var(--color-text)] truncate">{project.metadata.name}</h1>
           </div>
           <div className="flex items-center gap-2">
@@ -266,18 +289,18 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
               ].join(" ")}
             >
               <PresenceStack count={activePresence.length} />
-              <span className="text-sm font-bold">Collaborate</span>
+              <span className="text-sm font-bold">{t("collaborate")}</span>
             </button>
             <WorkspaceToggleButton
               active={isHistoryOpen}
               icon={<History size={18} />}
-              label="History"
+              label={t("history")}
               onClick={() => setIsHistoryOpen((value) => !value)}
             />
             <WorkspaceToggleButton
               active={isAiPaneOpen}
               icon={<Bot size={18} />}
-              label="AI Assistant"
+              label={t("aiAssistant")}
               onClick={handleAiPaneToggle}
             />
           </div>
@@ -293,7 +316,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
           <button
             onClick={() => setIsSidebarOpen(true)}
             className="p-2 rounded-xl text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
-            aria-label="Open sidebar"
+            aria-label={t("openSidebar")}
           >
             <Menu size={20} />
           </button>
@@ -307,7 +330,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
                 "p-2 rounded-xl transition-colors",
                 isCollabOpen ? "bg-[var(--color-text)] text-white" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
               ].join(" ")}
-              aria-label="Toggle collaboration panel"
+              aria-label={t("toggleCollaboration")}
             >
               <Users size={20} />
             </button>
@@ -317,7 +340,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
                 "p-2 rounded-xl transition-colors",
                 isHistoryOpen ? "bg-[var(--color-accent-muted)] text-[var(--color-accent)]" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
               ].join(" ")}
-              aria-label="Toggle version history"
+              aria-label={t("toggleHistory")}
             >
               <History size={20} />
             </button>
@@ -327,7 +350,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
                 "p-2 rounded-xl transition-colors",
                 isAiPaneOpen ? "bg-[var(--color-accent-muted)] text-[var(--color-accent)]" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
               ].join(" ")}
-              aria-label="Toggle AI assistant"
+              aria-label={t("toggleAiAssistant")}
             >
               <Bot size={20} />
             </button>
@@ -407,9 +430,9 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
           className="fixed bottom-6 right-6 z-50 rounded-full bg-[var(--color-surface)] px-4 py-2
             text-sm font-medium text-[var(--color-text-secondary)] shadow-lg border border-[var(--color-border)]
             hover:text-[var(--color-text)] transition-all"
-          aria-label="Exit zen mode"
+          aria-label={zenT("exit")}
         >
-          Exit zen mode
+          {zenT("exit")}
         </button>
       )}
     </div>
@@ -447,6 +470,8 @@ function WorkspaceToggleButton({
 }
 
 function PresenceStack({ count }: { count: number }) {
+  const t = useTranslations("workspace");
+
   return (
     <div className="flex items-center gap-2">
       <div className="flex -space-x-2">
@@ -455,9 +480,8 @@ function PresenceStack({ count }: { count: number }) {
         {count > 2 && <div className="h-7 w-7 rounded-full border-2 border-[var(--color-surface)] bg-sky-400" />}
       </div>
       <span className="text-xs font-bold uppercase tracking-wider">
-        {count === 0 ? "Quiet" : `${count} live`}
+        {count === 0 ? t("quiet") : t("liveCount", { count })}
       </span>
     </div>
   );
 }
-

@@ -27,8 +27,9 @@ import {
   upsertCharacter,
 } from "@/actions/projects";
 
-import { generateLongOutlineAction, generateOutlineAction, generateSynopsisAction } from "@/actions/ai";
+import { generateOutlineAction, generateSynopsisAction } from "@/actions/ai";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 import type {
   Character as ProjectCharacter,
   OutlineAct,
@@ -47,7 +48,6 @@ type BusyAction =
   | "worldRule"
   | "outline"
   | "generateOutline"
-  | "generateLongOutline"
   | null;
 
 type CharacterDialogState =
@@ -75,7 +75,6 @@ type ChapterDialogState =
 type ConfirmDialogState =
   | { kind: "replaceSynopsis" }
   | { kind: "replaceOutline" }
-  | { kind: "replaceLongOutline" }
   | { kind: "deleteCharacter"; character: ProjectCharacter }
   | { kind: "deleteWorldRule"; index: number; label: string }
   | { kind: "deleteAct"; actId: string; title: string }
@@ -97,8 +96,8 @@ type TextDraft = {
 
 const EMPTY_OUTLINE: ProjectOutline = { acts: [] };
 
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+function getErrorMessage(error: unknown, fallbackMessage: string) {
+  return error instanceof Error ? error.message : fallbackMessage;
 }
 
 function createClientId(prefix: string) {
@@ -137,6 +136,8 @@ function createEmptyTextDraft(): TextDraft {
 
 
 export function StoryBibleView() {
+  const commonT = useTranslations("common");
+  const t = useTranslations("storyBible");
   const project = useProjectStore((state) => state.project);
   const setProject = useProjectStore((state) => state.setProject);
 
@@ -185,7 +186,7 @@ export function StoryBibleView() {
       }
       return nextProject;
     } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+      setErrorMessage(getErrorMessage(error, t("genericError")));
       return null;
     } finally {
       setBusyAction(null);
@@ -260,7 +261,7 @@ export function StoryBibleView() {
     const role = characterDraft.role.trim();
     const memory = characterDraft.memory.trim();
     if (!name || !role || !memory) {
-      setErrorMessage("Character name, role, and memory are required.");
+      setErrorMessage(t("validation.characterRequired"));
       return;
     }
 
@@ -296,7 +297,7 @@ export function StoryBibleView() {
     if (!canEdit || !worldRuleDialog) return;
     const nextValue = worldRuleDraft.trim();
     if (!nextValue) {
-      setErrorMessage("Worldbuilding entries cannot be empty.");
+      setErrorMessage(t("validation.worldRuleRequired"));
       return;
     }
 
@@ -330,7 +331,7 @@ export function StoryBibleView() {
     const title = actDraft.title.trim();
     const summary = actDraft.summary.trim();
     if (!title) {
-      setErrorMessage("Act title is required.");
+      setErrorMessage(t("validation.actTitleRequired"));
       return;
     }
 
@@ -390,11 +391,11 @@ export function StoryBibleView() {
     const title = chapterDraft.title.trim();
     const summary = chapterDraft.summary.trim();
     if (!title) {
-      setErrorMessage("Chapter title is required.");
+      setErrorMessage(t("validation.chapterTitleRequired"));
       return;
     }
     if (!chapterDraft.actId) {
-      setErrorMessage("Choose an act for this outline chapter.");
+      setErrorMessage(t("validation.chooseAct"));
       return;
     }
 
@@ -459,19 +460,6 @@ export function StoryBibleView() {
     await syncProjectUpdate("generateOutline", () => generateOutlineAction(currentProject.metadata.id));
   }
 
-  async function handleGenerateLongOutline(forceReplace: boolean = false) {
-    if (!canEdit) return;
-    if (hasOutlineContent(outline) && !forceReplace) {
-      setConfirmDialog({ kind: "replaceLongOutline" });
-      return;
-    }
-
-    await syncProjectUpdate("generateLongOutline", () =>
-      generateLongOutlineAction(currentProject.metadata.id, { targetChapterCount: 200 })
-    );
-  }
-
-
   async function handleConfirmDialog() {
     if (!confirmDialog) return;
 
@@ -483,10 +471,6 @@ export function StoryBibleView() {
       case "replaceOutline":
         setConfirmDialog(null);
         await handleGenerateOutline(true);
-        return;
-      case "replaceLongOutline":
-        setConfirmDialog(null);
-        await handleGenerateLongOutline(true);
         return;
       case "deleteCharacter": {
         const updated = await syncProjectUpdate("deleteCharacter", () =>
@@ -524,15 +508,61 @@ export function StoryBibleView() {
     }
   }
 
+  const confirmTitle = (() => {
+    if (!confirmDialog) return "";
+
+    switch (confirmDialog.kind) {
+      case "replaceSynopsis":
+        return t("confirm.replaceSynopsisTitle");
+      case "replaceOutline":
+        return t("confirm.replaceOutlineTitle");
+      case "deleteCharacter":
+        return t("confirm.deleteCharacterTitle", { name: confirmDialog.character.name });
+      case "deleteWorldRule":
+        return t("confirm.deleteWorldRuleTitle");
+      case "deleteAct":
+        return t("confirm.deleteActTitle", { title: confirmDialog.title });
+      case "deleteChapter":
+        return t("confirm.deleteChapterTitle", { title: confirmDialog.title });
+    }
+  })();
+
+  const confirmDescription = (() => {
+    if (!confirmDialog) return "";
+
+    switch (confirmDialog.kind) {
+      case "replaceSynopsis":
+        return t("confirm.replaceSynopsisDescription");
+      case "replaceOutline":
+        return t("confirm.replaceOutlineDescription");
+      case "deleteCharacter":
+        return t("confirm.deleteCharacterDescription");
+      case "deleteWorldRule":
+        return t("confirm.deleteWorldRuleDescription", { label: confirmDialog.label });
+      case "deleteAct":
+        return t("confirm.deleteActDescription");
+      case "deleteChapter":
+        return t("confirm.deleteChapterDescription");
+    }
+  })();
+
+  const confirmLabel = !confirmDialog
+    ? t("confirm.confirm")
+    : confirmDialog.kind === "replaceSynopsis" || confirmDialog.kind === "replaceOutline"
+      ? t("confirm.replace")
+      : commonT("delete");
+
+  const confirmTone =
+    !confirmDialog || confirmDialog.kind === "replaceSynopsis" || confirmDialog.kind === "replaceOutline"
+      ? ("primary" as const)
+      : ("danger" as const);
+
   return (
     <div className="h-full flex flex-col bg-[var(--color-surface)] overflow-y-auto">
       <div className="max-w-5xl mx-auto w-full px-12 py-10">
         <header className="mb-10">
-          <h1 className="text-3xl font-extrabold text-[var(--color-text)] mb-2">Story Bible</h1>
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Track the key details of your story&apos;s world to improve AI suggestions or fill it up
-            step-by-step to grow your idea into a first draft.
-          </p>
+          <h1 className="text-3xl font-extrabold text-[var(--color-text)] mb-2">{t("title")}</h1>
+          <p className="text-sm text-[var(--color-text-muted)]">{t("description")}</p>
           {errorMessage && (
             <div className="mt-4 rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-4 py-3 text-sm font-medium text-[var(--color-destructive)]">
               {errorMessage}
@@ -541,11 +571,11 @@ export function StoryBibleView() {
         </header>
 
         <div className="space-y-4">
-          <BibleSection icon={<Type size={18} />} title="Braindump" defaultOpen>
+          <BibleSection icon={<Type size={18} />} title={t("sections.braindump")} defaultOpen>
             <textarea
               key={`summary-${currentProject.metadata.updatedAt}`}
               ref={braindumpRef}
-              placeholder="Write a braindump of everything you know about the story. You can include information about plot, characters, worldbuilding, theme - anything!"
+              placeholder={t("placeholders.braindump")}
               className="w-full min-h-[120px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
               defaultValue={currentProject.metadata.summary}
               onBlur={() => void handleUpdateSummary()}
@@ -553,11 +583,11 @@ export function StoryBibleView() {
             />
           </BibleSection>
 
-          <BibleSection icon={<Palette size={18} />} title="Genre">
+          <BibleSection icon={<Palette size={18} />} title={t("sections.genre")}>
             <textarea
               key={`genre-${currentProject.metadata.updatedAt}`}
               ref={genreRef}
-              placeholder="What genre are you writing in? Feel free to include sub-genres and tropes."
+              placeholder={t("placeholders.genre")}
               className="w-full min-h-[80px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
               defaultValue={currentProject.metadata.genre}
               onBlur={() => void handleUpdateGenre()}
@@ -565,12 +595,12 @@ export function StoryBibleView() {
             />
           </BibleSection>
 
-          <BibleSection icon={<FileText size={18} />} title="Synopsis">
+          <BibleSection icon={<FileText size={18} />} title={t("sections.synopsis")}>
             <div className="relative group">
               <textarea
                 key={`synopsis-${currentProject.metadata.updatedAt}`}
                 ref={synopsisRef}
-                placeholder="Introduce the characters, their goals, and the central conflict, while conveying the story's tone, themes, and unique elements."
+                placeholder={t("placeholders.synopsis")}
                 className="w-full min-h-[100px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 pr-40 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
                 defaultValue={currentProject.contextMemory.sharedNotes}
                 onBlur={() => void handleUpdateSynopsis()}
@@ -583,7 +613,7 @@ export function StoryBibleView() {
                   className="absolute right-4 top-4 flex items-center gap-2 px-3 py-1.5 bg-[var(--color-accent)] text-white rounded-lg text-xs font-bold shadow-md hover:bg-[var(--color-accent)] transition-all opacity-0 group-hover:opacity-100 disabled:opacity-60"
                 >
                   {busyAction === "generateSynopsis" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  Generate Synopsis
+                  {t("actions.generateSynopsis")}
                 </button>
               )}
             </div>
@@ -591,20 +621,20 @@ export function StoryBibleView() {
 
           <BibleSection
             icon={<Users size={18} />}
-            title="Characters"
+            title={t("sections.characters")}
             actions={
               canEdit ? (
                 <SectionActionButton onClick={openCharacterCreate}>
-                  <Plus size={14} /> Add Character
+                  <Plus size={14} /> {t("actions.addCharacter")}
                 </SectionActionButton>
               ) : undefined
             }
           >
             {currentProject.characters.length === 0 ? (
               <EmptyState
-                title="No characters yet"
-                description="Add protagonists, allies, or antagonists so the project keeps track of who matters."
-                actionLabel={canEdit ? "Add Character" : undefined}
+                title={t("empty.charactersTitle")}
+                description={t("empty.charactersDescription")}
+                actionLabel={canEdit ? t("actions.addCharacter") : undefined}
                 onAction={canEdit ? openCharacterCreate : undefined}
               />
             ) : (
@@ -624,13 +654,13 @@ export function StoryBibleView() {
                     {canEdit && (
                       <div className="flex items-center gap-2 shrink-0">
                         <IconActionButton
-                          label={`Edit ${character.name}`}
+                          label={t("aria.editCharacter", { name: character.name })}
                           onClick={() => openCharacterEdit(character)}
                         >
                           <Pencil size={14} />
                         </IconActionButton>
                         <IconActionButton
-                          label={`Delete ${character.name}`}
+                          label={t("aria.deleteCharacter", { name: character.name })}
                           variant="danger"
                           onClick={() => setConfirmDialog({ kind: "deleteCharacter", character })}
                         >
@@ -646,20 +676,20 @@ export function StoryBibleView() {
 
           <BibleSection
             icon={<Globe size={18} />}
-            title="Worldbuilding"
+            title={t("sections.worldbuilding")}
             actions={
               canEdit ? (
                 <SectionActionButton onClick={openWorldRuleCreate}>
-                  <Plus size={14} /> Add Element
+                  <Plus size={14} /> {t("actions.addElement")}
                 </SectionActionButton>
               ) : undefined
             }
           >
             {worldRules.length === 0 ? (
               <EmptyState
-                title="No worldbuilding yet"
-                description="Capture rules, places, magic systems, technologies, or social norms that the story should remember."
-                actionLabel={canEdit ? "Add Element" : undefined}
+                title={t("empty.worldbuildingTitle")}
+                description={t("empty.worldbuildingDescription")}
+                actionLabel={canEdit ? t("actions.addElement") : undefined}
                 onAction={canEdit ? openWorldRuleCreate : undefined}
               />
             ) : (
@@ -673,13 +703,13 @@ export function StoryBibleView() {
                     {canEdit && (
                       <div className="flex items-center gap-2 shrink-0">
                         <IconActionButton
-                          label={`Edit world rule ${index + 1}`}
+                          label={t("aria.editWorldRule", { number: index + 1 })}
                           onClick={() => openWorldRuleEdit(index, rule)}
                         >
                           <Pencil size={14} />
                         </IconActionButton>
                         <IconActionButton
-                          label={`Delete world rule ${index + 1}`}
+                          label={t("aria.deleteWorldRule", { number: index + 1 })}
                           variant="danger"
                           onClick={() => setConfirmDialog({ kind: "deleteWorldRule", index, label: rule })}
                         >
@@ -695,18 +725,18 @@ export function StoryBibleView() {
 
           <BibleSection
             icon={<ListOrdered size={18} />}
-            title="Outline"
+            title={t("sections.outline")}
             actions={
               canEdit ? (
                 <div className="flex gap-4">
                   <SectionActionButton onClick={openActCreate}>
-                    <Plus size={14} /> Add Act
+                    <Plus size={14} /> {t("actions.addAct")}
                   </SectionActionButton>
                   <SectionActionButton
                     onClick={() => openChapterCreate()}
                     disabled={outline.acts.length === 0}
                   >
-                    <Plus size={14} /> Add Chapter
+                    <Plus size={14} /> {t("actions.addChapter")}
                   </SectionActionButton>
                 </div>
               ) : undefined
@@ -720,22 +750,14 @@ export function StoryBibleView() {
                   className="flex items-center gap-2 px-5 py-2.5 bg-[var(--color-accent)] text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-indigo-200 transition-all disabled:opacity-50"
                 >
                   {busyAction === "generateOutline" ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                  Generate Novel Outline
-                </button>
-                <button
-                  onClick={() => void handleGenerateLongOutline()}
-                  disabled={!canEdit || busyAction === "generateLongOutline"}
-                  className="mt-3 flex items-center gap-2 px-5 py-2.5 bg-[var(--color-text)] text-white rounded-xl text-sm font-bold shadow-lg hover:opacity-90 transition-all disabled:opacity-50"
-                >
-                  {busyAction === "generateLongOutline" ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                  Generate 200-Chapter Map
+                  {t("actions.generateOutline")}
                 </button>
                 {canEdit && (
                   <button
                     onClick={openActCreate}
                     className="mt-4 text-xs font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors"
                   >
-                    or start by adding an act manually
+                    {t("actions.startManualAct")}
                   </button>
                 )}
               </div>
@@ -750,15 +772,7 @@ export function StoryBibleView() {
                         className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent-muted)] text-[var(--color-accent)] rounded-xl text-xs font-bold hover:bg-[var(--color-accent-muted)] transition-colors disabled:opacity-50"
                       >
                         {busyAction === "generateOutline" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                        Regenerate Outline
-                      </button>
-                      <button
-                        onClick={() => void handleGenerateLongOutline()}
-                        disabled={busyAction === "generateLongOutline"}
-                        className="flex items-center gap-2 px-4 py-2 bg-[var(--color-text)] text-white rounded-xl text-xs font-bold hover:opacity-90 transition-colors disabled:opacity-50"
-                      >
-                        {busyAction === "generateLongOutline" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                        200-Chapter Map
+                        {t("actions.regenerateOutline")}
                       </button>
                     </div>
                   )}
@@ -769,7 +783,7 @@ export function StoryBibleView() {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
-                          Act {index + 1}
+                          {t("labels.act", { number: index + 1 })}
                         </p>
                         <h4 className="mt-1 text-lg font-bold text-[var(--color-text)]">{act.title}</h4>
                         {act.summary && (
@@ -785,13 +799,13 @@ export function StoryBibleView() {
                             className="flex items-center gap-1.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[11px] font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
                           >
                             <Plus size={12} />
-                            Add Chapter
+                            {t("actions.addChapter")}
                           </button>
-                          <IconActionButton label={`Edit ${act.title}`} onClick={() => openActEdit(act)}>
+                          <IconActionButton label={t("aria.editAct", { title: act.title })} onClick={() => openActEdit(act)}>
                             <Pencil size={14} />
                           </IconActionButton>
                           <IconActionButton
-                            label={`Delete ${act.title}`}
+                            label={t("aria.deleteAct", { title: act.title })}
                             variant="danger"
                             onClick={() => setConfirmDialog({ kind: "deleteAct", actId: act.id, title: act.title })}
                           >
@@ -803,7 +817,7 @@ export function StoryBibleView() {
 
                     {act.chapters.length === 0 ? (
                       <div className="mt-4 rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/80 px-4 py-5 text-sm text-[var(--color-text-muted)]">
-                        No outline chapters yet for this act.
+                        {t("empty.outlineChapters")}
                       </div>
                     ) : (
                       <div className="mt-4 space-y-3">
@@ -814,7 +828,7 @@ export function StoryBibleView() {
                           >
                             <div>
                               <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
-                                Chapter {chapterIndex + 1}
+                                {t("labels.chapter", { number: chapterIndex + 1 })}
                               </p>
                               <h5 className="mt-1 text-sm font-bold text-[var(--color-text)]">{chapter.title}</h5>
                               {chapter.summary && (
@@ -826,13 +840,13 @@ export function StoryBibleView() {
                             {canEdit && (
                               <div className="flex items-center gap-2 shrink-0">
                                 <IconActionButton
-                                  label={`Edit ${chapter.title}`}
+                                  label={t("aria.editChapter", { title: chapter.title })}
                                   onClick={() => openChapterEdit(act.id, chapter)}
                                 >
                                   <Pencil size={14} />
                                 </IconActionButton>
                                 <IconActionButton
-                                  label={`Delete ${chapter.title}`}
+                                  label={t("aria.deleteChapter", { title: chapter.title })}
                                   variant="danger"
                                   onClick={() =>
                                     setConfirmDialog({
@@ -866,29 +880,29 @@ export function StoryBibleView() {
             setCharacterDialog(null);
           }
         }}
-        title={characterDialog?.mode === "edit" ? "Edit Character" : "Add Character"}
-        description="Capture the character details this project should remember."
+        title={characterDialog?.mode === "edit" ? t("dialogs.editCharacterTitle") : t("dialogs.addCharacterTitle")}
+        description={t("dialogs.characterDescription")}
         onSubmit={() => void handleSaveCharacter()}
-        submitLabel={characterDialog?.mode === "edit" ? "Save Character" : "Create Character"}
+        submitLabel={characterDialog?.mode === "edit" ? t("dialogs.saveCharacter") : t("dialogs.createCharacter")}
         busy={busyAction === "character"}
       >
         <FormInput
-          label="Name"
+          label={t("labels.name")}
           value={characterDraft.name}
           onChange={(value) => setCharacterDraft((draft) => ({ ...draft, name: value }))}
-          placeholder="Character name"
+          placeholder={t("placeholders.characterName")}
         />
         <FormInput
-          label="Role"
+          label={t("labels.role")}
           value={characterDraft.role}
           onChange={(value) => setCharacterDraft((draft) => ({ ...draft, role: value }))}
-          placeholder="Protagonist, mentor, rival..."
+          placeholder={t("placeholders.characterRole")}
         />
         <FormTextarea
-          label="Memory"
+          label={t("labels.memory")}
           value={characterDraft.memory}
           onChange={(value) => setCharacterDraft((draft) => ({ ...draft, memory: value }))}
-          placeholder="What should the story always remember about this character?"
+          placeholder={t("placeholders.characterMemory")}
         />
       </EntityDialog>
 
@@ -899,17 +913,17 @@ export function StoryBibleView() {
             setWorldRuleDialog(null);
           }
         }}
-        title={worldRuleDialog?.mode === "edit" ? "Edit Element" : "Add Element"}
-        description="Save a world rule, setting detail, or other lore element."
+        title={worldRuleDialog?.mode === "edit" ? t("dialogs.editElementTitle") : t("dialogs.addElementTitle")}
+        description={t("dialogs.elementDescription")}
         onSubmit={() => void handleSaveWorldRule()}
-        submitLabel={worldRuleDialog?.mode === "edit" ? "Save Element" : "Create Element"}
+        submitLabel={worldRuleDialog?.mode === "edit" ? t("dialogs.saveElement") : t("dialogs.createElement")}
         busy={busyAction === "worldRule"}
       >
         <FormTextarea
-          label="Worldbuilding Element"
+          label={t("labels.worldbuildingElement")}
           value={worldRuleDraft}
           onChange={setWorldRuleDraft}
-          placeholder="Describe a place, rule, system, taboo, or important lore fact."
+          placeholder={t("placeholders.worldbuildingElement")}
         />
       </EntityDialog>
 
@@ -920,23 +934,23 @@ export function StoryBibleView() {
             setActDialog(null);
           }
         }}
-        title={actDialog?.mode === "edit" ? "Edit Act" : "Add Act"}
-        description="Define the big movement of the story."
+        title={actDialog?.mode === "edit" ? t("dialogs.editActTitle") : t("dialogs.addActTitle")}
+        description={t("dialogs.actDescription")}
         onSubmit={() => void handleSaveAct()}
-        submitLabel={actDialog?.mode === "edit" ? "Save Act" : "Create Act"}
+        submitLabel={actDialog?.mode === "edit" ? t("dialogs.saveAct") : t("dialogs.createAct")}
         busy={busyAction === "outline"}
       >
         <FormInput
-          label="Act Title"
+          label={t("labels.actTitle")}
           value={actDraft.title}
           onChange={(value) => setActDraft((draft) => ({ ...draft, title: value }))}
-          placeholder="Act I: Setup"
+          placeholder={t("placeholders.actTitle")}
         />
         <FormTextarea
-          label="Act Summary"
+          label={t("labels.actSummary")}
           value={actDraft.summary}
           onChange={(value) => setActDraft((draft) => ({ ...draft, summary: value }))}
-          placeholder="What changes or escalates during this act?"
+          placeholder={t("placeholders.actSummary")}
         />
       </EntityDialog>
 
@@ -947,29 +961,29 @@ export function StoryBibleView() {
             setChapterDialog(null);
           }
         }}
-        title={chapterDialog?.mode === "edit" ? "Edit Outline Chapter" : "Add Outline Chapter"}
-        description="Add a planning chapter inside a specific act. This does not create a real workspace chapter."
+        title={chapterDialog?.mode === "edit" ? t("dialogs.editOutlineChapterTitle") : t("dialogs.addOutlineChapterTitle")}
+        description={t("dialogs.chapterDescription")}
         onSubmit={() => void handleSaveChapter()}
-        submitLabel={chapterDialog?.mode === "edit" ? "Save Chapter" : "Create Chapter"}
+        submitLabel={chapterDialog?.mode === "edit" ? t("dialogs.saveChapter") : t("dialogs.createChapter")}
         busy={busyAction === "outline"}
       >
         <FormSelect
-          label="Act"
+          label={t("labels.actField")}
           value={chapterDraft.actId}
           onChange={(value) => setChapterDraft((draft) => ({ ...draft, actId: value }))}
           options={outline.acts.map((act) => ({ value: act.id, label: act.title }))}
         />
         <FormInput
-          label="Chapter Title"
+          label={t("labels.chapterTitle")}
           value={chapterDraft.title}
           onChange={(value) => setChapterDraft((draft) => ({ ...draft, title: value }))}
-          placeholder="Chapter title"
+          placeholder={t("placeholders.chapterTitle")}
         />
         <FormTextarea
-          label="Chapter Summary"
+          label={t("labels.chapterSummary")}
           value={chapterDraft.summary}
           onChange={(value) => setChapterDraft((draft) => ({ ...draft, summary: value }))}
-          placeholder="What should happen in this outline chapter?"
+          placeholder={t("placeholders.chapterSummary")}
         />
       </EntityDialog>
 
@@ -981,67 +995,15 @@ export function StoryBibleView() {
             setConfirmDialog(null);
           }
         }}
-        title={getConfirmTitle(confirmDialog)}
-        description={getConfirmDescription(confirmDialog)}
-        confirmLabel={getConfirmLabel(confirmDialog)}
-        confirmTone={getConfirmTone(confirmDialog)}
-        busy={busyAction === "generateSynopsis" || busyAction === "generateOutline" || busyAction === "generateLongOutline" || busyAction === "deleteCharacter" || busyAction === "worldRule" || busyAction === "outline"}
+        title={confirmTitle}
+        description={confirmDescription}
+        confirmLabel={confirmLabel}
+        confirmTone={confirmTone}
+        busy={busyAction === "generateSynopsis" || busyAction === "generateOutline" || busyAction === "deleteCharacter" || busyAction === "worldRule" || busyAction === "outline"}
         onConfirm={() => void handleConfirmDialog()}
       />
     </div>
   );
-}
-
-function getConfirmTitle(confirmDialog: ConfirmDialogState) {
-  if (!confirmDialog) return "";
-
-  switch (confirmDialog.kind) {
-    case "replaceSynopsis":
-      return "Replace existing synopsis?";
-    case "replaceOutline":
-      return "Replace existing outline?";
-    case "replaceLongOutline":
-      return "Replace existing outline with a 200-chapter map?";
-    case "deleteCharacter":
-      return `Delete ${confirmDialog.character.name}?`;
-    case "deleteWorldRule":
-      return "Delete worldbuilding element?";
-    case "deleteAct":
-      return `Delete ${confirmDialog.title}?`;
-    case "deleteChapter":
-      return `Delete ${confirmDialog.title}?`;
-  }
-}
-
-function getConfirmDescription(confirmDialog: ConfirmDialogState) {
-  if (!confirmDialog) return "";
-
-  switch (confirmDialog.kind) {
-    case "replaceSynopsis":
-      return "Generating a new synopsis will overwrite the text currently in the Synopsis section.";
-    case "replaceOutline":
-      return "Generating a new outline will replace the acts and outline chapters you already have.";
-    case "replaceLongOutline":
-      return "Generating a long-form map will replace the current outline and create arc-level memory for future chapters.";
-    case "deleteCharacter":
-      return "This removes the character from the Story Bible. It does not rewrite existing chapters.";
-    case "deleteWorldRule":
-      return `Delete "${confirmDialog.label}" from Worldbuilding?`;
-    case "deleteAct":
-      return "Deleting an act also removes every outline chapter nested inside it.";
-    case "deleteChapter":
-      return "This removes the outline chapter from the current act.";
-  }
-}
-
-function getConfirmLabel(confirmDialog: ConfirmDialogState) {
-  if (!confirmDialog) return "Confirm";
-  return confirmDialog.kind === "replaceSynopsis" || confirmDialog.kind === "replaceOutline" || confirmDialog.kind === "replaceLongOutline" ? "Replace" : "Delete";
-}
-
-function getConfirmTone(confirmDialog: ConfirmDialogState) {
-  if (!confirmDialog) return "primary" as const;
-  return confirmDialog.kind === "replaceSynopsis" || confirmDialog.kind === "replaceOutline" || confirmDialog.kind === "replaceLongOutline" ? ("primary" as const) : ("danger" as const);
 }
 
 function BibleSection({
@@ -1176,6 +1138,9 @@ function EntityDialog({
   submitLabel: string;
   busy: boolean;
 }) {
+  const commonT = useTranslations("common");
+  const storyBibleT = useTranslations("storyBible");
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -1188,7 +1153,7 @@ function EntityDialog({
                 <Dialog.Description className="mt-2 text-sm text-[var(--color-text-secondary)]">{description}</Dialog.Description>
               </div>
               <Dialog.Close asChild>
-                <button aria-label="Close dialog" className="p-2 hover:bg-[var(--color-surface-alt)] rounded-full transition-colors">
+                <button aria-label={storyBibleT("dialogs.closeDialog")} className="p-2 hover:bg-[var(--color-surface-alt)] rounded-full transition-colors">
                   <X size={20} className="text-[var(--color-text-muted)]" />
                 </button>
               </Dialog.Close>
@@ -1199,7 +1164,7 @@ function EntityDialog({
             <div className="mt-8 flex items-center justify-end gap-3">
               <Dialog.Close asChild>
                 <button className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors">
-                  Cancel
+                  {commonT("cancel")}
                 </button>
               </Dialog.Close>
               <button
@@ -1237,6 +1202,8 @@ function ConfirmDialog({
   busy: boolean;
   onConfirm: () => void;
 }) {
+  const commonT = useTranslations("common");
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -1263,7 +1230,7 @@ function ConfirmDialog({
             <div className="mt-8 flex items-center justify-end gap-3">
               <Dialog.Close asChild>
                 <button className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors">
-                  Cancel
+                  {commonT("cancel")}
                 </button>
               </Dialog.Close>
               <button
@@ -1345,6 +1312,8 @@ function FormSelect({
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
 }) {
+  const t = useTranslations("storyBible");
+
   return (
     <label className="block">
       <span className="mb-2 block text-sm font-semibold text-[var(--color-text)]">{label}</span>
@@ -1354,7 +1323,7 @@ function FormSelect({
         className="w-full rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm outline-none focus:border-[var(--color-text)] transition-colors bg-[var(--color-surface)]"
       >
         <option value="" disabled>
-          Select an act
+          {t("labels.selectAct")}
         </option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>

@@ -17,6 +17,7 @@ import {
 import { useState, useRef, useEffect, startTransition } from "react";
 import { useRouter } from "@/lib/i18n-client";
 import ReactMarkdown from "react-markdown";
+import { useTranslations } from "next-intl";
 
 export type AiCardsPaneTab = "history" | "chat";
 
@@ -31,6 +32,7 @@ export function AiCardsPane({
   onClose?: () => void;
   showCloseButton?: boolean;
 }) {
+  const t = useTranslations("aiPane");
   const aiCards = useProjectStore((state) => state.aiCards);
   const removeAiCard = useProjectStore((state) => state.removeAiCard);
   const projectId = useProjectStore((state) => state.project?.metadata.id ?? null);
@@ -105,7 +107,7 @@ export function AiCardsPane({
     } catch (err) {
       console.error(err);
       updateProjectAiMessage(assistantMessageId, {
-        content: "Sorry, I encountered an error. Please try again.",
+        content: t("streamError"),
       });
     } finally {
       setIsLoading(false);
@@ -130,7 +132,7 @@ export function AiCardsPane({
       {/* Tabs Header */}
       <div className="flex items-center px-4 pt-4 border-b border-[var(--color-border)] bg-[var(--background)]">
         {showCloseButton && onClose && (
-          <button onClick={onClose} className="mr-2 p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-all" aria-label="Close AI assistant">
+          <button onClick={onClose} className="mr-2 p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-all" aria-label={t("close")}>
             <X size={16} />
           </button>
         )}
@@ -142,7 +144,7 @@ export function AiCardsPane({
           )}
         >
           <History size={14} />
-          History
+          {t("history")}
         </button>
         <button 
           onClick={() => onTabChange("chat")}
@@ -152,7 +154,7 @@ export function AiCardsPane({
           )}
         >
           <MessageSquare size={14} />
-          Chat
+          {t("chat")}
         </button>
       </div>
 
@@ -164,8 +166,8 @@ export function AiCardsPane({
                 <div className="w-16 h-16 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl flex items-center justify-center mb-6 shadow-sm">
                   <Plus size={24} className="text-[var(--color-text-muted)]" />
                 </div>
-                <p className="text-sm font-bold text-[var(--color-text)] mb-2">No history yet</p>
-                <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">Highlight text and use AI tools to generate suggestions. They will appear here as cards.</p>
+                <p className="text-sm font-bold text-[var(--color-text)] mb-2">{t("emptyHistoryTitle")}</p>
+                <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">{t("emptyHistoryDescription")}</p>
               </div>
             ) : (
               aiCards.map((card) => (
@@ -191,7 +193,7 @@ export function AiCardsPane({
                     <button
                       onClick={() => removeAiCard(card.id)}
                       className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
-                      aria-label="Remove AI history card"
+                      aria-label={t("removeHistoryCard")}
                     >
                       <X size={14} />
                     </button>
@@ -207,14 +209,14 @@ export function AiCardsPane({
                               className="flex items-center gap-2 px-4 py-2 bg-[var(--color-text)] text-[var(--color-surface)] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:opacity-90 transition-colors"
                             >
                               <Plus size={12} />
-                              Insert
+                              {t("insert")}
                             </button>
                             <button 
                               onClick={() => navigator.clipboard.writeText(card.content)}
                               className="flex items-center gap-2 px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-[var(--color-surface-alt)] transition-colors"
                           >
                             <Copy size={12} />
-                            Copy
+                            {t("copy")}
                           </button>
                         </div>
                       ) : (
@@ -225,12 +227,12 @@ export function AiCardsPane({
                           {card.status === "loading" ? (
                             <>
                               <Loader2 size={10} className="animate-spin" />
-                              Working
+                              {t("working")}
                             </>
                           ) : (
                             <>
                               <AlertCircle size={10} />
-                              Failed
+                              {t("failed")}
                             </>
                           )}
                         </div>
@@ -248,8 +250,8 @@ export function AiCardsPane({
                 <div className="w-16 h-16 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl flex items-center justify-center mb-6 shadow-sm">
                   <MessageSquare size={24} className="text-[var(--color-text-muted)]" />
                 </div>
-                <p className="text-sm font-bold text-[var(--color-text)] mb-2">AI Writing Assistant</p>
-                <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">Ask me anything about your story, brainstorm ideas, or ask for help with continuity.</p>
+                <p className="text-sm font-bold text-[var(--color-text)] mb-2">{t("emptyChatTitle")}</p>
+                <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">{t("emptyChatDescription")}</p>
               </div>
             ) : (
               messages.map((msg) => (
@@ -261,7 +263,7 @@ export function AiCardsPane({
                       : "bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)] rounded-tl-none shadow-sm"
                   )}>
                     <div className="prose-sm max-w-none text-inherit leading-relaxed [&>p]:mb-2 last:[&>p]:mb-0 [&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4">
-                      <ReactMarkdown>{msg.content || (isLoading && msg.role === "assistant" ? "Thinking..." : "")}</ReactMarkdown>
+                      <ReactMarkdown>{msg.content || (isLoading && msg.role === "assistant" ? t("thinking") : "")}</ReactMarkdown>
                     </div>
                   </div>
                   <div className="mt-1 flex items-center gap-1 px-1">
@@ -273,7 +275,7 @@ export function AiCardsPane({
                       <User size={8} className="text-[var(--color-text-muted)]" />
                     )}
                     <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                      {msg.role === "assistant" ? "Contextra AI" : "You"}
+                      {msg.role === "assistant" ? t("assistantName") : t("you")}
                     </span>
                   </div>
                 </div>
@@ -288,7 +290,7 @@ export function AiCardsPane({
         {activeTab === "chat" && (
           <form onSubmit={handleSubmit} className="relative">
             <label htmlFor="ai-chat-input" className="sr-only">
-              Ask Contextra AI a question
+              {t("inputLabel")}
             </label>
             <input 
               id="ai-chat-input"
@@ -296,12 +298,12 @@ export function AiCardsPane({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={isLoading}
-              placeholder="Ask Contextra AI..."
+              placeholder={t("inputPlaceholder")}
               className="w-full bg-[var(--color-surface-alt)] border-none rounded-2xl pl-4 pr-12 py-3 text-sm focus:ring-1 focus:ring-[var(--color-accent)] outline-none transition-all placeholder:text-[var(--color-text-muted)]"
             />
             <button 
               type="submit"
-              aria-label="Send message to Contextra AI"
+              aria-label={t("sendMessage")}
               disabled={!input.trim() || isLoading}
               className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-[var(--color-text)] text-[var(--color-surface)] flex items-center justify-center hover:opacity-90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >

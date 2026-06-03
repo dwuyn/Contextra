@@ -29,6 +29,7 @@ import {
 } from "@/actions/projects";
 import { useProjectStore } from "@/store/useProjectStore";
 import type { ProjectCommentThread } from "@/types/project";
+import { useLocale, useTranslations } from "next-intl";
 
 type FriendSummary = {
   id: string;
@@ -52,22 +53,11 @@ function getInitials(name: string) {
     .join("");
 }
 
-function getPresenceLabel(state: "viewing" | "editing") {
-  return state === "editing" ? "Editing" : "Viewing";
-}
-
-function formatTimestamp(value: string | Date) {
-  const date = new Date(value);
-  return date.toLocaleString([], {
-    hour: "numeric",
-    minute: "2-digit",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 export function CollaborationPanel({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const t = useTranslations("collaboration");
+  const commonT = useTranslations("common");
+  const locale = useLocale();
   const project = useProjectStore((state) => state.project);
   const selectedChapterId = useProjectStore((state) => state.selectedChapterId);
   const commentThreadsByChapter = useProjectStore((state) => state.commentThreadsByChapter);
@@ -150,7 +140,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
       } catch (error) {
         if (!cancelled) {
           console.error("Failed to load comment threads", error);
-          setCommentError("Could not load comment threads.");
+          setCommentError(t("errors.loadThreads"));
         }
       } finally {
         if (!cancelled) {
@@ -174,9 +164,39 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
     setCommentThreads,
     selectedCommentThreadId,
     setSelectedCommentThreadId,
+    t,
   ]);
 
   if (!project) return null;
+
+  const localeTag = locale === "vi" ? "vi-VN" : "en-US";
+  const formatTimestamp = (value: string | Date) =>
+    new Intl.DateTimeFormat(localeTag, {
+      hour: "numeric",
+      minute: "2-digit",
+      month: "short",
+      day: "numeric",
+    }).format(new Date(value));
+
+  const getPresenceLabel = (state: "viewing" | "editing") =>
+    state === "editing" ? t("presence.editing") : t("presence.viewing");
+
+  const getRoleLabel = (role: string) => {
+    if (role === "owner") return t("members.owner");
+    if (role === "level-1") return t("members.level1");
+    if (role === "level-2") return t("members.level2");
+    if (role === "level-3") return t("members.level3");
+    return role;
+  };
+
+  const getCommentFilterLabel = (filter: "open" | "resolved" | "all") => {
+    if (filter === "open") return t("comments.filterOpen");
+    if (filter === "resolved") return t("comments.filterResolved");
+    return t("comments.filterAll");
+  };
+
+  const getThreadStatusLabel = (status: "open" | "resolved") =>
+    status === "open" ? t("comments.filterOpen") : t("comments.filterResolved");
 
   const projectId = project.metadata.id;
   const canManage = project.viewerAccess.canManage;
@@ -225,7 +245,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
       setFriendSearch("");
     } catch (error) {
       console.error("Failed to create project invite", error);
-      setInviteError(error instanceof Error ? error.message : "Could not send invite.");
+      setInviteError(error instanceof Error ? error.message : t("errors.sendInvite"));
     } finally {
       setIsInviteBusy(false);
     }
@@ -240,7 +260,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
       setProject(result.project);
     } catch (error) {
       console.error("Failed to cancel invite", error);
-      setInviteError("Could not cancel this invite.");
+      setInviteError(t("errors.cancelInvite"));
     } finally {
       setThreadActionId(null);
     }
@@ -281,7 +301,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
       router.replace(`/?${nextSearchParams.toString()}`);
     } catch (error) {
       console.error("Failed to change project membership", error);
-      setMemberError(error instanceof Error ? error.message : "Could not update project membership.");
+      setMemberError(error instanceof Error ? error.message : t("errors.updateMembership"));
     } finally {
       setMemberActionUserId(null);
     }
@@ -300,7 +320,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
       setSelectedCommentThreadId(updated.id);
     } catch (error) {
       console.error("Failed to reply to thread", error);
-      setCommentError("Could not send your reply.");
+      setCommentError(t("errors.sendReply"));
     } finally {
       setThreadActionId(null);
     }
@@ -315,7 +335,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
       setSelectedCommentThreadId(updated.id);
     } catch (error) {
       console.error("Failed to update thread status", error);
-      setCommentError("Could not update this thread.");
+      setCommentError(t("errors.updateThread"));
     } finally {
       setThreadActionId(null);
     }
@@ -325,14 +345,14 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
     <aside className="flex h-full w-[380px] flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Collaboration</p>
-          <h2 className="text-lg font-bold text-[var(--color-text)]">Live workspace</h2>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("title")}</p>
+          <h2 className="text-lg font-bold text-[var(--color-text)]">{t("subtitle")}</h2>
         </div>
         <button
           type="button"
           onClick={onClose}
           className="rounded-xl p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)]"
-          aria-label="Close collaboration panel"
+          aria-label={t("close")}
         >
           <X size={18} />
         </button>
@@ -348,7 +368,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
           )}
         >
           <Users size={15} />
-          Members
+          {t("tabs.members")}
         </button>
         <button
           type="button"
@@ -359,7 +379,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
           )}
         >
           <MessageSquare size={15} />
-          Comments
+          {t("tabs.comments")}
         </button>
       </div>
 
@@ -368,18 +388,18 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
           <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-canvas)]/70 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Presence</p>
-                <h3 className="mt-1 text-sm font-bold text-[var(--color-text)]">{activePresence.length} active now</h3>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("presence.title")}</p>
+                <h3 className="mt-1 text-sm font-bold text-[var(--color-text)]">{t("presence.activeNow", { count: activePresence.length })}</h3>
               </div>
               <div className="rounded-full bg-[var(--color-success)]/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-success)]">
-                Live
+                {t("presence.live")}
               </div>
             </div>
 
             <div className="mt-4 space-y-3">
               {activePresence.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-4 text-center text-xs text-[var(--color-text-muted)]">
-                  No collaborators are active in this workspace right now.
+                  {t("presence.empty")}
                 </p>
               ) : (
                 activePresence.map((presence) => {
@@ -407,7 +427,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                             </span>
                           </div>
                           <p className="truncate text-xs text-[var(--color-text-secondary)]">
-                            {chapter ? `${chapter.title}` : "Project overview"} • {formatTimestamp(presence.lastActiveAt)}
+                            {chapter ? `${chapter.title}` : t("presence.projectOverview")} • {formatTimestamp(presence.lastActiveAt)}
                           </p>
                         </div>
                         {presence.state === "editing" ? (
@@ -426,16 +446,16 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
           <section className="mt-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Members</p>
-                <h3 className="mt-1 text-sm font-bold text-[var(--color-text)]">{project.collaborators.length + 1} people</h3>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("members.title")}</p>
+                <h3 className="mt-1 text-sm font-bold text-[var(--color-text)]">{t("members.peopleCount", { count: project.collaborators.length + 1 })}</h3>
               </div>
             </div>
 
             <div className="mt-4 space-y-3">
               <MemberCard
-                name={project.currentUser.id === project.metadata.ownerId ? "You" : "Owner"}
-                subtitle={project.metadata.ownerId === project.currentUser.id ? "Project owner" : "Project owner"}
-                badge="Owner"
+                name={project.currentUser.id === project.metadata.ownerId ? t("members.you") : t("members.owner")}
+                subtitle={t("members.projectOwner")}
+                badge={t("members.owner")}
                 accent="bg-[var(--color-text)] text-white"
               />
               {project.collaborators.map((collaborator) => {
@@ -447,7 +467,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                     onClick={() => openRemoveMemberDialog(collaborator.userId, collaborator.user.name)}
                     disabled={isBusy}
                     className="rounded-xl border border-[var(--color-destructive)]/25 bg-[var(--color-destructive)]/10 p-2 text-[var(--color-destructive)] transition-colors hover:bg-[var(--color-destructive)]/15 disabled:cursor-not-allowed disabled:opacity-60"
-                    aria-label={`Remove ${collaborator.user.name}`}
+                    aria-label={t("members.removeAria", { name: collaborator.user.name })}
                   >
                     {isBusy ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                   </button>
@@ -459,16 +479,16 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                     className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-destructive)]/25 bg-[var(--color-destructive)]/10 px-2.5 py-1.5 text-[11px] font-bold text-[var(--color-destructive)] transition-colors hover:bg-[var(--color-destructive)]/15 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isBusy ? <Loader2 size={13} className="animate-spin" /> : <LogOut size={13} />}
-                    Leave
+                    {t("members.leave")}
                   </button>
                 ) : null;
 
                 return (
                   <MemberCard
                     key={collaborator.id}
-                    name={isSelf ? "You" : collaborator.user.name}
+                    name={isSelf ? t("members.you") : collaborator.user.name}
                     subtitle={collaborator.user.email ?? ""}
-                    badge={collaborator.role}
+                    badge={getRoleLabel(collaborator.role)}
                     accent="bg-[var(--color-surface-alt)] text-[var(--color-text)]"
                     action={action}
                   />
@@ -485,15 +505,15 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
           <section className="mt-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Pending invites</p>
-                <h3 className="mt-1 text-sm font-bold text-[var(--color-text)]">{project.pendingInvites.length} waiting</h3>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("invites.title")}</p>
+                <h3 className="mt-1 text-sm font-bold text-[var(--color-text)]">{t("invites.waitingCount", { count: project.pendingInvites.length })}</h3>
               </div>
             </div>
 
             <div className="mt-4 space-y-3">
               {project.pendingInvites.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)] px-3 py-4 text-center text-xs text-[var(--color-text-muted)]">
-                  No outstanding collaborator invites.
+                  {t("invites.empty")}
                 </p>
               ) : (
                 project.pendingInvites.map((invite) => (
@@ -504,7 +524,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                         <p className="truncate text-xs text-[var(--color-text-secondary)]">{invite.receiver.email}</p>
                         <div className="mt-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
                           <Clock3 size={11} />
-                          Invited {formatTimestamp(invite.createdAt)}
+                          {t("invites.invitedAt", { timestamp: formatTimestamp(invite.createdAt) })}
                         </div>
                       </div>
                       {canManage && (
@@ -514,7 +534,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                           disabled={threadActionId === invite.id}
                           className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-[11px] font-bold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {threadActionId === invite.id ? "..." : "Cancel"}
+                          {threadActionId === invite.id ? t("invites.cancelling") : t("invites.cancel")}
                         </button>
                       )}
                     </div>
@@ -531,8 +551,8 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                   <UserPlus size={16} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Invite collaborator</p>
-                  <h3 className="text-sm font-bold text-[var(--color-text)]">Bring a friend into the draft</h3>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("invites.inviteTitle")}</p>
+                  <h3 className="text-sm font-bold text-[var(--color-text)]">{t("invites.inviteSubtitle")}</h3>
                 </div>
               </div>
 
@@ -541,7 +561,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                   type="text"
                   value={friendSearch}
                   onChange={(event) => setFriendSearch(event.target.value)}
-                  placeholder="Filter friends"
+                  placeholder={t("invites.filterFriends")}
                   className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-canvas)] px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--color-border)]"
                 />
                 <select
@@ -549,7 +569,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                   onChange={(event) => setSelectedFriendId(event.target.value)}
                   className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--color-border)]"
                 >
-                  <option value="">Choose a friend</option>
+                  <option value="">{t("invites.chooseFriend")}</option>
                   {inviteableFriends.map((friend) => (
                     <option key={friend.id} value={friend.id}>
                       {friend.name} • {friend.email}
@@ -561,9 +581,9 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                   onChange={(event) => setPermissionLevel(event.target.value)}
                   className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--color-border)]"
                 >
-                  <option value="1">Level 1 • Read/comment</option>
-                  <option value="2">Level 2 • Edit chapters</option>
-                  <option value="3">Level 3 • Manage workspace</option>
+                  <option value="1">{t("invites.permissionLevel1")}</option>
+                  <option value="2">{t("invites.permissionLevel2")}</option>
+                  <option value="3">{t("invites.permissionLevel3")}</option>
                 </select>
                 <button
                   type="button"
@@ -572,7 +592,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                   className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--color-text)] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isInviteBusy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                  Send invite
+                  {t("invites.sendInvite")}
                 </button>
                 {inviteError && (
                   <div className="rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-3 py-2 text-xs font-medium text-[var(--color-destructive)]">
@@ -588,9 +608,9 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
           <div className="border-b border-[var(--color-border)] px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Current chapter</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("comments.currentChapter")}</p>
                 <h3 className="truncate text-sm font-bold text-[var(--color-text)]">
-                  {selectedChapter?.title ?? "Choose a chapter"}
+                  {selectedChapter?.title ?? t("comments.chooseChapter")}
                 </h3>
               </div>
               <div className="flex items-center gap-2 rounded-full bg-[var(--color-canvas)] px-2 py-1">
@@ -604,7 +624,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                       commentFilter === filter ? "bg-[var(--color-text)] text-white" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]",
                     )}
                   >
-                    {filter}
+                    {getCommentFilterLabel(filter)}
                   </button>
                 ))}
               </div>
@@ -619,7 +639,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                 </div>
               ) : filteredThreads.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-5 text-center text-xs text-[var(--color-text-muted)]">
-                  {selectedChapterId ? "No matching threads yet." : "Select a chapter to review comments."}
+                  {selectedChapterId ? t("comments.noMatchingThreads") : t("comments.selectChapter")}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -642,15 +662,15 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                             thread.status === "open" ? "bg-amber-100 text-amber-700" : "bg-[var(--color-success)]/10 text-[var(--color-success)]",
                           )}
                         >
-                          {thread.status}
+                          {getThreadStatusLabel(thread.status)}
                         </span>
                         {thread.isDetached && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-destructive)]">Detached</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-destructive)]">{t("comments.detached")}</span>
                         )}
                       </div>
                       <p className="mt-2 line-clamp-2 text-xs font-semibold text-[var(--color-text)]">{thread.selectedText}</p>
                       <p className="mt-2 text-[11px] text-[var(--color-text-secondary)]">
-                        {thread.replies.length} repl{thread.replies.length === 1 ? "y" : "ies"}
+                        {t("comments.repliesCount", { count: thread.replies.length })}
                       </p>
                     </button>
                   ))}
@@ -664,7 +684,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                   <div className="border-b border-[var(--color-border)] px-4 py-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Selected text</p>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("comments.selectedText")}</p>
                         <blockquote className="mt-2 rounded-2xl bg-[var(--color-canvas)] px-3 py-3 text-sm font-medium text-[var(--color-text)]">
                           “{selectedThread.selectedText}”
                         </blockquote>
@@ -677,7 +697,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                             disabled={threadActionId === selectedThread.id}
                             className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            Resolve
+                            {t("comments.resolve")}
                           </button>
                         ) : (
                           <button
@@ -686,7 +706,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                             disabled={threadActionId === selectedThread.id}
                             className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            Reopen
+                            {t("comments.reopen")}
                           </button>
                         )}
                       </div>
@@ -719,7 +739,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
 
                   <div className="border-t border-[var(--color-border)] px-4 py-4">
                     <label className="sr-only" htmlFor={`reply-${selectedThread.id}`}>
-                      Reply to thread
+                      {t("comments.replyLabel")}
                     </label>
                     <textarea
                       id={`reply-${selectedThread.id}`}
@@ -727,12 +747,12 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                       onChange={(event) =>
                         setReplyDrafts((drafts) => ({ ...drafts, [selectedThread.id]: event.target.value }))
                       }
-                      placeholder="Add a reply"
+                      placeholder={t("comments.replyPlaceholder")}
                       className="min-h-[90px] w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-canvas)] px-4 py-3 text-sm outline-none transition-colors focus:border-[var(--color-border)]"
                     />
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <p className="text-[11px] text-[var(--color-text-muted)]">
-                        {selectedThread.isDetached ? "This anchor no longer exists in the chapter." : "Selecting this thread focuses the anchored text in the editor."}
+                        {selectedThread.isDetached ? t("comments.detachedHint") : t("comments.focusHint")}
                       </p>
                       <button
                         type="button"
@@ -740,7 +760,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                         disabled={threadActionId === selectedThread.id || !(replyDrafts[selectedThread.id] ?? "").trim()}
                         className="rounded-2xl bg-[var(--color-text)] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {threadActionId === selectedThread.id ? "Sending..." : "Reply"}
+                        {threadActionId === selectedThread.id ? t("comments.sending") : t("comments.reply")}
                       </button>
                     </div>
                     {commentError && (
@@ -756,9 +776,9 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                     <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-[var(--color-canvas)] text-[var(--color-text-muted)]">
                       <MessageSquare size={24} />
                     </div>
-                    <p className="mt-4 text-sm font-bold text-[var(--color-text)]">No thread selected</p>
+                    <p className="mt-4 text-sm font-bold text-[var(--color-text)]">{t("comments.noThreadTitle")}</p>
                     <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                      Create a comment from selected text in the editor, then review it here with the rest of the team.
+                      {t("comments.noThreadDescription")}
                     </p>
                   </div>
                 </div>
@@ -788,14 +808,14 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                 </div>
                 <div>
                   <Dialog.Title className="text-xl font-bold text-[var(--color-text)]">
-                    {membershipDialog?.kind === "leave"
-                      ? `Leave ${project.metadata.name}?`
-                      : `Remove ${membershipDialog?.memberName ?? "member"}?`}
+                  {membershipDialog?.kind === "leave"
+                      ? t("members.leaveDialogTitle", { projectName: project.metadata.name })
+                      : t("members.removeDialogTitle", { memberName: membershipDialog?.memberName ?? t("members.memberFallback") })}
                   </Dialog.Title>
                   <Dialog.Description className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
                     {membershipDialog?.kind === "leave"
-                      ? "You will immediately lose access to this project and return to the dashboard."
-                      : `This removes ${membershipDialog?.memberName ?? "this member"} from the workspace immediately. Their existing chapters, comments, and history stay intact.`}
+                      ? t("members.leaveDialogDescription")
+                      : t("members.removeDialogDescription", { memberName: membershipDialog?.memberName ?? t("members.memberFallback") })}
                   </Dialog.Description>
                 </div>
               </div>
@@ -810,12 +830,12 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                 <Dialog.Close asChild>
                   <button
                     type="button"
-                    disabled={memberActionUserId != null}
-                    className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Cancel
-                  </button>
-                </Dialog.Close>
+                  disabled={memberActionUserId != null}
+                  className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {commonT("cancel")}
+                </button>
+              </Dialog.Close>
                 <button
                   type="button"
                   onClick={() => void handleConfirmMembershipChange()}
@@ -823,7 +843,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                   className="inline-flex items-center gap-2 rounded-2xl bg-[var(--color-destructive)] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[var(--color-destructive)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {memberActionUserId === membershipDialog?.memberUserId && <Loader2 size={16} className="animate-spin" />}
-                  {membershipDialog?.kind === "leave" ? "Leave project" : "Remove member"}
+                  {membershipDialog?.kind === "leave" ? t("members.leaveProject") : t("members.removeMember")}
                 </button>
               </div>
             </div>

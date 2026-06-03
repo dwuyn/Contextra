@@ -5,6 +5,7 @@ import { useProjectStore } from "@/store/useProjectStore";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, Plus, Download, BookOpen, Trash2, Globe, Lock, GripVertical, Loader2, X } from "lucide-react";
 import { Link } from "@/lib/i18n-client";
+import { useTranslations } from "next-intl";
 import { createChapter, renameProject, updateSettings, reorderChapters, deleteChapter } from "@/actions/projects";
 import { useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import type { ChapterMeta } from "@/types/project";
@@ -92,6 +93,7 @@ function SortableChapter({
   canEdit: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chapter.id });
+  const st = useTranslations("sidebar");
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -106,7 +108,7 @@ function SortableChapter({
           {...attributes}
           {...listeners}
           className="opacity-0 group-hover/item:opacity-100 cursor-grab active:cursor-grabbing p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-all touch-none"
-          aria-label="Drag to reorder chapter"
+          aria-label={st("dragToReorder")}
         >
           <GripVertical size={14} />
         </button>
@@ -136,6 +138,7 @@ function SortableChapter({
 }
 
 export function SidebarNavigator() {
+  const st = useTranslations("sidebar");
   const project = useProjectStore((state) => state.project);
   const activeBranchId = useProjectStore((state) => state.activeBranchId);
   const setSelectedChapterId = useProjectStore((state) => state.setSelectedChapterId);
@@ -371,7 +374,7 @@ export function SidebarNavigator() {
       <div className="p-4 border-b border-[var(--color-border)]">
         <Link href="/" className="flex items-center gap-1 text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest hover:text-[var(--color-text)] transition-colors mb-4">
           <ChevronLeft size={12} />
-          Dashboard
+          {st("dashboard")}
         </Link>
         {isRenaming ? (
           <input
@@ -388,7 +391,7 @@ export function SidebarNavigator() {
           <h1
             className="text-lg font-bold text-[var(--color-text)] leading-tight truncate"
             onClick={canEdit ? handleStartRename : undefined}
-            title={canEdit ? "Click to rename" : undefined}
+            title={canEdit ? st("clickToRename") : undefined}
             style={canEdit ? { cursor: "pointer" } : undefined}
           >
             {project.metadata.name}
@@ -420,22 +423,22 @@ export function SidebarNavigator() {
               ) : (
                 <Plus size={14} />
               )}
-              {isCreatingChapter ? "Creating..." : "New"}
+              {isCreatingChapter ? st("creating") : st("newChapter")}
             </button>
             <button
               type="button"
               onClick={() => importInputRef.current?.click()}
               disabled={isImporting || !activeBranchId}
-              title="Import Markdown or text files as chapters"
+              title={st("importChapters")}
               className="flex cursor-pointer items-center justify-center gap-2 px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-bold text-[var(--color-text)] hover:bg-[var(--color-surface-alt)] transition-all shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Import chapters"
+              aria-label={st("importChapters")}
             >
               {isImporting ? (
                 <Loader2 size={14} className="animate-spin" />
               ) : (
                 <Download size={14} />
               )}
-              {isImporting ? "Importing..." : "Import"}
+              {isImporting ? st("importing") : st("importChapters")}
             </button>
           </div>
           {createChapterError && (
@@ -465,11 +468,11 @@ export function SidebarNavigator() {
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
         {visibleChapters.length === 0 ? (
           <div className="mx-2 mt-2 rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-alt)] px-4 py-6 text-center">
-            <p className="text-sm font-bold text-[var(--color-text-secondary)]">No chapters yet</p>
+            <p className="text-sm font-bold text-[var(--color-text-secondary)]">{st("noChapters")}</p>
             <p className="mt-1 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
               {canEdit
-                ? `Create your first chapter in ${activeBranch?.name ?? "this branch"} with New.`
-                : "This branch does not have any chapters yet."}
+                ? st("createFirstChapter", { branch: activeBranch?.name ?? "this branch" })
+                : st("noChaptersInBranch")}
             </p>
           </div>
         ) : (
@@ -502,16 +505,16 @@ export function SidebarNavigator() {
         {/* Privacy Toggle */}
         <div className="bg-[var(--color-surface-alt)] rounded-2xl p-3 border border-[var(--color-border)]">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest">Visibility</span>
+            <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest">{st("visibility")}</span>
             {project.metadata.isPublic ? (
               <span className="flex items-center gap-1 text-[10px] font-bold text-[var(--color-success)] uppercase">
                 <Globe size={10} />
-                Public
+                {st("public")}
               </span>
             ) : (
               <span className="flex items-center gap-1 text-[10px] font-bold text-[var(--color-text-secondary)] uppercase">
                 <Lock size={10} />
-                Private
+                {st("private")}
               </span>
             )}
           </div>
@@ -528,9 +531,9 @@ export function SidebarNavigator() {
             {isUpdatingPrivacy ? (
               <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : project.metadata.isPublic ? (
-              <>Make Private</>
+              <>{st("makePrivate")}</>
             ) : (
-              <>Make Public</>
+              <>{st("makePublic")}</>
             )}
           </button>
         </div>
@@ -544,7 +547,7 @@ export function SidebarNavigator() {
               <BookOpen size={16} />
             </div>
             <span className={cn("text-xs font-bold transition-colors", isStoryBibleOpen ? "text-[var(--color-text)]" : "text-[var(--color-text-secondary)]")}>
-              Story Bible
+              {st("storyBible")}
             </span>
           </div>
           <button 
@@ -553,7 +556,7 @@ export function SidebarNavigator() {
               "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2",
               isStoryBibleOpen ? "bg-[var(--color-accent)]" : "bg-[var(--color-border)]"
             )}
-            aria-label="Toggle Story Bible"
+            aria-label={st("toggleStoryBible")}
             aria-pressed={isStoryBibleOpen}
           >
             <span className={cn(
@@ -570,13 +573,13 @@ export function SidebarNavigator() {
               onClick={() => setIsDeleteDialogOpen(true)}
               disabled={!selectedChapter || isDeletingChapter}
               className="flex w-full items-center gap-3 text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-destructive)] disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Delete current chapter"
-              title={selectedChapter ? `Delete ${selectedChapter.title}` : "Select a chapter to delete"}
+              aria-label={st("deleteChapter", { title: selectedChapter?.title ?? "" })}
+              title={selectedChapter ? st("deleteChapter", { title: selectedChapter.title }) : st("selectChapterToDelete")}
             >
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-surface-alt)]">
                 {isDeletingChapter ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
               </div>
-              <span className="text-xs font-bold uppercase tracking-wider">Trash</span>
+              <span className="text-xs font-bold uppercase tracking-wider">{st("trash")}</span>
             </button>
             {deleteChapterError && (
               <div className="rounded-xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-3 py-2 text-[11px] font-medium text-[var(--color-destructive)]">
@@ -610,6 +613,8 @@ function DeleteChapterDialog({
   busy: boolean;
   onConfirm: () => void;
 }) {
+  const st = useTranslations("sidebar");
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -622,9 +627,9 @@ function DeleteChapterDialog({
                   <Trash2 size={18} />
                 </div>
                 <div>
-                  <Dialog.Title className="text-xl font-bold text-[var(--color-text)]">Delete Chapter</Dialog.Title>
+                  <Dialog.Title className="text-xl font-bold text-[var(--color-text)]">{st("deleteChapterDialogTitle")}</Dialog.Title>
                   <Dialog.Description className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
-                    Delete &ldquo;{chapterTitle}&rdquo;? This cannot be undone.
+                    {st("deleteChapterDialogDescription", { title: chapterTitle })}
                   </Dialog.Description>
                 </div>
               </div>
@@ -632,7 +637,7 @@ function DeleteChapterDialog({
                 <button
                   type="button"
                   className="rounded-xl p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text)]"
-                  aria-label="Close delete dialog"
+                  aria-label={st("closeDeleteDialog")}
                 >
                   <X size={16} />
                 </button>
@@ -645,7 +650,7 @@ function DeleteChapterDialog({
                   type="button"
                   className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-alt)]"
                 >
-                  Cancel
+                  {st("cancel")}
                 </button>
               </Dialog.Close>
               <button
@@ -655,7 +660,7 @@ function DeleteChapterDialog({
                 className="inline-flex items-center gap-2 rounded-2xl bg-[var(--color-destructive)] px-5 py-3 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:opacity-50"
               >
                 {busy && <Loader2 size={16} className="animate-spin" />}
-                Delete Chapter
+                {st("deleteChapterDialogTitle")}
               </button>
             </div>
           </div>

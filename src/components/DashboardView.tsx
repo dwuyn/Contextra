@@ -95,6 +95,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
   const [pendingProjectInvites, setPendingProjectInvites] = useState<PendingProjectInviteCard[]>(overview.pendingProjectInvites);
   const [inviteActionId, setInviteActionId] = useState<string | null>(null);
   const t = useTranslations();
+  const dt = useTranslations("dashboard");
   const membershipKind = searchParams.get("membership");
   const membershipProjectName = searchParams.get("project");
   const [membershipBanner] = useState<MembershipBanner | null>(() => {
@@ -191,7 +192,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
   const firstName = user.name.split(" ")[0];
 
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : hour < 21 ? "Good evening" : "Good night";
+  const greeting = hour < 12 ? dt("greeting_morning") : hour < 17 ? dt("greeting_afternoon") : hour < 21 ? dt("greeting_evening") : dt("greeting_night");
   const visibleMembershipBanner = isMembershipBannerDismissed ? null : membershipBanner;
 
   async function handleProjectInvite(inviteId: string, status: "accepted" | "declined") {
@@ -216,7 +217,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
         return (
           <>
             <header className="mb-12">
-              <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2">Workspace overview</p>
+              <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2">{dt("workspaceOverview")}</p>
               <h2 className="text-4xl lg:text-5xl font-extrabold text-[var(--color-text)] tracking-tight">{greeting}, {firstName}</h2>
             </header>
 
@@ -227,18 +228,18 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
                 className="mb-8 flex items-start justify-between gap-4 rounded-[24px] border border-[var(--color-accent-muted)] bg-[var(--color-accent-muted)] px-5 py-4 text-amber-900"
               >
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-700">Membership update</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-700">{dt("membershipUpdate")}</p>
                   <p className="mt-2 text-sm font-semibold">
                     {visibleMembershipBanner.kind === "removed"
-                      ? `You no longer have access to "${visibleMembershipBanner.projectName}".`
-                      : `You left "${visibleMembershipBanner.projectName}".`}
+                      ? dt("removedAccess", { projectName: visibleMembershipBanner.projectName })
+                      : dt("leftProject", { projectName: visibleMembershipBanner.projectName })}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsMembershipBannerDismissed(true)}
                   className="rounded-xl p-2 text-amber-700 transition-colors hover:bg-amber-100"
-                  aria-label="Dismiss membership update"
+                  aria-label={dt("dismissMembership")}
                 >
                   <X size={16} />
                 </button>
@@ -248,18 +249,18 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
             {pendingProjectInvites.length > 0 && (
               <section className="mb-12">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-sm font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">Collaboration requests</h3>
-                  <p className="text-xs text-[var(--color-text-muted)]">{pendingProjectInvites.length} waiting for your response</p>
+                  <h3 className="text-sm font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">{dt("collaborationRequests")}</h3>
+                  <p className="text-xs text-[var(--color-text-muted)]">{dt("waitingResponse", { count: pendingProjectInvites.length })}</p>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {pendingProjectInvites.map((invite) => (
                     <div key={invite.id} className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">Invite from {invite.sender.name}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{dt("inviteFrom", { name: invite.sender.name })}</p>
                       <h3 className="mt-3 text-xl font-bold text-[var(--color-text)]">{invite.projectName}</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">{invite.projectSummary || "No summary yet."}</p>
+                      <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">{invite.projectSummary || dt("noSummary")}</p>
                       <div className="mt-4 inline-flex rounded-full bg-[var(--color-canvas)] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
-                        Permission level {invite.permissionLevel}
+                        {dt("permissionLevel", { level: invite.permissionLevel })}
                       </div>
                       <div className="mt-5 flex gap-3">
                         <button
@@ -268,7 +269,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
                           disabled={inviteActionId === invite.id}
                           className="rounded-2xl bg-[var(--color-text)] px-4 py-2 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {inviteActionId === invite.id ? "Working..." : "Accept"}
+                          {inviteActionId === invite.id ? dt("working") : dt("accept")}
                         </button>
                         <button
                           type="button"
@@ -276,7 +277,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
                           disabled={inviteActionId === invite.id}
                           className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-alt)] disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          Decline
+                          {dt("decline")}
                         </button>
                       </div>
                     </div>
@@ -339,12 +340,12 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
             <section>
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-sm font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">{t("project.publicProjects")}</h3>
-                <p className="text-xs text-[var(--color-text-muted)]">Projects shared by other members</p>
+                <p className="text-xs text-[var(--color-text-muted)]">{dt("publicProjectHelper")}</p>
               </div>
 
               {overview.publicProjects.length === 0 ? (
                 <div className="flex h-32 items-center justify-center rounded-[32px] border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)] px-8 text-center text-sm text-[var(--color-text-muted)]">
-                  No public projects yet. Publish one from the Projects panel to share it.
+                  {dt("noPublicProjects")}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -367,7 +368,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
                           )}
                         </div>
                         <h5 className="font-bold text-[var(--color-text)] truncate">{project.name}</h5>
-                        <p className="text-[10px] text-[var(--color-text-muted)] mt-1 uppercase tracking-wider">by {project.ownerName}</p>
+                        <p className="text-[10px] text-[var(--color-text-muted)] mt-1 uppercase tracking-wider">{dt("by", { name: project.ownerName })}</p>
                       </div>
                     </Link>
                   ))}

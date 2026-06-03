@@ -18,22 +18,30 @@ function applyCookies(target: NextResponse, source?: NextResponse) {
   return target;
 }
 
+function getLocaleFromPath(pathname: string): string {
+  const segments = pathname.split("/").filter(Boolean);
+  if (segments.length > 0 && routing.locales.includes(segments[0] as "en" | "vi")) {
+    return segments[0];
+  }
+  return routing.defaultLocale;
+}
+
 export async function proxy(request: NextRequest) {
   const response = (await intlMiddleware(request)) ?? NextResponse.next();
 
   const session = request.cookies.get("session")?.value;
   const pathname = request.nextUrl.pathname;
-  const dl = routing.defaultLocale;
+  const locale = getLocaleFromPath(pathname);
 
   if (pathname.startsWith("/api/")) return response;
 
-  const isLogin = pathname === `/${dl}/login` || pathname === "/login";
-  const isRegister = pathname === `/${dl}/register` || pathname === "/register";
+  const isLogin = pathname === `/${locale}/login` || pathname === "/login";
+  const isRegister = pathname === `/${locale}/register` || pathname === "/register";
   const isAuth = isLogin || isRegister;
-  const isPublic = pathname === "/" || pathname === `/${dl}` || pathname === `/${dl}/`;
+  const isPublic = pathname === "/" || pathname === `/${locale}` || pathname === `/${locale}/`;
 
   if (!session && !isAuth && !isPublic) {
-    return NextResponse.redirect(new URL(`/${dl}/login`, request.url));
+    return NextResponse.redirect(new URL(`/${locale}/login`, request.url));
   }
 
   let refreshedSession: NextResponse | undefined;
@@ -48,7 +56,7 @@ export async function proxy(request: NextRequest) {
     if (sessionUpdate.kind === "invalid" || sessionUpdate.kind === "missing") {
       const res = isPublic || isAuth
         ? response
-        : NextResponse.redirect(new URL(`/${dl}/login`, request.url));
+        : NextResponse.redirect(new URL(`/${locale}/login`, request.url));
       res.cookies.delete("session");
       return res;
     }
@@ -60,7 +68,7 @@ export async function proxy(request: NextRequest) {
 
   if (refreshedSession && isAuth) {
     return applyCookies(
-      NextResponse.redirect(new URL(`/${dl}`, request.url)),
+      NextResponse.redirect(new URL(`/${locale}`, request.url)),
       refreshedSession,
     );
   }

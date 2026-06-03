@@ -9,7 +9,10 @@ import { FONT_OPTIONS, THEME_CARDS, toggleThemeDark } from "@/lib/appearance";
 import { usePreferencesStore } from "@/store/usePreferencesStore";
 import { updateProfile, changePassword, logout } from "@/actions/auth";
 import { useRouter } from "@/lib/i18n-client";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
+import { usePathname } from "@/lib/i18n-client";
+import { useSearchParams } from "next/navigation";
+import { routing } from "@/lib/i18n-client";
 
 interface PreferencesModalProps {
   onClose: () => void;
@@ -23,15 +26,20 @@ interface PreferencesModalProps {
 }
 
 function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+  if (error instanceof Error) return error.message;
+  return "Something went wrong. Please try again.";
 }
 
 export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
   const [activeTab, setActiveTab] = useState<"appearance" | "account">("appearance");
   const { theme, font, setTheme, setFont } = usePreferencesStore();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentLocale = useLocale();
   const t = useTranslations("auth");
   const ct = useTranslations("common");
+  const pt = useTranslations("preferences");
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // Account Form State
@@ -58,7 +66,7 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
     setProfileSuccess("");
     try {
       await updateProfile({ name, dob });
-      setProfileSuccess("Account updated.");
+      setProfileSuccess(pt("profileUpdated"));
       router.refresh();
     } catch (err) {
       console.error(err);
@@ -70,7 +78,7 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
 
   const handleChangePassword = async () => {
     if (newPassword !== confirmPassword) {
-      setPasswordError("Passwords do not match");
+      setPasswordError(pt("passwordsDontMatch"));
       return;
     }
     setIsChangingPassword(true);
@@ -81,7 +89,7 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setPasswordSuccess("Password updated successfully.");
+      setPasswordSuccess(pt("passwordUpdated"));
     } catch (err) {
       setPasswordError(getErrorMessage(err));
     } finally {
@@ -92,6 +100,11 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
   const handleLogout = async () => {
     await logout();
     router.push("/login");
+  };
+
+  const handleLocaleChange = (nextLocale: string) => {
+    if (!routing.locales.includes(nextLocale as "en" | "vi")) return;
+    router.replace({ pathname, query: Object.fromEntries(searchParams.entries()) }, { locale: nextLocale });
   };
 
   const handleAvatarUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -143,13 +156,13 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--color-text)]/30 backdrop-blur-[2px]" />
         <Dialog.Content className="fixed inset-4 z-50 mx-auto max-w-3xl overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-2xl flex flex-col md:inset-10 focus:outline-none">
-          <Dialog.Title className="sr-only">Preferences</Dialog.Title>
+          <Dialog.Title className="sr-only">{pt("modalTitle")}</Dialog.Title>
           <div className="flex flex-col md:flex-row h-full">
             {/* Tabs */}
             <div className="flex flex-row md:flex-col shrink-0 gap-1 px-4 py-3 md:px-3 md:py-4 border-b md:border-b-0 md:border-r border-[var(--color-border)] overflow-x-auto">
               {[
-                { id: "appearance" as const, icon: Palette, label: "Appearance" },
-                { id: "account" as const, icon: User, label: "Account" },
+                { id: "appearance" as const, icon: Palette, label: pt("appearance") },
+                { id: "account" as const, icon: User, label: pt("account") },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -170,11 +183,11 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
               {activeTab === "appearance" ? (
                 <div className="space-y-10">
                   <section>
-                    <h3 className="text-lg font-bold text-[var(--color-text)] mb-6">Theme</h3>
+                    <h3 className="text-lg font-bold text-[var(--color-text)] mb-6">{pt("theme")}</h3>
                     
                     {/* Dark mode toggle */}
                     <div className="flex items-center justify-between mb-4">
-                      <span className="text-sm font-medium">Dark mode</span>
+                      <span className="text-sm font-medium">{pt("darkMode")}</span>
                       <button
                         type="button"
                         onClick={() => setTheme(toggleThemeDark(theme))}
@@ -186,7 +199,7 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
                         )}
                         role="switch"
                         aria-checked={theme.endsWith("-dark")}
-                        aria-label="Toggle dark mode"
+                        aria-label={pt("toggleDarkMode")}
                       >
                         <span
                           className={cn(
@@ -242,7 +255,7 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
                   </section>
 
                   <section>
-                    <h3 className="text-lg font-bold text-[var(--color-text)] mb-6">Font</h3>
+                    <h3 className="text-lg font-bold text-[var(--color-text)] mb-6">{pt("font")}</h3>
                     <div className="grid grid-cols-2 gap-3">
                       {FONT_OPTIONS.map((f) => (
                         <button
@@ -263,7 +276,7 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
               ) : (
                 <div className="space-y-12">
                   <section>
-                    <h3 className="text-lg font-bold text-[var(--color-text)] mb-6">Account</h3>
+                    <h3 className="text-lg font-bold text-[var(--color-text)] mb-6">{pt("account")}</h3>
                     <div className="flex flex-col gap-8 xl:flex-row xl:gap-12">
                       {/* User Summary Card */}
                       <div className="mx-auto flex min-h-72 w-56 shrink-0 flex-col items-center rounded-[32px] border border-[var(--color-border)] bg-[var(--background)] px-6 py-7 xl:mx-0">
@@ -352,6 +365,27 @@ export function PreferencesModal({ onClose, user }: PreferencesModalProps) {
                               className="w-full rounded-2xl border border-[var(--color-border)] px-6 py-4 text-sm font-medium focus:border-[var(--color-accent)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
                             />
                           </label>
+                        </div>
+
+                        <div className="space-y-2">
+                          <span className="text-xs font-bold uppercase tracking-wider mb-1.5 block text-[var(--color-text-secondary)]">{pt("languageLabel")}</span>
+                          <div className="flex gap-2">
+                            {routing.locales.map((locale) => (
+                              <button
+                                key={locale}
+                                type="button"
+                                onClick={() => handleLocaleChange(locale)}
+                                className={cn(
+                                  "rounded-2xl border px-5 py-3 text-sm font-bold transition-colors",
+                                  currentLocale === locale
+                                    ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+                                    : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
+                                )}
+                              >
+                                {pt(locale)}
+                              </button>
+                            ))}
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-3">

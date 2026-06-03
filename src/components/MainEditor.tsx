@@ -168,32 +168,6 @@ function buildRewriteInstruction(language: PromptLanguage) {
     : "Make it more vivid and emotional.";
 }
 
-function buildLoadingHistoryCardContent(type: string) {
-  switch (type) {
-    case "Write":
-      return "Generating a continuation for your chapter...";
-    case "Rewrite":
-      return "Rewriting the selected text...";
-    case "Brainstorm":
-      return "Generating brainstorming ideas...";
-    default:
-      return "Generating an AI suggestion...";
-  }
-}
-
-function buildErrorHistoryCardContent(type: string) {
-  switch (type) {
-    case "Write":
-      return "Could not generate the continuation. Please try again.";
-    case "Rewrite":
-      return "Could not rewrite the selected text. Please try again.";
-    case "Brainstorm":
-      return "Could not generate brainstorming ideas. Please try again.";
-    default:
-      return "Could not generate the description. Please try again.";
-  }
-}
-
 export function MainEditor({
   onToggleHistory,
   onOpenAiHistory,
@@ -913,10 +887,12 @@ export function MainEditor({
   const runAiToolbarAction = async ({
     type,
     pendingContent,
+    errorContent,
     run,
   }: {
     type: string;
     pendingContent: string;
+    errorContent: string;
     run: () => Promise<string>;
   }) => {
     onOpenAiHistory?.();
@@ -937,7 +913,7 @@ export function MainEditor({
     } catch (error) {
       console.error(error);
       updateAiCard(cardId, {
-        content: buildErrorHistoryCardContent(type),
+        content: errorContent,
         status: "error",
         errorMessage: error instanceof Error ? error.message : undefined,
       });
@@ -961,8 +937,9 @@ export function MainEditor({
     const message = buildWriteMessage(promptLanguage, textBefore, title || currentChapter?.title || "");
 
     await runAiToolbarAction({
-      type: "Write",
-      pendingContent: buildLoadingHistoryCardContent("Write"),
+      type: t("editor.ai.write"),
+      pendingContent: t("editor.history.writeLoading"),
+      errorContent: t("editor.history.writeError"),
       run: async () => {
         const res = await fetch("/api/chat", {
           method: "POST",
@@ -996,8 +973,9 @@ export function MainEditor({
       : instructions;
 
     await runAiToolbarAction({
-      type: "Rewrite",
-      pendingContent: buildLoadingHistoryCardContent("Rewrite"),
+      type: t("editor.ai.rewrite"),
+      pendingContent: t("editor.history.rewriteLoading"),
+      errorContent: t("editor.history.rewriteError"),
       run: async () => {
         const { result } = await rewriteAction(project.metadata.id, activeBranchId, {
           selection,
@@ -1015,8 +993,9 @@ export function MainEditor({
     if (!selection) return;
 
     await runAiToolbarAction({
-      type: `Describe (${sense})`,
-      pendingContent: buildLoadingHistoryCardContent(`Describe (${sense})`),
+      type: t("editor.ai.describe"),
+      pendingContent: t("editor.history.describeLoading"),
+      errorContent: t("editor.history.describeError"),
       run: async () => {
         const { result } = await describeAction(project.metadata.id, activeBranchId, {
           selection,
@@ -1040,8 +1019,9 @@ export function MainEditor({
     const message = buildBrainstormMessage(promptLanguage);
 
     await runAiToolbarAction({
-      type: "Brainstorm",
-      pendingContent: buildLoadingHistoryCardContent("Brainstorm"),
+      type: t("editor.ai.brainstorm"),
+      pendingContent: t("editor.history.brainstormLoading"),
+      errorContent: t("editor.history.brainstormError"),
       run: async () => {
         const res = await fetch("/api/chat", {
           method: "POST",
@@ -1188,6 +1168,7 @@ export function MainEditor({
               <Tooltip.Trigger asChild>
                 <button
                   type="button"
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => void handleRewrite()}
                   disabled={isGenerating || !hasSelection || !canEdit}
                   className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-[var(--color-text-secondary)] rounded-lg text-sm font-bold hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
@@ -1211,6 +1192,7 @@ export function MainEditor({
               <Tooltip.Trigger asChild>
                 <button
                   type="button"
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => void handleDescribe()}
                   disabled={isGenerating || !hasSelection || !canEdit}
                   className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-[var(--color-text-secondary)] rounded-lg text-sm font-bold hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
@@ -1300,7 +1282,7 @@ export function MainEditor({
             <button
               type="button"
               onClick={onToggleHistory}
-              title="Version History"
+              title={t("editor.history.historyButton")}
               className="cursor-pointer p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors"
             >
               <History size={16} />
@@ -1398,6 +1380,7 @@ export function MainEditor({
       >
         <button
           type="button"
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => handleOpenCommentComposer()}
           disabled={!hasSelection || hasUnsavedChanges || hasCheckpointChanges || isSaving || isCreatingComment}
           className="cursor-pointer px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:opacity-90 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1407,6 +1390,7 @@ export function MainEditor({
         </button>
         <button
           type="button"
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => void handleRewrite()}
           disabled={!hasSelection}
           className="cursor-pointer px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:opacity-90 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1416,6 +1400,7 @@ export function MainEditor({
         </button>
         <button
           type="button"
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => void handleDescribe("sight")}
           disabled={!hasSelection}
           className="cursor-pointer px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:opacity-90 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1594,4 +1579,3 @@ function ToolbarButton({
     </button>
   );
 }
-
