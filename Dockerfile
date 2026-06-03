@@ -15,6 +15,7 @@ RUN npm ci
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN mkdir -p /app/public
 
 # Generate Prisma client before the production build so the standalone bundle
 # includes the generated runtime artifacts.
