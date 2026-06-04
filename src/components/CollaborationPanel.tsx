@@ -342,7 +342,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <aside className="flex h-full w-[380px] flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]">
+    <aside className="flex h-full w-[460px] xl:w-[520px] flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("title")}</p>
@@ -631,25 +631,25 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          <div className="grid min-h-0 flex-1 grid-cols-[200px_minmax(0,1fr)]">
-            <div className="border-r border-[var(--color-border)] bg-[var(--color-canvas)]/70 p-3">
+          <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
+            <div className="border-r border-[var(--color-border)] bg-[var(--color-canvas)]/70 p-4">
               {isLoadingComments ? (
                 <div className="flex h-full items-center justify-center text-[var(--color-text-muted)]">
                   <Loader2 size={18} className="animate-spin" />
                 </div>
               ) : filteredThreads.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-5 text-center text-xs text-[var(--color-text-muted)]">
+                <div className="rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-6 text-center text-sm text-[var(--color-text-muted)]">
                   {selectedChapterId ? t("comments.noMatchingThreads") : t("comments.selectChapter")}
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {filteredThreads.map((thread) => (
                     <button
                       key={thread.id}
                       type="button"
                       onClick={() => setSelectedCommentThreadId(thread.id)}
                       className={cn(
-                        "w-full rounded-2xl border px-3 py-3 text-left transition-colors",
+                        "w-full rounded-2xl border px-4 py-4 text-left transition-colors",
                         selectedThread?.id === thread.id
                           ? "border-[var(--color-text)] bg-[var(--color-surface)] shadow-sm"
                           : "border-transparent bg-[var(--color-surface)]/80 hover:border-[var(--color-border)]",
@@ -668,8 +668,8 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-destructive)]">{t("comments.detached")}</span>
                         )}
                       </div>
-                      <p className="mt-2 line-clamp-2 text-xs font-semibold text-[var(--color-text)]">{thread.selectedText}</p>
-                      <p className="mt-2 text-[11px] text-[var(--color-text-secondary)]">
+                      <p className="mt-3 line-clamp-3 text-sm font-semibold leading-relaxed text-[var(--color-text)]">{thread.selectedText}</p>
+                      <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
                         {t("comments.repliesCount", { count: thread.replies.length })}
                       </p>
                     </button>
@@ -681,11 +681,11 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
             <div className="flex min-h-0 flex-col">
               {selectedThread ? (
                 <>
-                  <div className="border-b border-[var(--color-border)] px-4 py-4">
+                  <div className="border-b border-[var(--color-border)] px-5 py-5">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("comments.selectedText")}</p>
-                        <blockquote className="mt-2 rounded-2xl bg-[var(--color-canvas)] px-3 py-3 text-sm font-medium text-[var(--color-text)]">
+                        <blockquote className="mt-3 rounded-2xl bg-[var(--color-canvas)] px-4 py-4 text-base leading-relaxed font-medium text-[var(--color-text)]">
                           “{selectedThread.selectedText}”
                         </blockquote>
                       </div>
@@ -695,7 +695,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                             type="button"
                             onClick={() => void handleUpdateThreadStatus(selectedThread, "resolved")}
                             disabled={threadActionId === selectedThread.id}
-                            className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 py-2.5 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {t("comments.resolve")}
                           </button>
@@ -704,7 +704,7 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                             type="button"
                             onClick={() => void handleUpdateThreadStatus(selectedThread, "open")}
                             disabled={threadActionId === selectedThread.id}
-                            className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 py-2.5 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {t("comments.reopen")}
                           </button>
@@ -713,31 +713,31 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto px-4 py-4">
-                    <div className="space-y-3">
+                  <div className="flex-1 overflow-y-auto px-5 py-5">
+                    <div className="space-y-4">
                       {selectedThread.replies.map((reply) => (
-                        <div key={reply.id} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 shadow-sm">
+                        <div key={reply.id} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 shadow-sm">
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
-                              <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-[var(--color-text)] text-[11px] font-bold text-white">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--color-text)] text-xs font-bold text-white">
                                 {getInitials(reply.author.name)}
                               </div>
                               <div>
-                                <p className="text-sm font-bold text-[var(--color-text)]">{reply.author.name}</p>
-                                <p className="text-[11px] text-[var(--color-text-secondary)]">{formatTimestamp(reply.createdAt)}</p>
+                                <p className="text-base font-bold text-[var(--color-text)]">{reply.author.name}</p>
+                                <p className="text-xs text-[var(--color-text-secondary)]">{formatTimestamp(reply.createdAt)}</p>
                               </div>
                             </div>
                             {reply.authorUserId === selectedThread.authorUserId && (
                               <Check size={14} className="text-[var(--color-success)]" />
                             )}
                           </div>
-                          <p className="mt-3 text-sm leading-relaxed text-[var(--color-text)]">{reply.content}</p>
+                          <p className="mt-3 text-base leading-relaxed text-[var(--color-text)]">{reply.content}</p>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="border-t border-[var(--color-border)] px-4 py-4">
+                  <div className="border-t border-[var(--color-border)] px-5 py-5">
                     <label className="sr-only" htmlFor={`reply-${selectedThread.id}`}>
                       {t("comments.replyLabel")}
                     </label>
@@ -748,23 +748,23 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                         setReplyDrafts((drafts) => ({ ...drafts, [selectedThread.id]: event.target.value }))
                       }
                       placeholder={t("comments.replyPlaceholder")}
-                      className="min-h-[90px] w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-canvas)] px-4 py-3 text-sm outline-none transition-colors focus:border-[var(--color-border)]"
+                      className="min-h-[120px] w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-canvas)] px-4 py-3.5 text-base leading-relaxed outline-none transition-colors focus:border-[var(--color-border)]"
                     />
                     <div className="mt-3 flex items-center justify-between gap-3">
-                      <p className="text-[11px] text-[var(--color-text-muted)]">
+                      <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">
                         {selectedThread.isDetached ? t("comments.detachedHint") : t("comments.focusHint")}
                       </p>
                       <button
                         type="button"
                         onClick={() => void handleReply(selectedThread)}
                         disabled={threadActionId === selectedThread.id || !(replyDrafts[selectedThread.id] ?? "").trim()}
-                        className="rounded-2xl bg-[var(--color-text)] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-2xl bg-[var(--color-text)] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {threadActionId === selectedThread.id ? t("comments.sending") : t("comments.reply")}
                       </button>
                     </div>
                     {commentError && (
-                      <div className="mt-3 rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-3 py-2 text-xs font-medium text-[var(--color-destructive)]">
+                      <div className="mt-3 rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-3 py-2 text-sm font-medium text-[var(--color-destructive)]">
                         {commentError}
                       </div>
                     )}
@@ -776,8 +776,8 @@ export function CollaborationPanel({ onClose }: { onClose: () => void }) {
                     <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-[var(--color-canvas)] text-[var(--color-text-muted)]">
                       <MessageSquare size={24} />
                     </div>
-                    <p className="mt-4 text-sm font-bold text-[var(--color-text)]">{t("comments.noThreadTitle")}</p>
-                    <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-muted)]">
+                    <p className="mt-4 text-base font-bold text-[var(--color-text)]">{t("comments.noThreadTitle")}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-muted)]">
                       {t("comments.noThreadDescription")}
                     </p>
                   </div>
