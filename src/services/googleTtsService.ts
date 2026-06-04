@@ -17,6 +17,7 @@ import {
   type PronunciationEntryData,
 } from "@/services/pronunciationService";
 import { prisma } from "@/lib/prisma";
+import { normalizeMpegAudioBuffer } from "@/lib/audio";
 
 type GoogleTtsConfig = {
   bucketName: string;
@@ -102,10 +103,30 @@ function toAudioBuffer(audioContent: Uint8Array | string | null | undefined) {
   }
 
   if (typeof audioContent === "string") {
-    return Buffer.from(audioContent, "base64");
+    const decodedBuffer = Buffer.from(audioContent, "base64");
+    const normalizedBuffer = normalizeMpegAudioBuffer(decodedBuffer);
+    if (normalizedBuffer) {
+      return normalizedBuffer;
+    }
+    throw new Error("Google TTS returned non-MP3 audio.");
   }
 
-  return Buffer.from(audioContent);
+  const normalizedBuffer = normalizeMpegAudioBuffer(audioContent);
+  if (normalizedBuffer) {
+    return normalizedBuffer;
+  }
+
+  throw new Error("Google TTS returned non-MP3 audio.");
+}
+
+function assertMpegAudioBuffer(audioBuffer: Uint8Array, source: "cache" | "synthesis") {
+  if (!normalizeMpegAudioBuffer(audioBuffer)) {
+    throw new Error(
+      source === "cache"
+        ? "Cached voice segment is not valid MP3 audio."
+        : "Google TTS returned non-MP3 audio.",
+    );
+  }
 }
 
 function buildCacheObjectPath(input: {
@@ -272,12 +293,39 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
   const [exists] = await file.exists();
   if (exists) {
     const [audioBuffer] = await file.download();
-    return {
-      audioBuffer,
-      contentType: "audio/mpeg",
-      segmentCount: speechSegments.length,
-      cacheHit: true,
-    };
+    const normalizedCachedBuffer = normalizeMpegAudioBuffer(audioBuffer);
+    if (normalizedCachedBuffer) {
+      if (!Buffer.from(audioBuffer).equals(normalizedCachedBuffer)) {
+        await uploadToCache(file, normalizedCachedBuffer).catch((error: unknown) => {
+          console.warn("Failed to rewrite normalized cached Google TTS segment:", {
+            cachePath,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
+
+      return {
+        audioBuffer: normalizedCachedBuffer,
+        contentType: "audio/mpeg",
+        segmentCount: speechSegments.length,
+        cacheHit: true,
+      };
+    }
+
+    console.warn("Invalid cached Google TTS segment detected, regenerating:", {
+      projectId: input.projectId,
+      chapterId: input.chapterId,
+      voiceId: input.voiceId,
+      segmentIndex: input.segmentIndex,
+      language: input.language,
+      cachePath,
+    });
+    await file.delete({ ignoreNotFound: true }).catch((error: unknown) => {
+      console.warn("Failed to delete invalid cached Google TTS segment:", {
+        cachePath,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   // Try SSML synthesis
@@ -289,6 +337,7 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
       input.voiceId,
       input.rate,
     );
+    assertMpegAudioBuffer(audioBuffer, "synthesis");
 
     await uploadToCache(file, audioBuffer);
 
@@ -317,6 +366,7 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
       input.voiceId,
       input.rate,
     );
+    assertMpegAudioBuffer(fallbackBuffer, "synthesis");
 
     // Do NOT cache fallback under SSML key
     return {

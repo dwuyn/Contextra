@@ -28,10 +28,103 @@ type VoiceResponse = {
   voices?: VoiceOption[];
 };
 
-type PrefetchedSegment = {
+export type SegmentAudioSource = {
   index: number;
   objectUrl: string;
+  contentType: string;
+  byteLength: number;
+  cacheStatus: string | null;
 };
+
+type PrefetchedSegment = SegmentAudioSource;
+
+export type ActiveAudioSource = Omit<SegmentAudioSource, "objectUrl">;
+
+function normalizeContentType(value: string | null) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function summarizeTextDetail(value: string) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+  return normalized.length > 180 ? `${normalized.slice(0, 177)}...` : normalized;
+}
+
+export function buildUnexpectedAudioResponseMessage(isVietnamese: boolean, contentType: string, detail: string | null) {
+  const fallbackType = contentType || (isVietnamese ? "không rõ kiểu dữ liệu" : "unknown content type");
+  const prefix = isVietnamese
+    ? `Trình đọc giọng nói nhận về ${fallbackType} thay vì âm thanh.`
+    : `Voice reader returned ${fallbackType} instead of audio.`;
+
+  return detail ? `${prefix} ${detail}` : prefix;
+}
+
+export function buildEmptyAudioResponseMessage(isVietnamese: boolean) {
+  return isVietnamese
+    ? "Trình đọc giọng nói trả về tệp âm thanh rỗng."
+    : "Voice reader returned an empty audio file.";
+}
+
+export function isBrowserMediaSourceErrorMessage(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("no supported source") ||
+    normalized.includes("not suitable") ||
+    normalized.includes("media resource indicated by the src attribute") ||
+    normalized.includes("assigned media provider object was not suitable")
+  );
+}
+
+export function buildUnsupportedMediaMessage(
+  isVietnamese: boolean,
+  source: ActiveAudioSource | null,
+) {
+  if (!source) {
+    return isVietnamese
+      ? "Trình duyệt không giải mã được âm thanh đã nhận. Hãy kiểm tra phản hồi localhost từ /api/voice-reader/segment."
+      : "The browser could not decode the returned audio. Check the localhost /api/voice-reader/segment response.";
+  }
+
+  const parts = [source.contentType || "unknown content type", `${source.byteLength} bytes`];
+  if (source.cacheStatus) {
+    parts.push(`cache ${source.cacheStatus}`);
+  }
+
+  const summary = parts.join(", ");
+  return isVietnamese
+    ? `Đoạn ${source.index + 1} trả về ${summary}, nhưng trình duyệt không giải mã được âm thanh. Hãy kiểm tra phản hồi localhost từ /api/voice-reader/segment.`
+    : `Segment ${source.index + 1} returned ${summary}, but the browser could not decode the audio. Check the localhost /api/voice-reader/segment response.`;
+}
+
+export async function readSegmentAudioResponse(
+  response: Response,
+  segmentIndex: number,
+  isVietnamese: boolean,
+): Promise<SegmentAudioSource> {
+  const responseContentType = normalizeContentType(response.headers.get("Content-Type"));
+  if (!responseContentType.startsWith("audio/")) {
+    const detail = summarizeTextDetail(await response.text());
+    throw new Error(buildUnexpectedAudioResponseMessage(isVietnamese, responseContentType, detail));
+  }
+
+  const blob = await response.blob();
+  const blobContentType = normalizeContentType(blob.type || responseContentType);
+  if (!blobContentType.startsWith("audio/")) {
+    throw new Error(buildUnexpectedAudioResponseMessage(isVietnamese, blobContentType, null));
+  }
+
+  if (blob.size === 0) {
+    throw new Error(buildEmptyAudioResponseMessage(isVietnamese));
+  }
+
+  return {
+    index: segmentIndex,
+    objectUrl: URL.createObjectURL(blob),
+    contentType: blobContentType,
+    byteLength: blob.size,
+    cacheStatus: response.headers.get("X-Voice-Reader-Cache"),
+  };
+}
 
 const EMPTY_VOICE_OPTIONS: Record<ReaderLanguage, VoiceOption[]> = {
   "en-US": [],
@@ -48,6 +141,30 @@ function getPlaybackErrorMessage(error: unknown, fallback: string) {
   }
 
   return fallback;
+}
+
+export function getVoiceDisplayLabel(voice: VoiceOption, isVietnamese: boolean) {
+  const normalizedId = voice.id.toLowerCase();
+
+  if (
+    normalizedId.endsWith("-a") ||
+    normalizedId.endsWith("-f") ||
+    normalizedId.endsWith("-h") ||
+    normalizedId.endsWith("-aoede")
+  ) {
+    return isVietnamese ? "Nữ" : "Female";
+  }
+
+  if (
+    normalizedId.endsWith("-d") ||
+    normalizedId.endsWith("-i") ||
+    normalizedId.endsWith("-j") ||
+    normalizedId.endsWith("-charon")
+  ) {
+    return isVietnamese ? "Nam" : "Male";
+  }
+
+  return voice.label;
 }
 
 export function PublicVoiceReader({
@@ -80,6 +197,7 @@ export function PublicVoiceReader({
   const playbackSessionIdRef = useRef(0);
   const currentSegmentIndexRef = useRef(0);
   const currentAudioUrlRef = useRef<string | null>(null);
+  const currentAudioSourceRef = useRef<ActiveAudioSource | null>(null);
   const activeFetchAbortRef = useRef<AbortController | null>(null);
   const prefetchAbortRef = useRef<AbortController | null>(null);
   const prefetchedSegmentRef = useRef<PrefetchedSegment | null>(null);
@@ -155,6 +273,7 @@ export function PublicVoiceReader({
   const clearCurrentAudioSource = useCallback(() => {
     revokeObjectUrl(currentAudioUrlRef.current);
     currentAudioUrlRef.current = null;
+    currentAudioSourceRef.current = null;
   }, [revokeObjectUrl]);
 
   const clearPrefetchedSegment = useCallback(() => {
@@ -228,10 +347,9 @@ export function PublicVoiceReader({
         throw new Error((await response.text()) || "Voice playback failed.");
       }
 
-      const blob = await response.blob();
-      return URL.createObjectURL(blob);
+      return readSegmentAudioResponse(response, segmentIndex, isVietnamese);
     },
-    [activeLanguage, activeVoice, chapterId, projectId, readerRate]
+    [activeLanguage, activeVoice, chapterId, isVietnamese, projectId, readerRate]
   );
 
   const prefetchSegment = useCallback(
@@ -249,14 +367,14 @@ export function PublicVoiceReader({
       prefetchAbortRef.current = controller;
 
       void requestSegmentAudio(segmentIndex, controller.signal)
-        .then((objectUrl) => {
+        .then((segmentSource) => {
           if (playbackSessionIdRef.current !== sessionId) {
-            revokeObjectUrl(objectUrl);
+            revokeObjectUrl(segmentSource.objectUrl);
             return;
           }
 
           clearPrefetchedSegment();
-          prefetchedSegmentRef.current = { index: segmentIndex, objectUrl };
+          prefetchedSegmentRef.current = segmentSource;
         })
         .catch((error) => {
           if (!isAbortError(error)) {
@@ -286,18 +404,18 @@ export function PublicVoiceReader({
       }
 
       try {
-        let nextObjectUrl: string;
+        let nextSegmentSource: SegmentAudioSource;
         if (prefetchedSegmentRef.current?.index === segmentIndex) {
-          nextObjectUrl = prefetchedSegmentRef.current.objectUrl;
+          nextSegmentSource = prefetchedSegmentRef.current;
           prefetchedSegmentRef.current = null;
         } else {
           activeFetchAbortRef.current?.abort();
           const controller = new AbortController();
           activeFetchAbortRef.current = controller;
-          nextObjectUrl = await requestSegmentAudio(segmentIndex, controller.signal);
+          nextSegmentSource = await requestSegmentAudio(segmentIndex, controller.signal);
 
           if (playbackSessionIdRef.current !== sessionId) {
-            revokeObjectUrl(nextObjectUrl);
+            revokeObjectUrl(nextSegmentSource.objectUrl);
             return;
           }
 
@@ -312,8 +430,14 @@ export function PublicVoiceReader({
 
         audio.pause();
         clearCurrentAudioSource();
-        currentAudioUrlRef.current = nextObjectUrl;
-        audio.src = nextObjectUrl;
+        currentAudioUrlRef.current = nextSegmentSource.objectUrl;
+        currentAudioSourceRef.current = {
+          index: nextSegmentSource.index,
+          contentType: nextSegmentSource.contentType,
+          byteLength: nextSegmentSource.byteLength,
+          cacheStatus: nextSegmentSource.cacheStatus,
+        };
+        audio.src = nextSegmentSource.objectUrl;
         audio.currentTime = 0;
         await audio.play();
         updatePlaybackState("playing");
@@ -324,12 +448,17 @@ export function PublicVoiceReader({
           return;
         }
 
-        stopPlayback(getPlaybackErrorMessage(error, playbackErrorFallback));
+        const message =
+          error instanceof Error && isBrowserMediaSourceErrorMessage(error.message)
+            ? buildUnsupportedMediaMessage(isVietnamese, currentAudioSourceRef.current)
+            : getPlaybackErrorMessage(error, playbackErrorFallback);
+        stopPlayback(message);
       }
     },
     [
       activeVoice,
       clearCurrentAudioSource,
+      isVietnamese,
       prefetchSegment,
       requestSegmentAudio,
       revokeObjectUrl,
@@ -372,14 +501,14 @@ export function PublicVoiceReader({
         return;
       }
 
-      stopPlayback("Voice playback failed. Please try again.");
+      stopPlayback(buildUnsupportedMediaMessage(isVietnamese, currentAudioSourceRef.current));
     };
 
     return () => {
       audio.onended = null;
       audio.onerror = null;
     };
-  }, [playSegment, speechSegments.length, stopPlayback]);
+  }, [isVietnamese, playSegment, speechSegments.length, stopPlayback]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -582,8 +711,8 @@ export function PublicVoiceReader({
                     <option value="">{isVietnamese ? "Chưa có giọng đọc tuyển chọn" : "No curated voice"}</option>
                   ) : (
                     availableVoices.map((voice) => (
-                      <option key={voice.id} value={voice.id}>
-                        {voice.label}
+                    <option key={voice.id} value={voice.id}>
+                        {getVoiceDisplayLabel(voice, isVietnamese)}
                       </option>
                     ))
                   )}
