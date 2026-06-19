@@ -56,6 +56,7 @@ export function FriendsView() {
   const [selectedFriend, setSelectedFriend] = useState<FriendSummary | null>(null);
   const [unreadMap, setUnreadMap] = useState<Record<string, boolean>>({});
   const [latestMessage, setLatestMessage] = useState<DirectMessageSummary | null>(null);
+  const appendMessageRef = useRef<((msg: DirectMessageSummary) => void) | null>(null);
 
   async function fetchFriends() {
     try {
@@ -75,9 +76,10 @@ export function FriendsView() {
       const message = toDirectMessage(data);
       if (!message) return;
       setLatestMessage(message);
-      // If the message is not from the currently selected friend, mark as unread
       if (selectedFriend?.id !== message.senderId) {
         setUnreadMap(prev => ({ ...prev, [message.senderId]: true }));
+      } else {
+        appendMessageRef.current?.(message);
       }
     }
   });
@@ -101,6 +103,7 @@ export function FriendsView() {
         </div>
         {selectedFriend ? (
           <button 
+            type="button"
             onClick={() => setSelectedFriend(null)}
             className="flex h-10 items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm font-bold text-[var(--color-text)] hover:bg-[var(--color-canvas)] transition-colors shadow-sm"
           >
@@ -135,6 +138,7 @@ export function FriendsView() {
               <nav className="space-y-1 pb-4">
                 {filteredFriends.map((friend) => (
                   <button
+                    type="button"
                     key={friend.id}
                     onClick={() => handleSelectFriend(friend)}
                     className={cn(
@@ -172,7 +176,7 @@ export function FriendsView() {
               <p className="text-[var(--color-text-muted)] leading-relaxed">{t("chooseFriendDescription")}</p>
             </div>
           ) : (
-            <EmbeddedChat friend={selectedFriend} latestMessage={latestMessage} />
+            <EmbeddedChat friend={selectedFriend} latestMessage={latestMessage} appendMessageRef={appendMessageRef} />
           )}
         </div>
       </div>
@@ -180,12 +184,24 @@ export function FriendsView() {
   );
 }
 
-function EmbeddedChat({ friend, latestMessage }: { friend: FriendSummary, latestMessage: DirectMessageSummary | null }) {
+function EmbeddedChat({ friend, latestMessage, appendMessageRef }: { friend: FriendSummary, latestMessage: DirectMessageSummary | null, appendMessageRef: React.MutableRefObject<((msg: DirectMessageSummary) => void) | null> }) {
   const t = useTranslations("friendsView");
   const [messages, setMessages] = useState<DirectMessageSummary[]>([]);
   const [inputValue, setInputValue] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const friendInitial = friend.name.charAt(0).toUpperCase();
+
+  useEffect(() => {
+    appendMessageRef.current = (msg: DirectMessageSummary) => {
+      setMessages((prev) => {
+        if (prev.some(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+    };
+    return () => {
+      appendMessageRef.current = null;
+    };
+  }, [appendMessageRef]);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -201,18 +217,6 @@ function EmbeddedChat({ friend, latestMessage }: { friend: FriendSummary, latest
       fetchMessages();
     });
   }, [fetchMessages]);
-
-  useEffect(() => {
-    if (latestMessage && latestMessage.senderId === friend.id) {
-      queueMicrotask(() => {
-        setMessages((prev) => {
-          // Prevent duplicate messages
-          if (prev.some(m => m.id === latestMessage.id)) return prev;
-          return [...prev, latestMessage];
-        });
-      });
-    }
-  }, [latestMessage, friend.id]);
 
   useEffect(() => {
     if (scrollRef.current) {

@@ -139,6 +139,7 @@ export function AllProjectsModal({ onClose }: { onClose: () => void }) {
             <p className="text-sm text-[var(--color-text-secondary)] mt-1">{t("subtitle")}</p>
           </div>
           <button 
+            type="button"
             onClick={onClose} 
             className="p-2.5 bg-[var(--color-canvas)] hover:bg-[var(--color-surface-alt)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] rounded-full transition-colors"
           >
@@ -150,6 +151,7 @@ export function AllProjectsModal({ onClose }: { onClose: () => void }) {
         <div className="flex flex-col sm:flex-row items-center justify-between p-6 gap-4 border-b border-[var(--color-border)] bg-[var(--color-canvas)]/30">
           <div className="flex bg-[var(--color-surface-alt)] p-1 rounded-2xl w-full sm:w-auto">
             <button
+              type="button"
               onClick={() => setActiveTab("my")}
               className={cn(
                 "px-6 py-2 rounded-xl text-sm font-bold transition-all",
@@ -159,6 +161,7 @@ export function AllProjectsModal({ onClose }: { onClose: () => void }) {
               {t("myProjects")}
             </button>
             <button
+              type="button"
               onClick={handleSelectPublicTab}
               className={cn(
                 "px-6 py-2 rounded-xl text-sm font-bold transition-all",
@@ -229,6 +232,7 @@ export function AllProjectsModal({ onClose }: { onClose: () => void }) {
                                 <DropdownMenu.Root>
                                   <DropdownMenu.Trigger asChild>
                                     <button
+                                      type="button"
                                       aria-label={dashboardT("deleteProject")}
                                       className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] p-1 rounded-md hover:bg-[var(--color-surface)]/50 transition-colors"
                                     >
@@ -278,13 +282,13 @@ export function AllProjectsModal({ onClose }: { onClose: () => void }) {
 
                     if (isMyProject) {
                       return (
-                        <div
+                        <Link
                           key={project.id}
+                          href={`/project/${project.id}`}
                           className="group relative flex aspect-[4/3] flex-col rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm transition-all hover:shadow-md hover:-translate-y-1 hover:border-[var(--color-border)] cursor-pointer"
-                          onClick={() => router.push(`/project/${project.id}`)}
                         >
                           {cardContent}
-                        </div>
+                        </Link>
                       );
                     }
 

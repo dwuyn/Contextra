@@ -5,7 +5,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function tr(language: string, en: string, vi: string) {
+function tr(language: string, en: string, vi: string) {
   return language === "vi-VN" ? vi : en;
 }
 

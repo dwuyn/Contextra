@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "@/lib/i18n-client";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
@@ -30,67 +30,70 @@ export function CommandPalette({ chapters }: CommandPaletteProps) {
   const router = useRouter();
   const { theme, setTheme } = usePreferencesStore();
   const { isZenMode, toggleZen } = useZenStore();
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [palette, setPalette] = useState({ open: false, query: "", selectedIndex: 0 });
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (palette.open && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [palette.open]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        setOpen((prev) => !prev);
-        setQuery("");
-        setSelectedIndex(0);
+        setPalette({ open: !palette.open, query: "", selectedIndex: 0 });
       }
-      if (e.key === "Escape" && open) {
-        setOpen(false);
+      if (e.key === "Escape" && palette.open) {
+        setPalette((prev) => ({ ...prev, open: false }));
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open]);
+  }, [palette.open]);
 
   const allCommands: CommandItem[] = useMemo(() => [
     { id: "dashboard", group: t("navigation"), label: t("goToDashboard"), icon: <Home className="size-4" />,
-      action: () => { router.push("/"); setOpen(false); } },
+      action: () => { router.push("/"); setPalette((prev) => ({ ...prev, open: false })); } },
     { id: "theme", group: t("settings"), label: t("toggleTheme"), icon: theme.endsWith("-dark") ? <Sun className="size-4" /> : <Moon className="size-4" />,
-      action: () => { setTheme(toggleThemeDark(theme)); setOpen(false); } },
+      action: () => { setTheme(toggleThemeDark(theme)); setPalette((prev) => ({ ...prev, open: false })); } },
     { id: "zen", group: t("settings"), label: t("toggleZen"), icon: isZenMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />,
-      action: () => { toggleZen(); setOpen(false); } },
+      action: () => { toggleZen(); setPalette((prev) => ({ ...prev, open: false })); } },
     ...chapters.map((ch) => ({
       id: `chapter-${ch.id}`,
       group: t("chapters"),
       label: ch.title || "Untitled Chapter",
       icon: <FileText className="size-4" />,
-      action: () => { setOpen(false); },
+      action: () => { setPalette((prev) => ({ ...prev, open: false })); },
     })),
   ], [t, router, theme, setTheme, isZenMode, toggleZen, chapters]);
 
   const filtered = useMemo(() => {
-    if (!query.trim()) return allCommands;
-    const q = query.toLowerCase();
+    if (!palette.query.trim()) return allCommands;
+    const q = palette.query.toLowerCase();
     return allCommands.filter((cmd) => cmd.label.toLowerCase().includes(q));
-  }, [allCommands, query]);
+  }, [allCommands, palette.query]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!palette.open) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex((i) => Math.min(i + 1, filtered.length - 1));
+        setPalette((prev) => ({ ...prev, selectedIndex: Math.min(prev.selectedIndex + 1, filtered.length - 1) }));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSelectedIndex((i) => Math.max(i - 1, 0));
-      } else if (e.key === "Enter" && filtered[selectedIndex]) {
+        setPalette((prev) => ({ ...prev, selectedIndex: Math.max(prev.selectedIndex - 1, 0) }));
+      } else if (e.key === "Enter" && filtered[palette.selectedIndex]) {
         e.preventDefault();
-        filtered[selectedIndex].action();
+        filtered[palette.selectedIndex].action();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, filtered, selectedIndex]);
+  }, [palette.open, filtered, palette.selectedIndex]);
 
-  if (!open) return null;
+  if (!palette.open) return null;
 
   const groups = new Map<string, CommandItem[]>();
   filtered.forEach((cmd) => {
@@ -103,16 +106,16 @@ export function CommandPalette({ chapters }: CommandPaletteProps) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[20vh]">
-      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={() => setOpen(false)} />
+      <button type="button" aria-label="Close search" className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] block" onClick={() => setPalette((prev) => ({ ...prev, open: false }))} />
       <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-2xl">
         <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-3">
           <Search className="size-5 text-[var(--color-text-muted)] shrink-0" />
           <input
-            autoFocus
-            value={query}
+            ref={searchInputRef}
+            aria-label={t("placeholder")}
+            value={palette.query}
             onChange={(e) => {
-              setQuery(e.target.value);
-              setSelectedIndex(0);
+              setPalette({ open: true, query: e.target.value, selectedIndex: 0 });
             }}
             placeholder={t("placeholder")}
             className="flex-1 bg-transparent text-sm text-[var(--color-text)] outline-none
@@ -139,10 +142,11 @@ export function CommandPalette({ chapters }: CommandPaletteProps) {
                   return (
                     <button
                       key={cmd.id}
+                      type="button"
                       onClick={cmd.action}
                       className={cn(
                         "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
-                        idx === selectedIndex
+                        idx === palette.selectedIndex
                           ? "bg-[var(--color-accent-muted)] text-[var(--color-accent)]"
                           : "text-[var(--color-text)] hover:bg-[var(--color-surface-alt)]"
                       )}

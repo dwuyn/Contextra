@@ -183,27 +183,31 @@ export async function importPronunciationSuggestions(projectId: string, language
     select: { name: true },
   });
 
+  const characterCreates: ReturnType<typeof prisma.pronunciationEntry.create>[] = [];
   for (const character of characters) {
     const key = `${character.name}|whole_word`;
     if (!existingKeys.has(key)) {
-      await prisma.pronunciationEntry.create({
-        data: {
-          projectId,
-          language,
-          term: character.name,
-          replacement: character.name,
-          renderMode: "sub",
-          matchMode: "whole_word",
-          caseSensitive: false,
-          priority: 0,
-          enabled: false,
-          source: "character",
-        },
-      });
-      importedCount++;
       existingKeys.add(key);
+      characterCreates.push(
+        prisma.pronunciationEntry.create({
+          data: {
+            projectId,
+            language,
+            term: character.name,
+            replacement: character.name,
+            renderMode: "sub",
+            matchMode: "whole_word",
+            caseSensitive: false,
+            priority: 0,
+            enabled: false,
+            source: "character",
+          },
+        }),
+      );
     }
   }
+
+  importedCount += characterCreates.length;
 
   // Pull from CanonEntity.name (source: "canon_entity")
   const canonEntities = await prisma.canonEntity.findMany({
@@ -211,27 +215,31 @@ export async function importPronunciationSuggestions(projectId: string, language
     select: { name: true },
   });
 
+  const canonEntityCreates: ReturnType<typeof prisma.pronunciationEntry.create>[] = [];
   for (const entity of canonEntities) {
     const key = `${entity.name}|whole_word`;
     if (!existingKeys.has(key)) {
-      await prisma.pronunciationEntry.create({
-        data: {
-          projectId,
-          language,
-          term: entity.name,
-          replacement: entity.name,
-          renderMode: "sub",
-          matchMode: "whole_word",
-          caseSensitive: false,
-          priority: 0,
-          enabled: false,
-          source: "canon_entity",
-        },
-      });
-      importedCount++;
       existingKeys.add(key);
+      canonEntityCreates.push(
+        prisma.pronunciationEntry.create({
+          data: {
+            projectId,
+            language,
+            term: entity.name,
+            replacement: entity.name,
+            renderMode: "sub",
+            matchMode: "whole_word",
+            caseSensitive: false,
+            priority: 0,
+            enabled: false,
+            source: "canon_entity",
+          },
+        }),
+      );
     }
   }
+
+  importedCount += canonEntityCreates.length;
 
   // Pull from CanonEntity.aliases (source: "canon_alias")
   const canonEntitiesWithAliases = await prisma.canonEntity.findMany({
@@ -239,6 +247,7 @@ export async function importPronunciationSuggestions(projectId: string, language
     select: { aliases: true },
   });
 
+  const aliasCreates: ReturnType<typeof prisma.pronunciationEntry.create>[] = [];
   for (const entity of canonEntitiesWithAliases) {
     const aliases = entity.aliases as string[] | undefined;
     if (!aliases) continue;
@@ -246,25 +255,30 @@ export async function importPronunciationSuggestions(projectId: string, language
     for (const alias of aliases) {
       const key = `${alias}|whole_word`;
       if (!existingKeys.has(key)) {
-        await prisma.pronunciationEntry.create({
-          data: {
-            projectId,
-            language,
-            term: alias,
-            replacement: alias,
-            renderMode: "sub",
-            matchMode: "whole_word",
-            caseSensitive: false,
-            priority: 0,
-            enabled: false,
-            source: "canon_alias",
-          },
-        });
-        importedCount++;
         existingKeys.add(key);
+        aliasCreates.push(
+          prisma.pronunciationEntry.create({
+            data: {
+              projectId,
+              language,
+              term: alias,
+              replacement: alias,
+              renderMode: "sub",
+              matchMode: "whole_word",
+              caseSensitive: false,
+              priority: 0,
+              enabled: false,
+              source: "canon_alias",
+            },
+          }),
+        );
       }
     }
   }
+
+  importedCount += aliasCreates.length;
+
+  await Promise.all([...characterCreates, ...canonEntityCreates, ...aliasCreates]);
 
   revalidatePath("/");
   return { importedCount };

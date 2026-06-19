@@ -15,6 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
+        {/* Theme preference injection — trusted static script, no user input */}
         <Script
           id="theme-prefs"
           strategy="beforeInteractive"

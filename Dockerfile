@@ -50,3 +50,23 @@ USER nextjs
 EXPOSE 3000
 
 CMD ["node", "server.js"]
+
+FROM base AS collab-runner
+ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
+ENV COLLAB_PORT=1234
+
+RUN groupadd --system --gid 1001 nodejs \
+  && useradd --system --uid 1001 --gid 1001 nextjs
+
+COPY package.json package-lock.json tsconfig.json prisma.config.ts ./
+COPY prisma ./prisma
+COPY src ./src
+COPY scripts ./scripts
+COPY --from=builder /app/node_modules ./node_modules
+
+USER nextjs
+
+EXPOSE 1234
+
+CMD ["node", "--import", "tsx", "scripts/collab-server.ts"]

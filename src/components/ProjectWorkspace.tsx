@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "@/lib/i18n-client";
 import { useProjectStore } from "@/store/useProjectStore";
@@ -98,29 +98,31 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
   const [showChrome, setShowChrome] = useState(false);
   const chromeTimer = useRef<number | null>(null);
 
-  const handleMouseMove = useCallback(() => {
+  const handleZenMouseMove = useEffectEvent(() => {
     if (!isZenMode) return;
     setShowChrome(true);
     if (chromeTimer.current) window.clearTimeout(chromeTimer.current);
     chromeTimer.current = window.setTimeout(() => setShowChrome(false), 3000);
-  }, [isZenMode]);
+  });
 
   useEffect(() => {
     let resetTimer: number | null = null;
+    let listener: (() => void) | null = null;
 
     if (isZenMode) {
       resetTimer = window.setTimeout(() => setShowChrome(false), 0);
-      window.addEventListener("mousemove", handleMouseMove);
+      listener = () => handleZenMouseMove();
+      window.addEventListener("mousemove", listener);
     }
 
     return () => {
       if (resetTimer) window.clearTimeout(resetTimer);
-      if (isZenMode) {
-        window.removeEventListener("mousemove", handleMouseMove);
+      if (listener) {
+        window.removeEventListener("mousemove", listener);
       }
       if (chromeTimer.current) window.clearTimeout(chromeTimer.current);
     };
-  }, [isZenMode, handleMouseMove]);
+  }, [isZenMode, handleZenMouseMove]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -250,8 +252,10 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
     <div className="flex h-screen w-full overflow-hidden bg-[var(--color-canvas)] relative">
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-[var(--color-canvas)]/50 lg:hidden"
+        <button
+          type="button"
+          aria-label="Close sidebar"
+          className="fixed inset-0 z-30 bg-[var(--color-canvas)]/50 lg:hidden block"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
@@ -314,6 +318,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
           "transition-all duration-500",
         )}>
           <button
+            type="button"
             onClick={() => setIsSidebarOpen(true)}
             className="p-2 rounded-xl text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
             aria-label={t("openSidebar")}
@@ -325,6 +330,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
           </span>
           <div className="flex items-center gap-1">
             <button
+              type="button"
               onClick={() => setIsCollabOpen((value) => !value)}
               className={[
                 "p-2 rounded-xl transition-colors",
@@ -335,6 +341,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
               <Users size={20} />
             </button>
             <button
+              type="button"
               onClick={() => setIsHistoryOpen((value) => !value)}
               className={[
                 "p-2 rounded-xl transition-colors",
@@ -345,6 +352,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
               <History size={20} />
             </button>
             <button
+              type="button"
               onClick={handleAiPaneToggle}
               className={[
                 "p-2 rounded-xl transition-colors",
@@ -418,14 +426,17 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
 
       {/* Mobile AI Pane Overlay */}
       {isAiPaneOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-[var(--color-canvas)]/50 lg:hidden"
+        <button
+          type="button"
+          aria-label="Close AI assistant"
+          className="fixed inset-0 z-30 bg-[var(--color-canvas)]/50 lg:hidden block"
           onClick={() => setIsAiPaneOpen(false)}
         />
       )}
 
       {isZenMode && chromeVisible && (
         <button
+          type="button"
           onClick={exitZen}
           className="fixed bottom-6 right-6 z-50 rounded-full bg-[var(--color-surface)] px-4 py-2
             text-sm font-medium text-[var(--color-text-secondary)] shadow-lg border border-[var(--color-border)]
@@ -455,6 +466,7 @@ function WorkspaceToggleButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={[
         "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold transition-colors",

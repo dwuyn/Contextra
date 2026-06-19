@@ -108,6 +108,36 @@
       "posting": "Posting...",
       "commentingMode": "Commenting mode"
     },
+    "collaboration": {
+      "liveSyncing": "Live syncing",
+      "liveOffline": "Live offline",
+      "syncTimedOut": "Live collaboration took too long to initialize. Editing locally for now.",
+      "reconnecting": "Live collaboration disconnected. Reconnecting…",
+      "reconnectExhausted": "Live collaboration is offline. Reconnect to resume shared editing.",
+      "reconnect": "Reconnect",
+      "localFallbackBadge": "Local editing fallback",
+      "localFallback": "Live collaboration is unavailable for this chapter right now. The body is editing locally and save works normally."
+    },
+    "illustration": {
+      "label": "Chapter Illustration",
+      "flip": "Flip Page",
+      "backToEditor": "Back to editor",
+      "alt": "Illustration for {title}",
+      "emptyTitle": "No illustration yet",
+      "emptyDescription": "Generate a cover-style illustration from the live chapter draft and optional art direction.",
+      "generateLabel": "Image Generation",
+      "generateTitle": "Generate chapter cover",
+      "regenerateTitle": "Regenerate chapter cover",
+      "generateDescription": "The app writes an English Imagen prompt from this chapter, project context, and your optional instruction before generating one vertical illustration.",
+      "customInstruction": "Optional custom instruction",
+      "customInstructionPlaceholder": "Example: rain-soaked neo-noir painting, lantern glow, no visible faces",
+      "generate": "Generate illustration",
+      "regenerate": "Regenerate illustration",
+      "generating": "Generating illustration...",
+      "generateError": "Could not generate the illustration. Please try again.",
+      "missingChapterContent": "Add chapter content before generating an illustration.",
+      "readOnlyHint": "You can view illustrations here, but only editors can generate them."
+    },
     "history": {
       "writeLoading": "Generating a continuation for your chapter...",
       "rewriteLoading": "Rewriting the selected text...",

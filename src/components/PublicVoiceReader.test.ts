@@ -4,7 +4,7 @@ import {
   getVoiceDisplayLabel,
   isBrowserMediaSourceErrorMessage,
   readSegmentAudioResponse,
-} from "@/components/PublicVoiceReader";
+} from "@/lib/voiceReaderUtils";
 
 const originalCreateObjectUrl = URL.createObjectURL;
 

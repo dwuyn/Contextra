@@ -3,11 +3,8 @@
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
-import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
-import TextAlign from "@tiptap/extension-text-align";
-import Underline from "@tiptap/extension-underline";
-import CharacterCount from "@tiptap/extension-character-count";
+import type { Editor as TiptapEditor } from "@tiptap/core";
+import { HocuspocusProvider } from "@hocuspocus/provider";
 import * as Dialog from "@radix-ui/react-dialog"
 import * as Tooltip from "@radix-ui/react-tooltip";
 import {
@@ -22,25 +19,43 @@ import {
   Save,
   X,
   Maximize2,
+  BookOpen,
+  AlertTriangle,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { rewriteAction, describeAction } from "@/actions/ai";
 import { exportProjectAction } from "@/actions/export";
-import { createCommentThread, getChapterContent, updateChapter } from "@/actions/projects";
-import { AiGenerated } from "@/lib/tiptap/AiGenerated";
-import { CommentAnchor } from "@/lib/tiptap/CommentAnchor";
+import { createCommentThread, getChapterContent, saveCollaborativeChapter, updateChapter } from "@/actions/projects";
+import { shouldUseProjectLiveCollaboration } from "@/lib/collaboration/config";
+import { createChapterEditorExtensions } from "@/lib/tiptap/chapterEditorExtensions";
 import { cn } from "@/lib/utils";
 import { EditorFormattingToolbar } from "@/components/EditorFormattingToolbar";
+import { ChapterIllustrationPage } from "@/components/ChapterIllustrationPage";
 import { PublicVoiceReader } from "@/components/PublicVoiceReader";
+import {
+  canFinalizeLiveCollaborationSync,
+  getPreferredDraftContent,
+  getPreservedEditorContent,
+  getEditorTransportKey,
+  resolveLiveCollaborationChapterId,
+  shouldApplyLocalEditorContent,
+  shouldFlushLiveCollaborativeContent,
+  shouldPreservePreviousEditorContent,
+  shouldPublishSavedTitle,
+  type DraftPersistenceReason,
+  type DraftMode,
+} from "@/components/mainEditorCollaboration";
 import { resolvePromptLanguage, type PromptLanguage } from "@/services/promptLanguageService";
 import { useProjectStore } from "@/store/useProjectStore";
 import { useZenStore } from "@/store/useZenStore";
+import type { ChapterIllustrationMeta, ProjectCollaborationSession } from "@/types/project";
 
-type SaveReason = "manual" | "autosave" | "blur" | "switch" | "unmount";
+type SaveReason = DraftPersistenceReason;
 
 type SaveRequest = {
   createVersion: boolean;
   reason: SaveReason;
+  flushCollaborativeContent?: boolean;
   draft?: DraftSnapshot;
 };
 
@@ -65,6 +80,8 @@ type PendingCommentDraft = {
   originalContent: string;
 };
 
+type CollaborationState = "idle" | "connecting" | "connected" | "synced" | "disconnected" | "error";
+
 function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -80,8 +97,10 @@ function toRichTextHtml(text: string) {
 
   return normalized
     .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean)
+    .flatMap((block) => {
+      const trimmed = block.trim();
+      return trimmed ? [trimmed] : [];
+    })
     .map((block) => {
       if (/^#{1,6}\s+/.test(block)) {
         const match = block.match(/^(#{1,6})\s+(.*)$/);
@@ -90,7 +109,10 @@ function toRichTextHtml(text: string) {
         return `<h${level}>${escapeHtml(match[2].trim())}</h${level}>`;
       }
 
-      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+      const lines = block.split("\n").flatMap((line) => {
+        const trimmed = line.trim();
+        return trimmed ? [trimmed] : [];
+      });
 
       if (lines.length > 0 && lines.every((line) => /^[-*]\s+/.test(line))) {
         return `<ul>${lines.map((line) => `<li>${escapeHtml(line.replace(/^[-*]\s+/, ""))}</li>`).join("")}</ul>`;
@@ -143,10 +165,16 @@ function mergeSaveRequests(current: SaveRequest | null, next: SaveRequest): Save
 
   return {
     createVersion: current.createVersion || next.createVersion,
+    flushCollaborativeContent: current.flushCollaborativeContent || next.flushCollaborativeContent,
     reason: current.createVersion || next.createVersion ? "manual" : next.reason,
     draft: next.draft ?? current.draft,
   };
 }
+
+const COLLABORATION_RETRY_DELAY_MS = 1500;
+const COLLABORATION_MAX_RETRIES = 3;
+const COLLABORATION_INITIAL_SYNC_TIMEOUT_MS = 4_000;
+const COLLABORATIVE_CONTENT_FLUSH_INTERVAL_MS = 30_000;
 
 function buildLanguageSignals({
   projectName,
@@ -226,7 +254,14 @@ export function MainEditor({
     const chapterId = state.selectedChapterId;
     return chapterId ? state.chapterContentCache[chapterId] : undefined;
   });
+  const pendingChapterContentReplacement = useProjectStore((state) => {
+    const chapterId = state.selectedChapterId;
+    return chapterId ? state.pendingChapterContentReplacements[chapterId] ?? null : null;
+  });
+  const setChapterDraft = useProjectStore((state) => state.setChapterDraft);
+  const clearChapterDraft = useProjectStore((state) => state.clearChapterDraft);
   const setChapterContent = useProjectStore((state) => state.setChapterContent);
+  const consumeChapterContentReplacement = useProjectStore((state) => state.consumeChapterContentReplacement);
   const upsertCommentThread = useProjectStore((state) => state.upsertCommentThread);
   const setSelectedCommentThreadId = useProjectStore((state) => state.setSelectedCommentThreadId);
   const selectedCommentThreadId = useProjectStore((state) => state.selectedCommentThreadId);
@@ -238,6 +273,15 @@ export function MainEditor({
   const t = useTranslations();
 
   const [title, setTitle] = useState(currentChapter?.title || "");
+  const [collaborationDisabledChapterId, setCollaborationDisabledChapterId] = useState<string | null>(null);
+  const [liveCollaborationChapterId, setLiveCollaborationChapterId] = useState<string | null>(null);
+  const [collaborationRetryNonce, setCollaborationRetryNonce] = useState(0);
+  const [collab, setCollab] = useState<{
+    session: ProjectCollaborationSession | null;
+    provider: HocuspocusProvider | null;
+    state: CollaborationState;
+    error: string | null;
+  }>({ session: null, provider: null, state: "idle", error: null });
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [hasCheckpointChanges, setHasCheckpointChanges] = useState(false);
@@ -249,26 +293,46 @@ export function MainEditor({
   const [pendingCommentDraft, setPendingCommentDraft] = useState<PendingCommentDraft | null>(null);
   const [isCreatingComment, setIsCreatingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [flippedIllustrationChapterId, setFlippedIllustrationChapterId] = useState<string | null>(null);
+  const [generatingIllustrationChapterId, setGeneratingIllustrationChapterId] = useState<string | null>(null);
+  const [illustrationErrorsByChapter, setIllustrationErrorsByChapter] = useState<Record<string, string>>({});
 
   const activeChapterIdRef = useRef<string | null>(null);
   const lastEditorContentRef = useRef("");
+  const currentCachedContentRef = useRef(currentCachedContent);
+  const currentChapterTitleRef = useRef(currentChapter?.title ?? "");
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const latestDraftRef = useRef<DraftSnapshot>(createEmptyDraftSnapshot());
   const draftsByChapterIdRef = useRef<Record<string, DraftSnapshot>>({});
   const persistedSnapshotsRef = useRef<Record<string, ChapterSnapshot>>({});
   const checkpointSnapshotsRef = useRef<Record<string, ChapterSnapshot>>({});
+  const collaborativeFlushedContentRef = useRef<Record<string, string>>({});
   const saveInFlightRef = useRef(false);
   const queuedSaveRef = useRef<SaveRequest[]>([]);
   const autosaveTimeoutRef = useRef<number | null>(null);
+  const collaborativeFlushTimeoutRef = useRef<number | null>(null);
+  const collaborationRetryTimeoutRef = useRef<number | null>(null);
+  const collaborationSyncTimeoutRef = useRef<number | null>(null);
+  const collaborationRetryCountRef = useRef(0);
+  const collaborationReadyFrameRef = useRef<number | null>(null);
+  const collaborationProviderSyncedRef = useRef(false);
+  const collaborationEditorRenderedRef = useRef(false);
   const requestSaveRef = useRef<(request: SaveRequest) => void>(() => undefined);
   const canEditRef = useRef(canEdit);
   const canCollaborateRef = useRef(canCollaborate);
+  const draftModesByChapterRef = useRef<Record<string, DraftMode>>({});
+  const isLiveCollaborationRequested = shouldUseProjectLiveCollaboration(project, selectedChapterId);
+  const usesCollaborativeBody = selectedChapterId != null && liveCollaborationChapterId === selectedChapterId;
   const isLoadingContentRef = useRef(isLoadingContent);
   const isMountedRef = useRef(true);
   const suppressAutosaveRef = useRef(false);
   const presenceStateRef = useRef<"viewing" | "editing">("viewing");
   const presenceIntervalRef = useRef<number | null>(null);
   const collaborationProjectIdRef = useRef<string | null>(project?.metadata.id ?? null);
+  const collaborationHasSyncedRef = useRef(false);
+  const collaborationModeRef = useRef<DraftMode>("local");
+  const collaborationExpectedContentRef = useRef("");
+  const pendingUnmountSaveRef = useRef<Promise<void> | null>(null);
 
   const createDraftSnapshot = (): DraftSnapshot => ({
     ...latestDraftRef.current,
@@ -288,16 +352,73 @@ export function MainEditor({
     return draft;
   };
 
+  const storeLocalDraft = useCallback((draft: Pick<DraftSnapshot, "chapterId" | "title" | "content">) => {
+    setChapterDraft(draft.chapterId, toChapterSnapshot(draft));
+  }, [setChapterDraft]);
+
+  const hasPendingDraftChanges = useCallback((
+    chapterId: string,
+    draft: Pick<DraftSnapshot, "title" | "content">,
+    mode: DraftMode = draftModesByChapterRef.current[chapterId] ?? "local",
+  ) => {
+    const persisted = persistedSnapshotsRef.current[chapterId];
+    if (mode === "live") {
+      return Boolean(persisted && persisted.title !== draft.title);
+    }
+
+    return (
+      hasSnapshotChanges(persisted, draft) ||
+      Boolean(useProjectStore.getState().chapterDraftCache[chapterId])
+    );
+  }, []);
+
   const clearAutosaveTimer = () => {
     if (autosaveTimeoutRef.current === null) return;
     window.clearTimeout(autosaveTimeoutRef.current);
     autosaveTimeoutRef.current = null;
   };
 
-  const syncSaveState = (chapterId: string, nextTitle: string, nextContent: string) => {
+  const clearCollaborativeFlushTimer = useCallback(() => {
+    if (collaborativeFlushTimeoutRef.current === null) return;
+    window.clearTimeout(collaborativeFlushTimeoutRef.current);
+    collaborativeFlushTimeoutRef.current = null;
+  }, []);
+
+  const clearCollaborationRetryTimer = useCallback(() => {
+    if (collaborationRetryTimeoutRef.current === null) return;
+    window.clearTimeout(collaborationRetryTimeoutRef.current);
+    collaborationRetryTimeoutRef.current = null;
+  }, []);
+
+  const clearCollaborationSyncTimeout = useCallback(() => {
+    if (collaborationSyncTimeoutRef.current === null) return;
+    window.clearTimeout(collaborationSyncTimeoutRef.current);
+    collaborationSyncTimeoutRef.current = null;
+  }, []);
+
+  const clearCollaborationReadyFrame = useCallback(() => {
+    if (collaborationReadyFrameRef.current === null) return;
+    window.cancelAnimationFrame(collaborationReadyFrameRef.current);
+    collaborationReadyFrameRef.current = null;
+  }, []);
+
+  const hasPendingCollaborativeContentFlush = useCallback((chapterId: string, content: string) => (
+    collaborativeFlushedContentRef.current[chapterId] !== content
+  ), []);
+
+  const syncSaveState = useCallback((
+    chapterId: string,
+    nextTitle: string,
+    nextContent: string,
+    mode: DraftMode = draftModesByChapterRef.current[chapterId] ?? "local",
+  ) => {
     const persisted = persistedSnapshotsRef.current[chapterId];
     const checkpoint = checkpointSnapshotsRef.current[chapterId];
-    const hasUnsaved = hasSnapshotChanges(persisted, { title: nextTitle, content: nextContent });
+    const hasUnsaved = hasPendingDraftChanges(
+      chapterId,
+      { title: nextTitle, content: nextContent },
+      mode,
+    );
     const checkpointBaseline = checkpoint?.content ?? persisted?.content ?? nextContent;
     const checkpointDirty = checkpointBaseline !== nextContent;
 
@@ -307,15 +428,225 @@ export function MainEditor({
     }
 
     return { hasUnsaved, checkpointDirty };
-  };
+  }, [hasPendingDraftChanges]);
+
+  const getSelectedChapterDraftSnapshot = useCallback((projectId: string) => {
+    if (!selectedChapterId) {
+      return null;
+    }
+
+    const storeState = useProjectStore.getState();
+    const cachedDraft = storeState.chapterDraftCache[selectedChapterId];
+    const chapterDraft = latestDraftRef.current.chapterId === selectedChapterId
+      ? latestDraftRef.current
+      : draftsByChapterIdRef.current[selectedChapterId];
+
+    return {
+      projectId,
+      chapterId: selectedChapterId,
+      title: chapterDraft?.title ?? cachedDraft?.title ?? currentChapterTitleRef.current,
+      content: getPreferredDraftContent({
+        draftContent: chapterDraft?.content,
+        cachedDraftContent: cachedDraft?.content,
+        cachedContent: storeState.chapterContentCache[selectedChapterId],
+        lastEditorContent: lastEditorContentRef.current,
+      }),
+    } satisfies DraftSnapshot;
+  }, [selectedChapterId]);
+
+  const snapshotEditorContent = useCallback((currentEditor: TiptapEditor | null) => {
+    if (!currentEditor) {
+      return;
+    }
+
+    const chapterId = activeChapterIdRef.current;
+    if (!chapterId) {
+      return;
+    }
+
+    let nextHtml = "";
+    try {
+      nextHtml = currentEditor.getHTML();
+    } catch {
+      return;
+    }
+
+    const existingDraft = draftsByChapterIdRef.current[chapterId]
+      ?? (latestDraftRef.current.chapterId === chapterId ? latestDraftRef.current : undefined);
+    const projectId = existingDraft?.projectId ?? project?.metadata.id;
+    if (!projectId) {
+      return;
+    }
+
+    const snapshotContent = getPreservedEditorContent({
+      nextHtml,
+      previousHtml: lastEditorContentRef.current,
+    });
+    const nextDraft = {
+      projectId,
+      chapterId,
+      title: existingDraft?.title ?? currentChapterTitleRef.current,
+      content: snapshotContent,
+    } satisfies DraftSnapshot;
+
+    lastEditorContentRef.current = snapshotContent;
+    setChapterContent(chapterId, snapshotContent);
+    setStoredDraft(nextDraft);
+
+    if ((draftModesByChapterRef.current[chapterId] ?? "local") === "local") {
+      storeLocalDraft(nextDraft);
+    }
+  }, [project?.metadata.id, setChapterContent, storeLocalDraft]);
+
+  const resetCollaborationState = useCallback(() => {
+    clearCollaborativeFlushTimer();
+    clearCollaborationRetryTimer();
+    clearCollaborationSyncTimeout();
+    clearCollaborationReadyFrame();
+    collaborationProviderSyncedRef.current = false;
+    collaborationEditorRenderedRef.current = false;
+    setCollab({ session: null, provider: null, state: "idle", error: null });
+    collaborationHasSyncedRef.current = false;
+    collaborationRetryCountRef.current = 0;
+  }, [clearCollaborativeFlushTimer, clearCollaborationReadyFrame, clearCollaborationRetryTimer, clearCollaborationSyncTimeout]);
+
+  const finalizeLiveCollaborationSync = useCallback(() => {
+    if (!canFinalizeLiveCollaborationSync({
+      providerSynced: collaborationProviderSyncedRef.current,
+      editorRendered: collaborationEditorRenderedRef.current,
+    })) {
+      console.log("[collab] finalizeLiveCollaborationSync - not ready yet", {
+        providerSynced: collaborationProviderSyncedRef.current,
+        editorRendered: collaborationEditorRenderedRef.current,
+      });
+      return;
+    }
+
+    clearCollaborationReadyFrame();
+    collaborationReadyFrameRef.current = window.requestAnimationFrame(() => {
+      collaborationReadyFrameRef.current = null;
+      if (!canFinalizeLiveCollaborationSync({
+        providerSynced: collaborationProviderSyncedRef.current,
+        editorRendered: collaborationEditorRenderedRef.current,
+      })) {
+        return;
+      }
+
+      console.log("[collab] finalizeLiveCollaborationSync - synced!");
+      setCollab((prev) => ({ ...prev, state: "synced", error: null }));
+      clearCollaborationSyncTimeout();
+      setIsLoadingContent(false);
+    });
+  }, [clearCollaborationReadyFrame, clearCollaborationSyncTimeout]);
+
+  const handleCollaborationFirstRender = useCallback(() => {
+    console.log("[collab] handleCollaborationFirstRender - providerSynced:", collaborationProviderSyncedRef.current);
+    collaborationEditorRenderedRef.current = true;
+    finalizeLiveCollaborationSync();
+  }, [finalizeLiveCollaborationSync]);
+
+  const loadCollaborativeDraft = useCallback((
+    nextDraft: DraftSnapshot,
+    chapterId: string,
+    content: string,
+  ) => {
+    activeChapterIdRef.current = chapterId;
+    lastEditorContentRef.current = nextDraft.content;
+    collaborationExpectedContentRef.current = content;
+    setActiveDraft(nextDraft);
+
+    if (!persistedSnapshotsRef.current[chapterId]) {
+      persistedSnapshotsRef.current[chapterId] = toChapterSnapshot(nextDraft);
+    }
+
+    if (!checkpointSnapshotsRef.current[chapterId]) {
+      checkpointSnapshotsRef.current[chapterId] = toChapterSnapshot(nextDraft);
+    }
+
+    clearAutosaveTimer();
+    clearCollaborativeFlushTimer();
+    setTitle(nextDraft.title);
+    setSaveError(null);
+    setSaveWarning(null);
+    setHasSelection(false);
+    setIsLoadingContent(!collaborationHasSyncedRef.current);
+    syncSaveState(chapterId, nextDraft.title, content, "local");
+  }, [clearCollaborativeFlushTimer, syncSaveState]);
+
+  const recoverCollaborativeDraftLocally = useCallback((chapterId: string | null) => {
+    if (!chapterId) {
+      return;
+    }
+
+    clearCollaborativeFlushTimer();
+    clearCollaborationReadyFrame();
+    collaborationHasSyncedRef.current = false;
+    collaborationProviderSyncedRef.current = false;
+    collaborationEditorRenderedRef.current = false;
+    draftModesByChapterRef.current[chapterId] = "local";
+    collaborationModeRef.current = "local";
+
+    const recoveredDraft = draftsByChapterIdRef.current[chapterId]
+      ?? (latestDraftRef.current.chapterId === chapterId ? latestDraftRef.current : null);
+    if (recoveredDraft) {
+      lastEditorContentRef.current = recoveredDraft.content;
+      collaborationExpectedContentRef.current = recoveredDraft.content;
+      setChapterContent(chapterId, recoveredDraft.content);
+      setStoredDraft(recoveredDraft);
+      storeLocalDraft(recoveredDraft);
+      syncSaveState(chapterId, recoveredDraft.title, recoveredDraft.content, "local");
+    }
+
+    setIsLoadingContent(false);
+  }, [clearCollaborativeFlushTimer, clearCollaborationReadyFrame, setChapterContent, storeLocalDraft, syncSaveState]);
+
+  const disableLiveCollaboration = useCallback((chapterId: string | null) => {
+    if (!chapterId) {
+      return;
+    }
+
+    setLiveCollaborationChapterId((activeChapterId) => (
+      activeChapterId === chapterId ? null : activeChapterId
+    ));
+    setCollaborationDisabledChapterId(chapterId);
+    resetCollaborationState();
+    setIsLoadingContent(false);
+  }, [resetCollaborationState]);
+
+  const fallbackToLocalEditing = useCallback((chapterId: string | null, errorMessage: string) => {
+    if (!chapterId) {
+      return;
+    }
+
+    disableLiveCollaboration(chapterId);
+    setCollab({
+      session: null,
+      provider: null,
+      state: "error",
+      error: errorMessage,
+    });
+  }, [disableLiveCollaboration]);
 
   const persistDraft = async (request: SaveRequest) => {
     const draft = request.draft ?? createDraftSnapshot();
     if (!draft.projectId || !draft.chapterId) return;
 
-    const { hasUnsaved, checkpointDirty } = syncSaveState(draft.chapterId, draft.title, draft.content);
+    const draftMode = draftModesByChapterRef.current[draft.chapterId] ?? "local";
+    const isCollaborativeDraft = draftMode === "live";
+    const { hasUnsaved, checkpointDirty } = syncSaveState(draft.chapterId, draft.title, draft.content, draftMode);
     const shouldCreateVersion = request.createVersion && checkpointDirty;
-    const shouldSave = request.createVersion ? true : hasUnsaved;
+    const shouldFlushCollaborativeContent = isCollaborativeDraft && shouldFlushLiveCollaborativeContent({
+      createVersion: request.createVersion,
+      reason: request.reason,
+      flushRequested: request.flushCollaborativeContent,
+    });
+    const hasCollaborativeContentChanges = isCollaborativeDraft
+      && hasPendingCollaborativeContentFlush(draft.chapterId, draft.content);
+    const shouldSave = request.createVersion
+      ? true
+      : shouldFlushCollaborativeContent
+        ? hasUnsaved || hasCollaborativeContentChanges
+        : hasUnsaved;
     const shouldSurfaceStatus = request.reason !== "switch" && request.reason !== "unmount";
 
     if (!shouldSave) return;
@@ -327,23 +658,43 @@ export function MainEditor({
     }
 
     try {
-      const result = await updateChapter(draft.projectId, draft.chapterId, {
-        title: draft.title,
-        content: draft.content,
-        createVersion: request.createVersion,
-        revalidate: request.reason === "manual",
-      });
+      const result = shouldFlushCollaborativeContent
+        ? await saveCollaborativeChapter(draft.projectId, draft.chapterId, {
+            title: draft.title,
+            createVersion: shouldCreateVersion,
+            revalidate: request.reason === "manual" || shouldCreateVersion,
+          })
+        : await updateChapter(draft.projectId, draft.chapterId, {
+            title: draft.title,
+            content: isCollaborativeDraft ? undefined : draft.content,
+            createVersion: isCollaborativeDraft ? undefined : request.createVersion,
+            revalidate: request.reason === "manual",
+          });
 
-      setStoredDraft(draft);
       persistedSnapshotsRef.current[draft.chapterId] = toChapterSnapshot(draft);
+      if (shouldFlushCollaborativeContent) {
+        collaborativeFlushedContentRef.current[draft.chapterId] = draft.content;
+        clearCollaborativeFlushTimer();
+      }
+      const latestDraft = draftsByChapterIdRef.current[draft.chapterId] ?? draft;
 
-      const projectState = useProjectStore.getState();
-      if (projectState.chapterContentCache[draft.chapterId] !== draft.content) {
-        setChapterContent(draft.chapterId, draft.content);
+      if (!isCollaborativeDraft) {
+        if (hasSnapshotChanges(toChapterSnapshot(draft), latestDraft)) {
+          storeLocalDraft(latestDraft);
+        } else {
+          clearChapterDraft(draft.chapterId);
+        }
       }
 
+      const projectState = useProjectStore.getState();
       const savedChapter = projectState.project?.chapters.find((chapter) => chapter.id === draft.chapterId);
-      if (savedChapter?.title !== draft.title) {
+      if (
+        shouldPublishSavedTitle({
+          savedTitle: draft.title,
+          latestTitle: latestDraft.title,
+        }) &&
+        savedChapter?.title !== draft.title
+      ) {
         updateChapterMetaLocally(draft.chapterId, { title: draft.title });
       }
 
@@ -351,13 +702,38 @@ export function MainEditor({
         checkpointSnapshotsRef.current[draft.chapterId] = toChapterSnapshot(draft);
       }
 
-      const latestDraft = latestDraftRef.current.chapterId === draft.chapterId ? latestDraftRef.current : draft;
-      syncSaveState(draft.chapterId, latestDraft.title, latestDraft.content);
+      syncSaveState(draft.chapterId, latestDraft.title, latestDraft.content, draftMode);
 
       if (isMountedRef.current && shouldSurfaceStatus && activeChapterIdRef.current === draft.chapterId) {
-        setSaveWarning(result.continuity.fresh || result.continuity.status === "queued" ? null : result.continuity.warning);
+        const continuityWarning =
+          result.continuity.fresh || result.continuity.status === "queued"
+            ? null
+            : result.continuity.warning;
+        const nextWarning = [continuityWarning, result.collaborationWarning]
+          .filter((warning): warning is string => Boolean(warning))
+          .join(" ");
+
+        setSaveWarning(nextWarning || null);
       }
     } catch (error) {
+      // If collaborative flush fails, save content locally as fallback
+      if (isCollaborativeDraft && draft.content) {
+        console.warn("[collab] Flush failed, saving locally as fallback:", error);
+        try {
+          await updateChapter(draft.projectId, draft.chapterId, {
+            title: draft.title,
+            content: draft.content,
+            createVersion: false,
+            revalidate: false,
+          });
+          // Mark as successfully saved locally
+          persistedSnapshotsRef.current[draft.chapterId] = toChapterSnapshot(draft);
+          collaborativeFlushedContentRef.current[draft.chapterId] = draft.content;
+        } catch (fallbackError) {
+          console.error("[collab] Local fallback save also failed:", fallbackError);
+        }
+      }
+
       if (
         isMountedRef.current &&
         activeChapterIdRef.current === draft.chapterId &&
@@ -391,6 +767,17 @@ export function MainEditor({
     if (!nextRequest.draft.projectId || !nextRequest.draft.chapterId) return;
 
     clearAutosaveTimer();
+    const draftMode = draftModesByChapterRef.current[nextRequest.draft.chapterId] ?? "local";
+    if (
+      draftMode !== "live" ||
+      nextRequest.flushCollaborativeContent ||
+      nextRequest.createVersion ||
+      nextRequest.reason === "blur" ||
+      nextRequest.reason === "switch" ||
+      nextRequest.reason === "unmount"
+    ) {
+      clearCollaborativeFlushTimer();
+    }
 
     if (saveInFlightRef.current) {
       queueSaveRequest(nextRequest);
@@ -415,23 +802,423 @@ export function MainEditor({
   const requestSaveEffect = useEffectEvent((request: SaveRequest) => {
     requestSave(request);
   });
+  const hasPendingDraftPersistence = useCallback((
+    draft: Pick<DraftSnapshot, "chapterId" | "title" | "content">,
+    mode: DraftMode,
+  ) => (
+    hasPendingDraftChanges(draft.chapterId, draft, mode)
+    || (mode === "live" && hasPendingCollaborativeContentFlush(draft.chapterId, draft.content))
+  ), [hasPendingCollaborativeContentFlush, hasPendingDraftChanges]);
+  const handleUnmountSave = useEffectEvent(() => {
+    const draft = createDraftSnapshot();
+    if (!draft.chapterId) return;
+
+    const draftMode = draftModesByChapterRef.current[draft.chapterId] ?? "local";
+    const hasPendingSave = hasPendingDraftPersistence(draft, draftMode);
+    if (!hasPendingSave) return;
+
+    const savePromise = new Promise<void>((resolve) => {
+      requestSaveEffect({
+        createVersion: false,
+        reason: "unmount",
+        flushCollaborativeContent: draftMode === "live",
+        draft,
+      });
+      // Give the save some time to complete, but don't block forever
+      window.setTimeout(resolve, 2000);
+    });
+
+    pendingUnmountSaveRef.current = savePromise;
+  });
+
+  const waitForPendingSaves = useCallback(async () => {
+    while (saveInFlightRef.current || queuedSaveRef.current.length > 0) {
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 50);
+      });
+    }
+  }, []);
+
+  const flushLocalDraftForCollaboration = useEffectEvent(async () => {
+    const draft = createDraftSnapshot();
+    if (!draft.projectId || !draft.chapterId) {
+      return;
+    }
+
+    const draftMode = draftModesByChapterRef.current[draft.chapterId] ?? "local";
+    if (draftMode === "live") {
+      return;
+    }
+
+    if (!hasPendingDraftPersistence(draft, draftMode)) {
+      return;
+    }
+
+    await waitForPendingSaves();
+    await persistDraft({
+      createVersion: false,
+      reason: "switch",
+      draft,
+    });
+  });
+
+  const triggerCollaborationReconnect = useCallback(() => {
+    if (!selectedChapterId) {
+      return;
+    }
+
+    clearCollaborationRetryTimer();
+    clearCollaborationSyncTimeout();
+    clearCollaborationReadyFrame();
+    setCollaborationDisabledChapterId(null);
+    collaborationHasSyncedRef.current = false;
+    collaborationProviderSyncedRef.current = false;
+    collaborationEditorRenderedRef.current = false;
+    collaborationRetryCountRef.current = 0;
+    setCollab((prev) => ({
+      ...prev,
+      session: null,
+      provider: null,
+      state: "connecting",
+      error: null,
+    }));
+    setCollaborationRetryNonce((value) => value + 1);
+  }, [clearCollaborationReadyFrame, clearCollaborationRetryTimer, clearCollaborationSyncTimeout, selectedChapterId]);
+
+  const scheduleCollaborationReconnect = useCallback((options?: { recoverLocally?: boolean }) => {
+    if (!selectedChapterId) {
+      return;
+    }
+
+    clearCollaborationRetryTimer();
+    clearCollaborationSyncTimeout();
+    clearCollaborationReadyFrame();
+    collaborationHasSyncedRef.current = false;
+    collaborationProviderSyncedRef.current = false;
+    collaborationEditorRenderedRef.current = false;
+
+    const recoverLocally = options?.recoverLocally ?? false;
+
+    if (collaborationRetryCountRef.current >= COLLABORATION_MAX_RETRIES) {
+      recoverCollaborativeDraftLocally(selectedChapterId);
+      setCollab((prev) => ({
+        ...prev,
+        session: null,
+        provider: null,
+        state: "error",
+        error: t("editor.collaboration.reconnectExhausted"),
+      }));
+      return;
+    }
+
+    collaborationRetryCountRef.current += 1;
+    if (recoverLocally) {
+      recoverCollaborativeDraftLocally(selectedChapterId);
+    }
+    setCollab((prev) => ({
+      ...prev,
+      session: null,
+      provider: null,
+      state: "disconnected",
+      error: t("editor.collaboration.reconnecting"),
+    }));
+
+    collaborationRetryTimeoutRef.current = window.setTimeout(() => {
+      setCollab((prev) => ({
+        ...prev,
+        session: null,
+        provider: null,
+        state: "connecting",
+        error: null,
+      }));
+      setCollaborationRetryNonce((value) => value + 1);
+    }, COLLABORATION_RETRY_DELAY_MS);
+  }, [
+    clearCollaborationReadyFrame,
+    clearCollaborationRetryTimer,
+    clearCollaborationSyncTimeout,
+    recoverCollaborativeDraftLocally,
+    selectedChapterId,
+    t,
+  ]);
 
   useEffect(() => {
     canEditRef.current = canEdit;
     canCollaborateRef.current = canCollaborate;
     isLoadingContentRef.current = isLoadingContent;
     collaborationProjectIdRef.current = project?.metadata.id ?? null;
+    currentCachedContentRef.current = currentCachedContent;
+    currentChapterTitleRef.current = currentChapter?.title ?? "";
     requestSaveRef.current = requestSave;
   });
 
-  const scheduleAutosave = (draft: DraftSnapshot, hasUnsaved: boolean) => {
+  useEffect(() => {
+    if (!canCollaborate || !canEdit) {
+      setLiveCollaborationChapterId(null);
+      return;
+    }
+
+    setLiveCollaborationChapterId((previousLiveChapterId) => (
+      resolveLiveCollaborationChapterId({
+        selectedChapterId,
+        previousLiveChapterId,
+        isLiveCollaborationRequested,
+        collaborationDisabledChapterId,
+      })
+    ));
+  }, [canCollaborate, canEdit, collaborationDisabledChapterId, isLiveCollaborationRequested, selectedChapterId]);
+
+  useEffect(() => {
+    setCollaborationDisabledChapterId((chapterId) => (
+      chapterId && chapterId !== selectedChapterId ? null : chapterId
+    ));
+  }, [selectedChapterId]);
+
+  // Unmount save effect - must be declared BEFORE provider effects so cleanup runs AFTER them
+  useEffect(() => {
+    return () => {
+      clearAutosaveTimer();
+      clearCollaborativeFlushTimer();
+      isMountedRef.current = false;
+      handleUnmountSave();
+    };
+  }, [clearCollaborativeFlushTimer]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!usesCollaborativeBody || !project?.metadata.id || !selectedChapterId) {
+      queueMicrotask(() => {
+        if (active) {
+          resetCollaborationState();
+        }
+      });
+      return () => {
+        active = false;
+      };
+    }
+
+    const searchParams = new URLSearchParams({
+      projectId: project.metadata.id,
+      chapterId: selectedChapterId,
+    });
+
+    void (async () => {
+      try {
+        console.log("[collab] Starting session fetch", { chapterId: selectedChapterId, mode: collaborationModeRef.current });
+        if (collaborationModeRef.current === "local") {
+          await flushLocalDraftForCollaboration();
+        }
+
+        if (!active) return;
+
+        queueMicrotask(() => {
+          if (!active) return;
+          collaborationHasSyncedRef.current = false;
+          collaborationProviderSyncedRef.current = false;
+          collaborationEditorRenderedRef.current = false;
+          clearCollaborationReadyFrame();
+          setCollab((prev) => ({
+            ...prev,
+            session: null,
+            provider: null,
+            state: "connecting",
+            error: null,
+          }));
+          setIsLoadingContent(true);
+        });
+
+        const response = await fetch(`/api/collab/session?${searchParams.toString()}`, {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          const message = await response.text();
+          throw Object.assign(new Error(message || "Failed to create collaboration session"), {
+            status: response.status,
+          });
+        }
+
+        const session = await response.json() as ProjectCollaborationSession;
+        console.log("[collab] Session fetched", { websocketUrl: session.websocketUrl, documentName: session.documentName });
+        if (!active) return;
+        setCollab((prev) => ({ ...prev, session }));
+      } catch (error) {
+        if (!active) return;
+        console.error("[collab] Session fetch failed:", error);
+        const status = typeof error === "object"
+          && error
+          && "status" in error
+          && typeof error.status === "number"
+          ? error.status
+          : null;
+
+        if (status === 401 || status === 403 || status === 404) {
+          disableLiveCollaboration(selectedChapterId);
+          return;
+        }
+
+        scheduleCollaborationReconnect({
+          recoverLocally: collaborationHasSyncedRef.current,
+        });
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    clearCollaborationReadyFrame,
+    disableLiveCollaboration,
+    project?.metadata.id,
+    resetCollaborationState,
+    scheduleCollaborationReconnect,
+    selectedChapterId,
+    usesCollaborativeBody,
+    collaborationRetryNonce,
+  ]);
+
+  useEffect(() => {
+    if (!collab.session) {
+      return;
+    }
+
+    let active = true;
+    collaborationProviderSyncedRef.current = false;
+    collaborationEditorRenderedRef.current = false;
+    clearCollaborationSyncTimeout();
+    clearCollaborationReadyFrame();
+
+    console.log("[collab] Creating HocuspocusProvider", {
+      url: collab.session.websocketUrl,
+      documentName: collab.session.documentName,
+    });
+
+    collaborationSyncTimeoutRef.current = window.setTimeout(() => {
+      if (!active) {
+        return;
+      }
+
+      const providerSynced = collaborationProviderSyncedRef.current;
+      const editorRendered = collaborationEditorRenderedRef.current;
+
+      if (canFinalizeLiveCollaborationSync({ providerSynced, editorRendered })) {
+        return;
+      }
+
+      console.warn("[collab] Sync timeout - providerSynced:", providerSynced, "editorRendered:", editorRendered);
+      fallbackToLocalEditing(selectedChapterId, t("editor.collaboration.syncTimedOut"));
+    }, COLLABORATION_INITIAL_SYNC_TIMEOUT_MS);
+
+    const provider = new HocuspocusProvider({
+      url: collab.session.websocketUrl,
+      name: collab.session.documentName,
+      token: collab.session.token,
+      onOpen: () => {
+        console.log("[collab] Provider onOpen");
+        setCollab((prev) => ({ ...prev, state: "connected" }));
+      },
+      onConnect: () => {
+        console.log("[collab] Provider onConnect");
+        setCollab((prev) => ({ ...prev, state: "connected" }));
+      },
+      onSynced: () => {
+        console.log("[collab] Provider onSynced - editorRendered:", collaborationEditorRenderedRef.current);
+        collaborationHasSyncedRef.current = true;
+        collaborationProviderSyncedRef.current = true;
+        clearCollaborationRetryTimer();
+        collaborationRetryCountRef.current = 0;
+        setCollab((prev) => ({ ...prev, state: "connected", error: null }));
+        finalizeLiveCollaborationSync();
+      },
+      onDisconnect: () => {
+        console.log("[collab] Provider onDisconnect - hasSynced:", collaborationHasSyncedRef.current);
+        scheduleCollaborationReconnect({
+          recoverLocally: collaborationHasSyncedRef.current,
+        });
+      },
+      onClose: () => {
+        console.log("[collab] Provider onClose - hasSynced:", collaborationHasSyncedRef.current);
+        scheduleCollaborationReconnect({
+          recoverLocally: collaborationHasSyncedRef.current,
+        });
+      },
+      onAuthenticationFailed: ({ reason }: { reason: string }) => {
+        console.error("[collab] Provider onAuthenticationFailed:", reason);
+        scheduleCollaborationReconnect({
+          recoverLocally: collaborationHasSyncedRef.current,
+        });
+      },
+    });
+
+    provider.awareness?.setLocalStateField("user", collab.session.user);
+    queueMicrotask(() => {
+      if (!active) return;
+      setCollab((prev) => ({ ...prev, provider }));
+    });
+
+    return () => {
+      active = false;
+      clearCollaborationSyncTimeout();
+      clearCollaborationReadyFrame();
+      provider.destroy();
+      setCollab((prev) => (prev.provider === provider ? { ...prev, provider: null } : prev));
+    };
+  }, [
+    clearCollaborationSyncTimeout,
+    clearCollaborationReadyFrame,
+    clearCollaborationRetryTimer,
+    collab.session,
+    fallbackToLocalEditing,
+    finalizeLiveCollaborationSync,
+    scheduleCollaborationReconnect,
+    selectedChapterId,
+    t,
+  ]);
+
+  const scheduleAutosave = useCallback((draft: DraftSnapshot, hasUnsaved: boolean) => {
     clearAutosaveTimer();
     if (!canEditRef.current || isLoadingContentRef.current || !hasUnsaved) return;
 
     autosaveTimeoutRef.current = window.setTimeout(() => {
       requestSaveRef.current({ createVersion: false, reason: "autosave", draft });
     }, 2000);
-  };
+  }, []);
+
+  const scheduleCollaborativeContentFlush = useCallback((draft: DraftSnapshot) => {
+    if (
+      !canEditRef.current ||
+      isLoadingContentRef.current ||
+      (draftModesByChapterRef.current[draft.chapterId] ?? "local") !== "live" ||
+      !hasPendingCollaborativeContentFlush(draft.chapterId, draft.content) ||
+      collaborativeFlushTimeoutRef.current !== null
+    ) {
+      return;
+    }
+
+    collaborativeFlushTimeoutRef.current = window.setTimeout(() => {
+      collaborativeFlushTimeoutRef.current = null;
+
+      const latestDraft = draftsByChapterIdRef.current[draft.chapterId]
+        ?? (latestDraftRef.current.chapterId === draft.chapterId ? latestDraftRef.current : null);
+      if (!latestDraft) {
+        return;
+      }
+
+      if (
+        (draftModesByChapterRef.current[draft.chapterId] ?? "local") !== "live" ||
+        !hasPendingCollaborativeContentFlush(draft.chapterId, latestDraft.content)
+      ) {
+        return;
+      }
+
+      requestSaveRef.current({
+        createVersion: false,
+        reason: "autosave",
+        flushCollaborativeContent: true,
+        draft: latestDraft,
+      });
+    }, COLLABORATIVE_CONTENT_FLUSH_INTERVAL_MS);
+  }, [hasPendingCollaborativeContentFlush]);
 
   const handleManualSave = () => {
     requestSave({ createVersion: true, reason: "manual" });
@@ -483,22 +1270,40 @@ export function MainEditor({
     void postPresence({ action: "leave", keepalive });
   }, [clearPresenceInterval, postPresence]);
 
+  const editorTransportKey = getEditorTransportKey({
+    selectedChapterId,
+    usesCollaborativeBody,
+    sessionDocumentName: collab.session?.documentName ?? null,
+    hasProvider: Boolean(collab.provider),
+  });
+  const collaborativeReadOnly = usesCollaborativeBody && (collab.session?.readOnly ?? true);
+  const hasLiveTransport = editorTransportKey.startsWith("live:");
+
+  useEffect(() => {
+    console.log("[collab] Transport key:", editorTransportKey, "collab.state:", collab.state);
+  }, [editorTransportKey, collab.state]);
+
+  const editorCanEdit =
+    canEdit &&
+    !isLoadingContent &&
+    (!hasLiveTransport || collab.state === "synced") &&
+    !collaborativeReadOnly;
+
   const editor = useEditor({
     immediatelyRender: false,
-    editable: canEdit,
-    extensions: [
-      StarterKit.configure(),
-      Underline,
-      AiGenerated,
-      CommentAnchor,
-      TextAlign.configure({
-        types: ["heading", "paragraph"],
-      }),
-      Placeholder.configure({
-        placeholder: canEdit ? t("editor.placeholder") : t("editor.emptyChapter"),
-      }),
-      CharacterCount.configure({ mode: "nodeSize" }),
-    ],
+    editable: false,
+    extensions: createChapterEditorExtensions({
+      collaborative: Boolean(usesCollaborativeBody && collab.provider),
+      placeholder: canEdit ? t("editor.placeholder") : t("editor.emptyChapter"),
+      provider: collab.provider,
+      user: collab.session
+        ? {
+            name: collab.session.user.name,
+            color: collab.session.user.color,
+          }
+        : null,
+      onCollaborationFirstRender: handleCollaborationFirstRender,
+    }),
     content: "",
     editorProps: {
       attributes: {
@@ -521,25 +1326,34 @@ export function MainEditor({
     },
     onBlur: () => {
       setHasSelection(false);
-      if (canCollaborate) {
+      if (canCollaborateRef.current) {
         updatePresenceState("viewing");
       }
-      if (!canEdit || isLoadingContent) return;
-      requestSave({ createVersion: false, reason: "blur" });
+      if (!canEditRef.current || isLoadingContentRef.current) return;
+      requestSave({
+        createVersion: false,
+        reason: "blur",
+        flushCollaborativeContent:
+          (draftModesByChapterRef.current[activeChapterIdRef.current ?? ""] ?? "local") === "live",
+      });
     },
     onSelectionUpdate: ({ editor: nextEditor }) => {
       setHasSelection(!nextEditor.state.selection.empty);
     },
     onUpdate: ({ editor: nextEditor }) => {
       const chapterId = activeChapterIdRef.current;
-      if (!chapterId || isLoadingContent) return;
+      if (!chapterId || isLoadingContentRef.current) return;
 
       const nextContent = nextEditor.getHTML();
       lastEditorContentRef.current = nextContent;
+      setChapterContent(chapterId, nextContent);
       const nextDraft = setActiveDraft({
         ...latestDraftRef.current,
         content: nextContent,
       });
+      if ((draftModesByChapterRef.current[chapterId] ?? "local") === "local") {
+        storeLocalDraft(nextDraft);
+      }
 
       if (suppressAutosaveRef.current) {
         suppressAutosaveRef.current = false;
@@ -547,37 +1361,49 @@ export function MainEditor({
       }
 
       setSaveError(null);
-      if (canCollaborate && canEdit) {
+      if (canCollaborateRef.current && canEditRef.current) {
         updatePresenceState("editing");
       }
       const { hasUnsaved } = syncSaveState(chapterId, nextDraft.title, nextContent);
       scheduleAutosave(nextDraft, hasUnsaved);
+      scheduleCollaborativeContentFlush(nextDraft);
     },
-  });
+  }, [editorTransportKey]);
 
   useEffect(() => {
-    const persistedSnapshots = persistedSnapshotsRef.current;
+    if (!editor) {
+      return;
+    }
 
     return () => {
-      clearAutosaveTimer();
-      isMountedRef.current = false;
-
-      const draft = createDraftSnapshot();
-      if (!draft.chapterId) return;
-      if (!hasSnapshotChanges(persistedSnapshots[draft.chapterId], draft)) return;
-
-      requestSaveEffect({ createVersion: false, reason: "unmount", draft });
+      snapshotEditorContent(editor);
     };
-  }, []);
+  }, [editor, editorTransportKey, snapshotEditorContent]);
+
+  const applyLocalEditorContent = useCallback((chapterId: string | null, nextHtml: string) => {
+    if (!editor) {
+      return false;
+    }
+
+    const draftMode = chapterId ? draftModesByChapterRef.current[chapterId] : undefined;
+    const currentHtml = editor.getHTML();
+    if (!shouldApplyLocalEditorContent({ draftMode, currentHtml, nextHtml })) {
+      return false;
+    }
+
+    editor.commands.setContent(nextHtml, { emitUpdate: false });
+    return true;
+  }, [editor]);
 
   useEffect(() => {
     if (!editor) return;
-    editor.setEditable(canEdit && !isLoadingContent);
-  }, [editor, canEdit, isLoadingContent]);
+    editor.setEditable(editorCanEdit);
+  }, [editor, editorCanEdit]);
 
   useEffect(() => {
     if (!project?.metadata.id || !canCollaborate) return;
 
+    clearPresenceInterval();
     presenceStateRef.current = "viewing";
     void postPresence({
       chapterId: selectedChapterId ?? null,
@@ -588,24 +1414,43 @@ export function MainEditor({
     return () => {
       leavePresence(true);
     };
-  }, [project?.metadata.id, selectedChapterId, canCollaborate, postPresence, startPresenceHeartbeat, leavePresence]);
+  }, [clearPresenceInterval, project?.metadata.id, selectedChapterId, canCollaborate, postPresence, startPresenceHeartbeat, leavePresence]);
+
+  const handlePageHide = useEffectEvent(() => {
+    handleUnmountSave();
+    leavePresence(true);
+  });
+
+  const handleVisibilityChange = useEffectEvent(() => {
+    if (document.visibilityState === "hidden") {
+      handleUnmountSave();
+    }
+  });
 
   useEffect(() => {
     if (!canCollaborate) return;
 
-    const handlePageHide = () => {
-      leavePresence(true);
-    };
-
     window.addEventListener("pagehide", handlePageHide);
-    return () => window.removeEventListener("pagehide", handlePageHide);
-  }, [canCollaborate, leavePresence]);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [canCollaborate]);
 
   useEffect(() => {
     if (!editor) return;
 
+    let editorDom: HTMLElement | null = null;
+
+    try {
+      editorDom = editor.view.dom;
+    } catch {
+      return;
+    }
+
     const activeElements = Array.from(
-      editor.view.dom.querySelectorAll<HTMLElement>("[data-comment-thread-active='true']")
+      editorDom.querySelectorAll<HTMLElement>("[data-comment-thread-active='true']")
     );
     activeElements.forEach((element) => {
       element.removeAttribute("data-comment-thread-active");
@@ -614,7 +1459,7 @@ export function MainEditor({
     if (!selectedCommentThreadId) return;
 
     const anchors = Array.from(
-      editor.view.dom.querySelectorAll<HTMLElement>(`[data-comment-thread-id="${selectedCommentThreadId}"]`)
+      editorDom.querySelectorAll<HTMLElement>(`[data-comment-thread-id="${selectedCommentThreadId}"]`)
     );
     anchors.forEach((element) => {
       element.setAttribute("data-comment-thread-active", "true");
@@ -646,17 +1491,16 @@ export function MainEditor({
   }, [pendingTitleFocusChapterId, selectedChapterId, isLoadingContent, clearPendingTitleFocus]);
 
   useEffect(() => {
-    if (!editor) return;
-
     if (!selectedChapterId || !currentChapter?.id) {
       activeChapterIdRef.current = null;
+      collaborationModeRef.current = "local";
+      collaborationExpectedContentRef.current = "";
       lastEditorContentRef.current = "";
       latestDraftRef.current = createEmptyDraftSnapshot();
       clearAutosaveTimer();
-
-      if (editor.getHTML() !== "") {
-        editor.commands.setContent("", { emitUpdate: false });
-      }
+      clearCollaborativeFlushTimer();
+      setIsLoadingContent(false);
+      setHasSelection(false);
 
       return;
     }
@@ -667,7 +1511,7 @@ export function MainEditor({
     let cancelled = false;
     const previousChapterId = activeChapterIdRef.current;
     const previousChapterStillExists = previousChapterId
-      ? project?.chapters.some((chapter) => chapter.id === previousChapterId)
+      ? useProjectStore.getState().project?.chapters.some((chapter) => chapter.id === previousChapterId)
       : false;
 
     if (previousChapterId && previousChapterId !== selectedChapterId && previousChapterStillExists) {
@@ -680,18 +1524,31 @@ export function MainEditor({
 
     const loadChapter = (draft: DraftSnapshot, source: "local" | "cache" | "server") => {
       if (cancelled) return;
+      draftModesByChapterRef.current[draft.chapterId] = "local";
+      collaborationModeRef.current = "local";
+      collaborationExpectedContentRef.current = "";
 
       const persistedBaseline =
         source === "local"
           ? persistedSnapshotsRef.current[draft.chapterId] ?? toChapterSnapshot({
-            title: currentChapter?.title || draft.title,
-            content: currentCachedContent ?? draft.content,
+            title: currentChapterTitleRef.current || draft.title,
+            content: currentCachedContentRef.current ?? draft.content,
           })
           : toChapterSnapshot(draft);
 
       activeChapterIdRef.current = draft.chapterId;
       lastEditorContentRef.current = draft.content;
       setActiveDraft(draft);
+      if (source === "local") {
+        const hasStoredLocalDraft = Boolean(useProjectStore.getState().chapterDraftCache[draft.chapterId]);
+        if (hasStoredLocalDraft || hasSnapshotChanges(persistedSnapshotsRef.current[draft.chapterId], draft)) {
+          storeLocalDraft(draft);
+        } else {
+          clearChapterDraft(draft.chapterId);
+        }
+      } else {
+        clearChapterDraft(draft.chapterId);
+      }
 
       if (!persistedSnapshotsRef.current[draft.chapterId] || source !== "local") {
         persistedSnapshotsRef.current[draft.chapterId] = persistedBaseline;
@@ -702,115 +1559,261 @@ export function MainEditor({
       }
 
       clearAutosaveTimer();
+      clearCollaborativeFlushTimer();
       setTitle(draft.title);
       setSaveError(null);
       setSaveWarning(null);
       setIsLoadingContent(false);
       setHasSelection(false);
 
-      if (editor.getHTML() !== draft.content) {
-        editor.commands.setContent(draft.content || "", { emitUpdate: false });
-      }
-
-      syncSaveState(draft.chapterId, draft.title, draft.content);
+      syncSaveState(draft.chapterId, draft.title, draft.content, "local");
     };
 
-    if (previousChapterId !== selectedChapterId) {
-      const localDraft = draftsByChapterIdRef.current[selectedChapterId];
-      if (localDraft) {
-        loadChapter({ ...localDraft, projectId, chapterId: selectedChapterId }, "local");
-        return () => {
-          cancelled = true;
-        };
-      }
-
-      const nextTitle = currentChapter?.title || "";
-
-      if (currentCachedContent !== undefined) {
-        loadChapter({
-          projectId,
-          chapterId: selectedChapterId,
-          title: nextTitle,
-          content: currentCachedContent,
-        }, "cache");
-        return () => {
-          cancelled = true;
-        };
-      }
-
-      queueMicrotask(() => {
-        if (cancelled) return;
-        setIsLoadingContent(true);
-        setSaveError(null);
-        setSaveWarning(null);
-      });
-      editor.commands.setContent(`<p class='text-[var(--color-text-muted)] italic'>${t("editor.loading")}</p>`, { emitUpdate: false });
-
-      getChapterContent(projectId, selectedChapterId)
-        .then((content) => {
-          if (cancelled) return;
-          const nextContent = content || "";
-          setChapterContent(selectedChapterId, nextContent);
-          loadChapter({
-            projectId,
-            chapterId: selectedChapterId,
-            title: nextTitle,
-            content: nextContent,
-          }, "server");
-        })
-        .catch((error) => {
-          console.error(error);
-          if (!cancelled) {
-            setIsLoadingContent(false);
-            setSaveError("Could not load this chapter. Try switching chapters or refreshing.");
-            setSaveWarning(null);
-          }
-        });
-
+    if (previousChapterId === selectedChapterId) {
       return () => {
         cancelled = true;
       };
     }
 
-    if (currentCachedContent !== undefined && currentCachedContent !== lastEditorContentRef.current) {
-      const nextDraft = {
+    const storeState = useProjectStore.getState();
+    const cachedDraft = storeState.chapterDraftCache[selectedChapterId];
+    const localDraft = draftsByChapterIdRef.current[selectedChapterId] ?? (
+      cachedDraft
+        ? {
+            projectId,
+            chapterId: selectedChapterId,
+            title: cachedDraft.title,
+            content: cachedDraft.content,
+          }
+        : undefined
+    );
+    if (localDraft) {
+      loadChapter({ ...localDraft, projectId, chapterId: selectedChapterId }, "local");
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const nextTitle = currentChapterTitleRef.current || "";
+    const cachedContent = storeState.chapterContentCache[selectedChapterId];
+
+    if (cachedContent !== undefined) {
+      loadChapter({
         projectId,
         chapterId: selectedChapterId,
-        title: currentChapter?.title || "",
-        content: currentCachedContent,
+        title: nextTitle,
+        content: cachedContent,
+      }, "cache");
+      return () => {
+        cancelled = true;
       };
+    }
 
-      lastEditorContentRef.current = currentCachedContent;
-      setStoredDraft(nextDraft);
-      persistedSnapshotsRef.current[selectedChapterId] = toChapterSnapshot(nextDraft);
-      checkpointSnapshotsRef.current[selectedChapterId] = toChapterSnapshot(nextDraft);
-
-      clearAutosaveTimer();
-      setTitle(nextDraft.title);
-      setHasSelection(false);
-
-      if (editor.getHTML() !== currentCachedContent) {
-        editor.commands.setContent(currentCachedContent || "", { emitUpdate: false });
-      }
-
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setIsLoadingContent(true);
       setSaveError(null);
       setSaveWarning(null);
-      syncSaveState(selectedChapterId, nextDraft.title, currentCachedContent);
-    }
+    });
+
+    getChapterContent(projectId, selectedChapterId)
+      .then((content) => {
+        if (cancelled) return;
+        const nextContent = content || "";
+        setChapterContent(selectedChapterId, nextContent);
+        loadChapter({
+          projectId,
+          chapterId: selectedChapterId,
+          title: nextTitle,
+          content: nextContent,
+        }, "server");
+      })
+      .catch((error) => {
+        console.error(error);
+        if (!cancelled) {
+          setIsLoadingContent(false);
+          setSaveError("Could not load this chapter. Try switching chapters or refreshing.");
+          setSaveWarning(null);
+        }
+      });
 
     return () => {
       cancelled = true;
     };
   }, [
-    editor,
-    project?.chapters,
+    clearCollaborativeFlushTimer,
+    clearChapterDraft,
     selectedChapterId,
     project?.metadata.id,
     currentChapter?.id,
-    currentChapter?.title,
-    currentCachedContent,
     setChapterContent,
+    storeLocalDraft,
+    syncSaveState,
+  ]);
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    if (!selectedChapterId || !currentChapter?.id) {
+      applyLocalEditorContent(null, "");
+      return;
+    }
+
+    if (!editorTransportKey.startsWith("local:")) {
+      return;
+    }
+
+    if (isLoadingContent && activeChapterIdRef.current !== selectedChapterId) {
+      applyLocalEditorContent(
+        selectedChapterId,
+        `<p class='text-[var(--color-text-muted)] italic'>${t("editor.loading")}</p>`,
+      );
+      return;
+    }
+
+    const projectId = project?.metadata.id;
+    if (!projectId || activeChapterIdRef.current !== selectedChapterId) {
+      return;
+    }
+
+    const nextDraft = getSelectedChapterDraftSnapshot(projectId);
+    if (!nextDraft) {
+      return;
+    }
+
+    applyLocalEditorContent(selectedChapterId, nextDraft.content || "");
+  }, [
+    applyLocalEditorContent,
+    currentChapter?.id,
+    editor,
+    editorTransportKey,
+    getSelectedChapterDraftSnapshot,
+    isLoadingContent,
+    project?.metadata.id,
+    selectedChapterId,
     t,
+  ]);
+
+  useEffect(() => {
+    if (!selectedChapterId || !currentChapter?.id) {
+      return;
+    }
+
+    const projectId = project?.metadata.id;
+    if (!projectId || activeChapterIdRef.current !== selectedChapterId) {
+      return;
+    }
+
+    const nextMode: DraftMode = usesCollaborativeBody ? "live" : "local";
+    const previousMode = collaborationModeRef.current;
+    if (previousMode === nextMode) {
+      return;
+    }
+
+    const nextDraft = getSelectedChapterDraftSnapshot(projectId) ?? {
+      projectId,
+      chapterId: selectedChapterId,
+      title: currentChapterTitleRef.current,
+      content: lastEditorContentRef.current,
+    };
+    const nextContent = nextDraft.content;
+
+    if (usesCollaborativeBody) {
+      loadCollaborativeDraft(nextDraft, selectedChapterId, nextContent);
+      return;
+    }
+
+    activeChapterIdRef.current = selectedChapterId;
+    lastEditorContentRef.current = nextContent;
+    collaborationExpectedContentRef.current = "";
+    setStoredDraft(nextDraft);
+    clearChapterDraft(selectedChapterId);
+    draftModesByChapterRef.current[selectedChapterId] = "local";
+    collaborationModeRef.current = "local";
+
+    if (!persistedSnapshotsRef.current[selectedChapterId]) {
+      persistedSnapshotsRef.current[selectedChapterId] = toChapterSnapshot(nextDraft);
+    }
+    if (!checkpointSnapshotsRef.current[selectedChapterId]) {
+      checkpointSnapshotsRef.current[selectedChapterId] = toChapterSnapshot(nextDraft);
+    }
+
+    clearAutosaveTimer();
+    clearCollaborativeFlushTimer();
+    setTitle(nextDraft.title);
+    setHasSelection(false);
+    setSaveError(null);
+    setSaveWarning(null);
+    setIsLoadingContent(false);
+    syncSaveState(selectedChapterId, nextDraft.title, nextContent, "local");
+  }, [
+    clearCollaborativeFlushTimer,
+    clearChapterDraft,
+    currentChapter?.id,
+    getSelectedChapterDraftSnapshot,
+    loadCollaborativeDraft,
+    project?.metadata.id,
+    selectedChapterId,
+    syncSaveState,
+    usesCollaborativeBody,
+  ]);
+
+  useEffect(() => {
+    if (
+      !editor ||
+      !selectedChapterId ||
+      !currentChapter?.id ||
+      !project?.metadata.id ||
+      !pendingChapterContentReplacement ||
+      usesCollaborativeBody
+    ) {
+      return;
+    }
+
+    const chapterDraft = latestDraftRef.current.chapterId === selectedChapterId
+      ? latestDraftRef.current
+      : draftsByChapterIdRef.current[selectedChapterId];
+    const nextDraft = {
+      projectId: project.metadata.id,
+      chapterId: selectedChapterId,
+      title: chapterDraft?.title ?? currentChapterTitleRef.current,
+      content: pendingChapterContentReplacement.content,
+    };
+
+    activeChapterIdRef.current = selectedChapterId;
+    lastEditorContentRef.current = nextDraft.content;
+    collaborationExpectedContentRef.current = "";
+    setStoredDraft(nextDraft);
+    clearChapterDraft(selectedChapterId);
+    draftModesByChapterRef.current[selectedChapterId] = "local";
+    collaborationModeRef.current = "local";
+    persistedSnapshotsRef.current[selectedChapterId] = toChapterSnapshot(nextDraft);
+    checkpointSnapshotsRef.current[selectedChapterId] = toChapterSnapshot(nextDraft);
+
+    clearAutosaveTimer();
+    clearCollaborativeFlushTimer();
+    setTitle(nextDraft.title);
+    setSaveError(null);
+    setSaveWarning(null);
+    setHasSelection(false);
+    setIsLoadingContent(false);
+    applyLocalEditorContent(selectedChapterId, nextDraft.content || "");
+    syncSaveState(selectedChapterId, nextDraft.title, nextDraft.content, "local");
+    consumeChapterContentReplacement(selectedChapterId, pendingChapterContentReplacement.nonce);
+  }, [
+    applyLocalEditorContent,
+    clearCollaborativeFlushTimer,
+    clearChapterDraft,
+    consumeChapterContentReplacement,
+    currentChapter?.id,
+    editor,
+    pendingChapterContentReplacement,
+    project?.metadata.id,
+    selectedChapterId,
+    syncSaveState,
+    usesCollaborativeBody,
   ]);
 
   useEffect(() => {
@@ -821,9 +1824,96 @@ export function MainEditor({
   }, [editor, pendingInsertion, clearPendingInsertion]);
 
   useEffect(() => {
+    if (!editor || !usesCollaborativeBody || collab.state !== "synced" || !selectedChapterId || !project?.metadata.id) {
+      return;
+    }
+
+    let cancelled = false;
+    let attemptCount = 0;
+    let frame: number | null = null;
+
+    const finalizeSyncedDraft = () => {
+      if (cancelled) {
+        return;
+      }
+
+      const rawSyncedContent = editor.getHTML();
+      const previousContent = collaborationExpectedContentRef.current;
+      const isInitialLiveSync = (draftModesByChapterRef.current[selectedChapterId] ?? "local") !== "live";
+
+      if (
+        isInitialLiveSync &&
+        shouldPreservePreviousEditorContent({
+          nextHtml: rawSyncedContent,
+          previousHtml: previousContent,
+        }) &&
+        attemptCount < 30
+      ) {
+        attemptCount += 1;
+        frame = window.requestAnimationFrame(finalizeSyncedDraft);
+        return;
+      }
+
+      const syncedContent = isInitialLiveSync
+        ? getPreservedEditorContent({
+            nextHtml: rawSyncedContent,
+            previousHtml: previousContent,
+          })
+        : rawSyncedContent;
+      const chapterDraft = latestDraftRef.current.chapterId === selectedChapterId
+        ? latestDraftRef.current
+        : draftsByChapterIdRef.current[selectedChapterId];
+
+      collaborationExpectedContentRef.current = syncedContent;
+      lastEditorContentRef.current = syncedContent;
+      setChapterContent(selectedChapterId, syncedContent);
+      const syncedDraft = setStoredDraft({
+        projectId: project.metadata.id,
+        chapterId: selectedChapterId,
+        title: chapterDraft?.title ?? currentChapterTitleRef.current,
+        content: syncedContent,
+      });
+      clearChapterDraft(selectedChapterId);
+
+      if (!persistedSnapshotsRef.current[selectedChapterId]) {
+        persistedSnapshotsRef.current[selectedChapterId] = toChapterSnapshot(syncedDraft);
+      }
+      if (!checkpointSnapshotsRef.current[selectedChapterId]) {
+        checkpointSnapshotsRef.current[selectedChapterId] = toChapterSnapshot(syncedDraft);
+      }
+
+      draftModesByChapterRef.current[selectedChapterId] = "live";
+      collaborationModeRef.current = "live";
+      collaborativeFlushedContentRef.current[selectedChapterId] = syncedContent;
+      syncSaveState(selectedChapterId, syncedDraft.title, syncedContent, "live");
+    };
+
+    finalizeSyncedDraft();
+
+    return () => {
+      cancelled = true;
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
+  }, [
+    collab.state,
+    clearChapterDraft,
+    editor,
+    project?.metadata.id,
+    selectedChapterId,
+    setChapterContent,
+    syncSaveState,
+    usesCollaborativeBody,
+  ]);
+
+  useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       const hasUnsavedDrafts = Object.values(draftsByChapterIdRef.current).some((draft) =>
-        hasSnapshotChanges(persistedSnapshotsRef.current[draft.chapterId], draft)
+        hasPendingDraftPersistence(
+          draft,
+          draftModesByChapterRef.current[draft.chapterId] ?? "local",
+        )
       );
       if (!hasUnsavedDrafts) return;
       event.preventDefault();
@@ -832,7 +1922,7 @@ export function MainEditor({
 
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, []);
+  }, [hasPendingDraftPersistence]);
 
   const handleOpenCommentComposer = () => {
     if (!editor || !currentChapter) return;
@@ -841,7 +1931,12 @@ export function MainEditor({
     const selectedText = editor.state.doc.textBetween(from, to, " ").trim();
     if (!selectedText) return;
 
-    if (hasUnsavedChanges || hasCheckpointChanges || isSaving) {
+    if (usesCollaborativeBody && collab.state !== "synced") {
+      setCommentError("Wait for live collaboration to reconnect before attaching a comment.");
+      return;
+    }
+
+    if (!usesCollaborativeBody && (hasUnsavedChanges || hasCheckpointChanges || isSaving)) {
       setCommentError("Save the latest prose changes before attaching a comment.");
       return;
     }
@@ -873,6 +1968,13 @@ export function MainEditor({
     const originalContent = pendingCommentDraft.originalContent;
 
     try {
+      const thread = await createCommentThread(project.metadata.id, {
+        threadId: pendingCommentDraft.threadId,
+        chapterId,
+        selectedText: pendingCommentDraft.selectedText,
+        content,
+      });
+
       suppressAutosaveRef.current = true;
       editor
         .chain()
@@ -882,35 +1984,29 @@ export function MainEditor({
 
       const anchoredContent = editor.getHTML();
       lastEditorContentRef.current = anchoredContent;
-      const storedDraft = setStoredDraft({
+      const anchoredDraft = setStoredDraft({
         ...latestDraftRef.current,
         content: anchoredContent,
       });
-
-      const thread = await createCommentThread(project.metadata.id, {
-        threadId: pendingCommentDraft.threadId,
-        chapterId,
-        selectedText: pendingCommentDraft.selectedText,
-        content,
-        chapterContent: anchoredContent,
-      });
-
-      const baseline = toChapterSnapshot(storedDraft);
-      persistedSnapshotsRef.current[chapterId] = baseline;
-      checkpointSnapshotsRef.current[chapterId] = baseline;
+      if (!usesCollaborativeBody) {
+        storeLocalDraft(anchoredDraft);
+      }
       setChapterContent(chapterId, anchoredContent);
-      syncSaveState(chapterId, storedDraft.title, anchoredContent);
+      syncSaveState(chapterId, latestDraftRef.current.title, anchoredContent);
       upsertCommentThread(thread);
       setSelectedCommentThreadId(thread.id);
       setPendingCommentDraft(null);
     } catch (error) {
-      editor.commands.setContent(originalContent, { emitUpdate: false });
-      lastEditorContentRef.current = originalContent;
-      const restoredDraft = setStoredDraft({
-        ...latestDraftRef.current,
-        content: originalContent,
-      });
-      syncSaveState(chapterId, restoredDraft.title, originalContent);
+      if (!usesCollaborativeBody) {
+        applyLocalEditorContent(chapterId, originalContent);
+        lastEditorContentRef.current = originalContent;
+        const restoredDraft = setStoredDraft({
+          ...latestDraftRef.current,
+          content: originalContent,
+        });
+        storeLocalDraft(restoredDraft);
+        syncSaveState(chapterId, restoredDraft.title, originalContent);
+      }
       setCommentError(error instanceof Error ? error.message : "Could not create this comment.");
     } finally {
       suppressAutosaveRef.current = false;
@@ -1072,6 +2168,50 @@ export function MainEditor({
     });
   };
 
+  const handleGenerateIllustration = async (customInstruction?: string) => {
+    if (!editor || !project || !currentChapter || isGeneratingIllustration) return;
+
+    setIllustrationErrorsByChapter((state) => {
+      if (!state[currentChapter.id]) return state;
+      const nextState = { ...state };
+      delete nextState[currentChapter.id];
+      return nextState;
+    });
+    setGeneratingIllustrationChapterId(currentChapter.id);
+
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(project.metadata.id)}/chapters/${encodeURIComponent(currentChapter.id)}/illustration`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chapterTitle: title.trim() || currentChapter.title || t("editor.untitledChapter"),
+            chapterContent: editor.getHTML(),
+            customInstruction,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const data = (await response.json()) as { illustration: ChapterIllustrationMeta | null };
+      updateChapterMetaLocally(currentChapter.id, {
+        illustration: data.illustration,
+      });
+      setFlippedIllustrationChapterId(currentChapter.id);
+    } catch (error) {
+      setIllustrationErrorsByChapter((state) => ({
+        ...state,
+        [currentChapter.id]: error instanceof Error ? error.message : t("editor.illustration.generateError"),
+      }));
+    } finally {
+      setGeneratingIllustrationChapterId((chapterId) => (chapterId === currentChapter.id ? null : chapterId));
+    }
+  };
+
   const handleKeyboardShortcuts = useEffectEvent((event: KeyboardEvent) => {
     const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
     const modifier = isMac ? event.metaKey : event.ctrlKey;
@@ -1093,7 +2233,6 @@ export function MainEditor({
     window.addEventListener("keydown", listener);
     return () => window.removeEventListener("keydown", listener);
   }, []);
-
   if (!editor) return null;
 
   if (!currentChapter) {
@@ -1113,10 +2252,41 @@ export function MainEditor({
     );
   }
 
-  if (!canEdit && !canCollaborate) {
-    return (
-      <div className="flex flex-col h-full bg-[var(--color-canvas)] relative">
-        <div className="border-b border-[var(--color-border)]/50 bg-[var(--color-canvas)] px-6 py-4">
+  const isCommentOnly = Boolean(canCollaborate && !canEdit);
+  const isLiveConnectionIssue = usesCollaborativeBody && (collab.state === "disconnected" || collab.state === "error");
+  const isLiveConnecting = usesCollaborativeBody && !isLiveConnectionIssue && collab.state !== "idle" && collab.state !== "synced";
+  const isLocalEditingFallback = isLiveCollaborationRequested && collaborationDisabledChapterId === currentChapter.id;
+  const canReconnectLiveCollaboration = canEdit && isLiveCollaborationRequested && (
+    isLocalEditingFallback ||
+    collab.state === "disconnected" ||
+    collab.state === "error"
+  );
+  const isIllustrationFlipped = flippedIllustrationChapterId === currentChapter.id;
+  const isGeneratingIllustration = generatingIllustrationChapterId === currentChapter.id;
+  const illustrationError = illustrationErrorsByChapter[currentChapter.id] ?? null;
+  const canManualSave =
+    Boolean(selectedChapterId) &&
+    !isLoadingContent &&
+    canEdit &&
+    (!hasLiveTransport || collab.state === "synced");
+  const selectedChapterDraft = project?.metadata.id
+    ? getSelectedChapterDraftSnapshot(project.metadata.id)
+    : null;
+  const voiceReaderTitle = title || currentChapter.title || t("editor.untitledChapter");
+  const voiceReaderContent = getPreferredDraftContent({
+    draftContent: selectedChapterDraft?.content,
+    cachedDraftContent: undefined,
+    cachedContent: currentCachedContent,
+    lastEditorContent: lastEditorContentRef.current,
+  }) ?? "";
+  const showIllustrationGenerationPanel = !project?.viewerAccess?.isPublicViewer;
+  const illustration = currentChapter.illustration;
+  const illustrationContent = editor.getHTML();
+
+  const readOnlyEditorPage = (
+    <div className="flex h-full flex-col bg-[var(--color-canvas)]">
+      <div className="border-b border-[var(--color-border)]/50 bg-[var(--color-canvas)] px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2 rounded-full bg-[var(--color-accent-muted)] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-accent)]">
               <Globe size={12} />
@@ -1127,42 +2297,47 @@ export function MainEditor({
               {project?.metadata?.name}
             </h2>
           </div>
+          <button
+            type="button"
+            onClick={() => setFlippedIllustrationChapterId(currentChapter.id)}
+            className="flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text)] shadow-sm transition-colors hover:bg-[var(--color-surface-alt)]"
+          >
+            <BookOpen size={16} className="text-[var(--color-accent)]" />
+            {t("editor.illustration.flip")}
+          </button>
         </div>
+      </div>
 
-        <div className="flex-1 overflow-y-auto px-20 py-20 pb-40 scroll-smooth bg-[var(--color-canvas)]">
-          <div className="max-w-3xl mx-auto">
-            <h1 className="text-5xl font-extrabold text-[var(--color-text)] mb-12 tracking-tight leading-tight">
-              {currentChapter?.title || t("editor.untitledChapter")}
-            </h1>
-            <div className="prose prose-slate max-w-none text-xl leading-relaxed text-[var(--color-text)]">
-              <EditorContent editor={editor} />
-            </div>
+      <div className="flex-1 overflow-y-auto px-20 py-20 pb-40 scroll-smooth bg-[var(--color-canvas)]">
+        <div className="mx-auto max-w-3xl">
+          <h1 className="mb-12 text-5xl font-extrabold leading-tight tracking-tight text-[var(--color-text)]">
+            {currentChapter.title || t("editor.untitledChapter")}
+          </h1>
+          <div className="prose prose-slate max-w-none text-xl leading-relaxed text-[var(--color-text)]">
+            <EditorContent editor={editor} />
           </div>
         </div>
-
-        <PublicVoiceReader
-          projectId={project?.metadata.id ?? currentChapter.projectId}
-          chapterId={currentChapter.id}
-          chapterTitle={currentChapter.title || t("editor.untitledChapter")}
-          chapterContent={currentCachedContent ?? ""}
-          isLoading={isLoadingContent}
-        />
       </div>
-    );
-  }
 
-  const isCommentOnly = Boolean(canCollaborate && !canEdit);
-  const canManualSave = Boolean(selectedChapterId) && !isLoadingContent && canEdit;
+      <PublicVoiceReader
+        projectId={project?.metadata.id ?? currentChapter.projectId}
+        chapterId={currentChapter.id}
+        chapterTitle={voiceReaderTitle}
+        chapterContent={voiceReaderContent}
+        isLoading={isLoadingContent}
+      />
+    </div>
+  );
 
-  return (
-    <div className="flex flex-col h-full bg-[var(--color-canvas)]">
-      <div className="flex items-center gap-2 px-6 py-2 border-b border-[var(--color-border)]/50 bg-[var(--color-canvas)]">
-        <div className="flex items-center gap-1 bg-[var(--color-canvas)] rounded-xl p-1">
+  const editableEditorPage = (
+    <div className="flex h-full flex-col bg-[var(--color-canvas)]">
+      <div className="flex items-center gap-2 border-b border-[var(--color-border)]/50 bg-[var(--color-canvas)] px-6 py-2">
+        <div className="flex items-center gap-1 rounded-xl bg-[var(--color-canvas)] p-1">
           <button
             type="button"
             onClick={() => void handleWrite()}
             disabled={isGenerating || !canEdit}
-            className="flex cursor-pointer items-center gap-2 px-4 py-1.5 bg-[var(--color-surface)] text-[var(--color-text)] rounded-lg text-sm font-bold shadow-sm border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-sm font-bold text-[var(--color-text)] shadow-sm transition-all hover:bg-[var(--color-surface-alt)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Wand2 size={16} className="text-[var(--color-accent)]" />
             {t("editor.ai.write")}
@@ -1173,7 +2348,7 @@ export function MainEditor({
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => void handleRewrite()}
             disabled={isGenerating || !hasSelection || !canEdit}
-            className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-[var(--color-text-secondary)] rounded-lg text-sm font-bold hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-bold text-[var(--color-text-secondary)] transition-all hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Sparkles size={16} className="text-[var(--color-accent)]" />
             {t("editor.ai.rewrite")}
@@ -1184,7 +2359,7 @@ export function MainEditor({
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => void handleDescribe()}
             disabled={isGenerating || !hasSelection || !canEdit}
-            className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-[var(--color-text-secondary)] rounded-lg text-sm font-bold hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-bold text-[var(--color-text-secondary)] transition-all hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <MessageSquare size={16} className="text-[var(--color-accent)]" />
             {t("editor.ai.describe")}
@@ -1194,7 +2369,7 @@ export function MainEditor({
             type="button"
             onClick={() => void handleBrainstorm()}
             disabled={isGenerating || !canEdit}
-            className="flex cursor-pointer items-center gap-2 px-4 py-1.5 text-[var(--color-text-secondary)] rounded-lg text-sm font-bold hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-bold text-[var(--color-text-secondary)] transition-all hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Zap size={16} className="text-[var(--color-accent)]" />
             {t("editor.ai.brainstorm")}
@@ -1207,14 +2382,28 @@ export function MainEditor({
               {t("editor.comment.commentingMode")}
             </div>
           )}
-          <div className="flex items-center gap-1 text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest">
+          {isLocalEditingFallback && (
+            <div className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-semibold text-amber-800">
+              <AlertTriangle size={10} className="text-amber-600" />
+              {t("editor.collaboration.localFallbackBadge")}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setFlippedIllustrationChapterId(currentChapter.id)}
+            className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm font-bold text-[var(--color-text)] shadow-sm transition-all hover:bg-[var(--color-surface-alt)]"
+          >
+            <BookOpen size={15} className="text-[var(--color-accent)]" />
+            {t("editor.illustration.flip")}
+          </button>
+          <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
             <div
               className={cn(
-                "w-2 h-2 rounded-full transition-colors",
-                saveError
+                "h-2 w-2 rounded-full transition-colors",
+                saveError || isLiveConnectionIssue
                   ? "bg-[var(--color-destructive)]"
-                  : isSaving
-                    ? "bg-[var(--color-accent)]/60 animate-pulse"
+                  : isSaving || isLiveConnecting
+                    ? "animate-pulse bg-[var(--color-accent)]/60"
                     : saveWarning
                       ? "bg-[var(--color-accent)]"
                       : hasUnsavedChanges || hasCheckpointChanges
@@ -1224,8 +2413,12 @@ export function MainEditor({
             />
             {saveError
               ? t("editor.status.saveFailed")
+              : isLiveConnectionIssue
+                ? t("editor.collaboration.liveOffline")
               : isSaving
                 ? t("editor.status.saving")
+                : isLiveConnecting
+                  ? t("editor.collaboration.liveSyncing")
                 : saveWarning
                   ? t("editor.status.memoryStale")
                   : hasUnsavedChanges || hasCheckpointChanges
@@ -1247,7 +2440,7 @@ export function MainEditor({
               type="button"
               onClick={onToggleHistory}
               title={t("editor.history.historyButton")}
-              className="cursor-pointer p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors"
+              className="cursor-pointer rounded-lg p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)]"
             >
               <History size={16} />
             </button>
@@ -1274,7 +2467,7 @@ export function MainEditor({
             }}
             title={t("workspace.exportMarkdown")}
             disabled={isExporting}
-            className="cursor-pointer p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            className="cursor-pointer rounded-lg p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Download size={16} />
           </button>
@@ -1282,8 +2475,9 @@ export function MainEditor({
             <Tooltip.Root>
               <Tooltip.Trigger asChild>
                 <button
+                  type="button"
                   onClick={toggleZen}
-                  className="cursor-pointer p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors"
+                  className="cursor-pointer rounded-lg p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)]"
                   aria-label={t("zen.enter")}
                 >
                   <Maximize2 size={16} />
@@ -1320,14 +2514,19 @@ export function MainEditor({
 
       <BubbleMenu
         editor={editor}
-        className="flex items-center bg-[var(--color-text)] text-white rounded-xl shadow-2xl overflow-hidden divide-x divide-slate-800 border border-slate-800"
+        className="flex items-center overflow-hidden rounded-xl border border-slate-800 bg-[var(--color-text)] text-white shadow-2xl divide-x divide-slate-800"
       >
         <button
           type="button"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => handleOpenCommentComposer()}
-          disabled={!hasSelection || hasUnsavedChanges || hasCheckpointChanges || isSaving || isCreatingComment}
-          className="cursor-pointer px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:opacity-90 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={
+            !hasSelection ||
+            (!usesCollaborativeBody && (hasUnsavedChanges || hasCheckpointChanges || isSaving)) ||
+            (usesCollaborativeBody && collab.state !== "synced") ||
+            isCreatingComment
+          }
+          className="flex cursor-pointer items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <MessageSquare size={12} />
           {t("editor.comment.comment")}
@@ -1337,7 +2536,7 @@ export function MainEditor({
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => void handleRewrite()}
           disabled={!hasSelection}
-          className="cursor-pointer px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:opacity-90 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex cursor-pointer items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Sparkles size={12} />
           {t("editor.ai.rewrite")}
@@ -1347,15 +2546,15 @@ export function MainEditor({
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => void handleDescribe("sight")}
           disabled={!hasSelection}
-          className="cursor-pointer px-3 py-2 text-[10px] font-bold uppercase tracking-wider hover:opacity-90 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex cursor-pointer items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Search size={12} />
           {t("editor.ai.describe")}
         </button>
       </BubbleMenu>
 
-      <div className="flex-1 overflow-y-auto px-20 py-16 scroll-smooth bg-[var(--color-surface)]">
-        <div className="max-w-3xl mx-auto">
+      <div className="flex-1 overflow-y-auto bg-[var(--color-surface)] px-20 py-16 scroll-smooth">
+        <div className="mx-auto max-w-3xl">
           <input
             ref={titleInputRef}
             type="text"
@@ -1374,13 +2573,16 @@ export function MainEditor({
                 ...latestDraftRef.current,
                 title: nextTitle,
               });
+              if ((draftModesByChapterRef.current[chapterId] ?? "local") === "local") {
+                storeLocalDraft(nextDraft);
+              }
               const { hasUnsaved } = syncSaveState(chapterId, nextTitle, lastEditorContentRef.current);
               scheduleAutosave(nextDraft, hasUnsaved);
             }}
             placeholder={t("editor.chapterTitle")}
             aria-label={t("editor.chapterTitle")}
             className={cn(
-              "w-full text-4xl font-extrabold text-[var(--color-text)] bg-transparent border-b border-[var(--color-border)] outline-none mb-10 pb-4 placeholder:text-[var(--color-border)] tracking-tight transition-colors focus:border-[var(--color-text-muted)]",
+              "mb-10 w-full border-b border-[var(--color-border)] bg-transparent pb-4 text-4xl font-extrabold tracking-tight text-[var(--color-text)] outline-none transition-colors placeholder:text-[var(--color-border)] focus:border-[var(--color-text-muted)]",
               !canEdit && "cursor-default border-transparent pb-2 focus:border-transparent",
             )}
           />
@@ -1388,6 +2590,22 @@ export function MainEditor({
           {saveError && (
             <div className="mt-6 rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-4 py-3 text-sm font-medium text-[var(--color-destructive)]">
               {saveError}
+            </div>
+          )}
+          {collab.error && (
+            <div className="mt-6 rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-4 py-3 text-sm font-medium text-[var(--color-destructive)]">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span>{collab.error}</span>
+                {canReconnectLiveCollaboration && (
+                  <button
+                    type="button"
+                    onClick={triggerCollaborationReconnect}
+                    className="rounded-xl border border-[var(--color-destructive)]/25 bg-white/70 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-[var(--color-destructive)] transition-colors hover:bg-white"
+                  >
+                    {t("editor.collaboration.reconnect")}
+                  </button>
+                )}
+              </div>
             </div>
           )}
           {commentError && !pendingCommentDraft && (
@@ -1400,10 +2618,15 @@ export function MainEditor({
               {saveWarning}
             </div>
           )}
+          {isLocalEditingFallback && (
+            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+              {t("editor.collaboration.localFallback")}
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="flex items-center gap-4 px-20 py-2 border-t border-[var(--color-border)] bg-[var(--background)]">
+      <div className="flex items-center gap-4 border-t border-[var(--color-border)] bg-[var(--background)] px-20 py-2">
         <span className="text-[11px] text-[var(--color-text-muted)]">
           {t("editor.wordCount", { count: editor.storage.characterCount?.words?.() ?? 0 })}
         </span>
@@ -1412,6 +2635,15 @@ export function MainEditor({
           {t("editor.charCount", { count: editor.storage.characterCount?.characters?.() ?? 0 })}
         </span>
       </div>
+
+      <PublicVoiceReader
+        projectId={project?.metadata.id ?? currentChapter.projectId}
+        chapterId={currentChapter.id}
+        chapterTitle={voiceReaderTitle}
+        chapterContent={voiceReaderContent}
+        isLoading={isLoadingContent}
+      />
+
       <Dialog.Root open={pendingCommentDraft != null} onOpenChange={(open) => {
         if (!open) {
           setPendingCommentDraft(null);
@@ -1494,6 +2726,33 @@ export function MainEditor({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+    </div>
+  );
+
+  const editorPage = !canEdit && !canCollaborate ? readOnlyEditorPage : editableEditorPage;
+
+  return (
+    <div className="page-flip-stage h-full">
+      <div className={cn("page-flip-book relative h-full", isIllustrationFlipped && "page-flip-book-flipped")}>
+        <div className={cn("page-flip-face page-flip-front", isIllustrationFlipped && "pointer-events-none")}>
+          {editorPage}
+        </div>
+        <div className={cn("page-flip-face page-flip-back", !isIllustrationFlipped && "pointer-events-none")}>
+          <ChapterIllustrationPage
+            key={currentChapter.id}
+            chapterTitle={title || currentChapter.title || t("editor.untitledChapter")}
+            projectName={project?.metadata.name ?? ""}
+            chapterContent={illustrationContent}
+            illustration={illustration}
+            showGenerationPanel={showIllustrationGenerationPanel}
+            canGenerate={canEdit}
+            isGenerating={isGeneratingIllustration}
+            error={illustrationError}
+            onFlipBack={() => setFlippedIllustrationChapterId(null)}
+            onGenerate={handleGenerateIllustration}
+          />
+        </div>
+      </div>
     </div>
   );
 }

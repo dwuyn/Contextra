@@ -108,6 +108,36 @@
       "posting": "Đang đăng...",
       "commentingMode": "Chế độ bình luận"
     },
+    "collaboration": {
+      "liveSyncing": "Đồng bộ trực tiếp",
+      "liveOffline": "Trực tiếp ngoại tuyến",
+      "syncTimedOut": "Cộng tác trực tiếp khởi tạo quá lâu. Tạm thời chuyển sang chỉnh sửa cục bộ.",
+      "reconnecting": "Cộng tác trực tiếp bị ngắt. Đang kết nối lại...",
+      "reconnectExhausted": "Cộng tác trực tiếp đang ngoại tuyến. Hãy kết nối lại để tiếp tục chỉnh sửa chung.",
+      "reconnect": "Kết nối lại",
+      "localFallbackBadge": "Chỉnh sửa cục bộ",
+      "localFallback": "Cộng tác trực tiếp hiện không khả dụng cho chương này. Phần nội dung đang được chỉnh sửa cục bộ và vẫn lưu bình thường."
+    },
+    "illustration": {
+      "label": "Minh họa chương",
+      "flip": "Lật trang",
+      "backToEditor": "Về trình soạn thảo",
+      "alt": "Minh họa cho {title}",
+      "emptyTitle": "Chưa có minh họa",
+      "emptyDescription": "Tạo một hình minh họa kiểu bìa sách từ bản nháp chương hiện tại và chỉ dẫn nghệ thuật tùy chọn.",
+      "generateLabel": "Tạo ảnh",
+      "generateTitle": "Tạo bìa cho chương",
+      "regenerateTitle": "Tạo lại bìa cho chương",
+      "generateDescription": "Ứng dụng sẽ viết prompt tiếng Anh cho Imagen từ chương này, ngữ cảnh dự án và chỉ dẫn tùy chọn của bạn trước khi tạo một ảnh minh họa dọc.",
+      "customInstruction": "Chỉ dẫn tùy chọn",
+      "customInstructionPlaceholder": "Ví dụ: tranh sơn dầu noir mưa đêm, ánh đèn lồng, không lộ mặt nhân vật",
+      "generate": "Tạo minh họa",
+      "regenerate": "Tạo lại minh họa",
+      "generating": "Đang tạo minh họa...",
+      "generateError": "Không thể tạo minh họa. Vui lòng thử lại.",
+      "missingChapterContent": "Hãy thêm nội dung chương trước khi tạo minh họa.",
+      "readOnlyHint": "Bạn có thể xem minh họa ở đây, nhưng chỉ người có quyền chỉnh sửa mới có thể tạo."
+    },
     "history": {
       "writeLoading": "Đang tạo phần tiếp theo cho chương của bạn...",
       "rewriteLoading": "Đang viết lại đoạn văn đã chọn...",

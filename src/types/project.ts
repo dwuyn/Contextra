@@ -1,6 +1,13 @@
 // Core project types derived from the Prisma schema
 // Use these instead of `any` throughout the codebase
 
+export interface ChapterIllustrationMeta {
+  url: string;
+  prompt: string;
+  model: string;
+  generatedAt: Date | string;
+}
+
 export interface ChapterMeta {
   id: string;
   projectId: string;
@@ -9,6 +16,7 @@ export interface ChapterMeta {
   summary: string;
   index: number;
   source: string;
+  illustration: ChapterIllustrationMeta | null;
   createdAt: Date | string;
   updatedAt: Date | string;
 }
@@ -297,6 +305,21 @@ export interface CreateChapterResult {
 
 export interface UpdateChapterResult {
   continuity: ContinuityRefreshStatus;
+  contentChanged: boolean;
+  collaborationWarning?: string | null;
+}
+
+export interface ProjectCollaborationSession {
+  documentName: string;
+  websocketUrl: string;
+  token: string;
+  readOnly: boolean;
+  user: {
+    id: string;
+    name: string;
+    color: string;
+    profileImageUrl?: string | null;
+  };
 }
 
 export interface RestoreVersionResult {

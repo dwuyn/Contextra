@@ -114,30 +114,40 @@ export function AiCardsPane({
     }
   };
 
+  const handleTabChange = (tab: AiCardsPaneTab) => {
+    onTabChange(tab);
+    if (tab === "history") {
+      scrollRef.current?.scrollTo({ top: 0 });
+    } else {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    }
+  };
+
   useEffect(() => {
     if (!scrollRef.current) {
       return;
     }
 
-    if (activeTab === "history") {
-      scrollRef.current.scrollTop = 0;
-      return;
-    }
-
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [activeTab, aiCards, messages]);
+  }, [messages]);
+
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollTop = 0;
+  }, [aiCards]);
 
   return (
     <aside className="h-full w-96 border-l border-[var(--color-border)] bg-[var(--background)] flex flex-col">
       {/* Tabs Header */}
       <div className="flex items-center px-4 pt-4 border-b border-[var(--color-border)] bg-[var(--background)]">
         {showCloseButton && onClose && (
-          <button onClick={onClose} className="mr-2 p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-all" aria-label={t("close")}>
+          <button type="button" onClick={onClose} className="mr-2 p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-all" aria-label={t("close")}>
             <X size={16} />
           </button>
         )}
         <button 
-          onClick={() => onTabChange("history")}
+          type="button"
+          onClick={() => handleTabChange("history")}
           className={cn(
             "flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
             activeTab === "history" ? "border-[var(--color-accent)] text-[var(--color-text)]" : "border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
@@ -147,7 +157,8 @@ export function AiCardsPane({
           {t("history")}
         </button>
         <button 
-          onClick={() => onTabChange("chat")}
+          type="button"
+          onClick={() => handleTabChange("chat")}
           className={cn(
             "flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
             activeTab === "chat" ? "border-[var(--color-accent)] text-[var(--color-text)]" : "border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
@@ -191,6 +202,7 @@ export function AiCardsPane({
                       <span className="text-[10px] font-black uppercase tracking-tighter text-[var(--color-text-muted)]">{card.type}</span>
                     </div>
                     <button
+                      type="button"
                       onClick={() => removeAiCard(card.id)}
                       className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
                       aria-label={t("removeHistoryCard")}
@@ -205,6 +217,7 @@ export function AiCardsPane({
                       {card.status === "ready" ? (
                         <div className="flex items-center gap-1">
                             <button 
+                              type="button"
                               onClick={() => useProjectStore.getState().insertContent(card.content)}
                               className="flex items-center gap-2 px-4 py-2 bg-[var(--color-text)] text-[var(--color-surface)] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:opacity-90 transition-colors"
                             >
@@ -212,6 +225,7 @@ export function AiCardsPane({
                               {t("insert")}
                             </button>
                             <button 
+                              type="button"
                               onClick={() => navigator.clipboard.writeText(card.content)}
                               className="flex items-center gap-2 px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-[var(--color-surface-alt)] transition-colors"
                           >

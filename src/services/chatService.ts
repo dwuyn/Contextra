@@ -1,4 +1,4 @@
-import "server-only";
+import "@/lib/server-only";
 
 import { prisma } from "@/lib/prisma";
 

@@ -1,4 +1,4 @@
-import "server-only";
+import "@/lib/server-only";
 
 import { createHash } from "node:crypto";
 import { Storage } from "@google-cloud/storage";
@@ -66,9 +66,10 @@ function requireEnv(name: string) {
 function parseCuratedVoices(value: string, language: ReaderLanguage) {
   const voices = value
     .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .map((id) => ({ id, label: formatVoiceOptionLabel(id), language }));
+    .flatMap((entry) => {
+      const trimmed = entry.trim();
+      return trimmed ? [{ id: trimmed, label: formatVoiceOptionLabel(trimmed), language }] : [];
+    });
 
   if (voices.length === 0) {
     throw new Error(`No curated Google TTS voices configured for ${language}.`);

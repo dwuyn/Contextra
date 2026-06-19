@@ -53,8 +53,10 @@ export default async function LocaleLayout({
     notFound();
   }
 
-  const messages = await getMessages();
-  const a11y = await getTranslations("a11y");
+  const [messages, a11y] = await Promise.all([
+    getMessages(),
+    getTranslations("a11y"),
+  ]);
 
   return (
     <>

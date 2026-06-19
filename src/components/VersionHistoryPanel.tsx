@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Clock, RotateCcw, ChevronRight } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { getChapterVersions, restoreVersion } from "@/actions/projects";
@@ -14,6 +14,10 @@ interface Version {
   createdAt: Date | string;
 }
 
+function stripHtml(html: string) {
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+}
+
 export function VersionHistoryPanel({ onClose }: { onClose: () => void }) {
   const t = useTranslations("versionHistory");
   const locale = useLocale();
@@ -24,12 +28,10 @@ export function VersionHistoryPanel({ onClose }: { onClose: () => void }) {
     return state.project?.chapters.find((chapter) => chapter.id === chapterId)?.title ?? null;
   });
   const chapterTitle = selectedChapterTitle ?? t("chapterFallback");
-  const setChapterContent = useProjectStore((state) => state.setChapterContent);
-  const [versions, setVersions] = useState<Version[] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const replaceChapterContent = useProjectStore((state) => state.replaceChapterContent);
+  const [versionsState, setVersionsState] = useState<{ status: "loading" | "loaded"; versions: Version[] | null; warning: string | null }>({ status: "loading", versions: null, warning: null });
   const [isRestoring, setIsRestoring] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [restoreWarning, setRestoreWarning] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,13 +40,13 @@ export function VersionHistoryPanel({ onClose }: { onClose: () => void }) {
     getChapterVersions(projectId, selectedChapterId)
       .then((v) => {
         if (!cancelled) {
-          setRestoreWarning(null);
-          setVersions(v as Version[]);
+          setVersionsState({ status: "loaded", versions: v as Version[], warning: null });
         }
       })
-      .catch(console.error)
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+      .catch(() => {
+        if (!cancelled) {
+          setVersionsState((prev) => ({ ...prev, status: "loaded" }));
+        }
       });
 
     return () => {
@@ -55,14 +57,15 @@ export function VersionHistoryPanel({ onClose }: { onClose: () => void }) {
   const handleRestore = async (versionId: string) => {
     if (!projectId || !selectedChapterId) return;
     setIsRestoring(versionId);
-    setRestoreWarning(null);
+    setVersionsState((prev) => ({ ...prev, warning: null }));
     try {
       const result = await restoreVersion(projectId, selectedChapterId, versionId);
-      setChapterContent(selectedChapterId, result.content ?? "");
+      replaceChapterContent(selectedChapterId, result.content ?? "");
       if (result.continuity.fresh || result.continuity.status === "queued") {
         onClose();
       } else {
-        setRestoreWarning(result.continuity.warning);
+        const continuity = result.continuity as { warning?: string };
+        setVersionsState((prev) => ({ ...prev, warning: continuity.warning ?? null }));
       }
     } catch (err) {
       console.error(err);
@@ -71,17 +74,17 @@ export function VersionHistoryPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const formatDate = (iso: Date | string) => {
-    const d = new Date(iso);
-    return new Intl.DateTimeFormat(locale === "vi" ? "vi-VN" : "en-US", {
+  const dateFormatter = useMemo(() =>
+    new Intl.DateTimeFormat(locale === "vi" ? "vi-VN" : "en-US", {
       month: "short",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-    }).format(d);
+    }), [locale]);
+  const formatDate = (iso: Date | string) => {
+    const d = new Date(iso);
+    return dateFormatter.format(d);
   };
-
-  const stripHtml = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-surface)] border-l border-[var(--color-border)] w-72">
@@ -92,6 +95,7 @@ export function VersionHistoryPanel({ onClose }: { onClose: () => void }) {
           <h2 className="text-sm font-bold text-[var(--color-text)]">{t("title")}</h2>
         </div>
         <button
+          type="button"
           onClick={onClose}
           className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-all"
           aria-label={t("close")}
@@ -103,21 +107,21 @@ export function VersionHistoryPanel({ onClose }: { onClose: () => void }) {
       <p className="px-5 py-3 text-[11px] text-[var(--color-text-muted)] border-b border-[var(--color-border)]">
         {t("intro", { chapterTitle })}
       </p>
-      {restoreWarning && (
+      {versionsState.warning && (
         <div className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-800">
-          {restoreWarning}
+          {versionsState.warning}
         </div>
       )}
 
       {/* Version List */}
       <div className="flex-1 overflow-y-auto">
-        {loading && (
+        {versionsState.status === "loading" && (
           <div className="flex items-center justify-center py-12">
             <div className="w-5 h-5 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
           </div>
         )}
 
-        {!loading && versions?.length === 0 && (
+        {versionsState.status === "loaded" && versionsState.versions?.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
             <Clock size={32} className="text-[var(--color-text-muted)] mb-4" />
             <p className="text-sm font-bold text-[var(--color-text-muted)]">{t("emptyTitle")}</p>
@@ -125,7 +129,7 @@ export function VersionHistoryPanel({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {versions?.map((v, i) => (
+        {versionsState.versions?.map((v, i) => (
           <div
             key={v.id}
             className={cn(
@@ -134,13 +138,14 @@ export function VersionHistoryPanel({ onClose }: { onClose: () => void }) {
             )}
           >
             <button
+              type="button"
               onClick={() => setPreview(preview === v.id ? null : v.id)}
               className="w-full text-left px-5 py-3"
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-[var(--color-text)]">{formatDate(v.createdAt)}</span>
                 <span className="text-[10px] text-[var(--color-text-muted)]">
-                  {i === 0 ? t("latest") : t("versionNumber", { number: versions.length - i })}
+                  {i === 0 ? t("latest") : t("versionNumber", { number: versionsState.versions!.length - i })}
                 </span>
               </div>
               {preview === v.id && (
@@ -152,6 +157,7 @@ export function VersionHistoryPanel({ onClose }: { onClose: () => void }) {
             {preview === v.id && (
               <div className="px-5 pb-3">
                 <button
+                  type="button"
                   onClick={() => handleRestore(v.id)}
                   disabled={!!isRestoring}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-accent)] text-white rounded-lg text-xs font-bold hover:bg-[var(--color-accent)] transition-colors disabled:opacity-50"

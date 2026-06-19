@@ -44,11 +44,12 @@ export function ProjectDeleteDialog({
 
             <div className="mt-8 flex items-center justify-end gap-3">
               <Dialog.Close asChild>
-                <button className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors">
+                <button type="button" className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors">
                   {t("common.cancel")}
                 </button>
               </Dialog.Close>
               <button
+                type="button"
                 onClick={onConfirm}
                 disabled={busy}
                 className="inline-flex items-center gap-2 rounded-2xl bg-[var(--color-destructive)] px-5 py-3 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:opacity-50"

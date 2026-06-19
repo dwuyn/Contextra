@@ -13,14 +13,13 @@ export function LoadingState({ variant = "inline", message }: LoadingStateProps)
   const t = useTranslations("common");
 
   return (
-    <div
+    <output
       className={cn(
         "flex items-center justify-center",
         variant === "inline" && "py-8",
         variant === "overlay" && "absolute inset-0 bg-[var(--color-canvas)]/80 backdrop-blur-sm z-10",
         variant === "fullscreen" && "min-h-screen"
       )}
-      role="status"
       aria-busy="true"
       aria-label={message ?? t("loading")}
     >
@@ -30,6 +29,6 @@ export function LoadingState({ variant = "inline", message }: LoadingStateProps)
           <p className="text-sm text-[var(--color-text-muted)]">{message}</p>
         )}
       </div>
-    </div>
+    </output>
   );
 }

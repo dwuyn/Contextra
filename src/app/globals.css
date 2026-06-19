@@ -437,6 +437,43 @@ body, body * {
   border-radius: 2px;
 }
 
+.page-flip-stage {
+  perspective: 2200px;
+  perspective-origin: center center;
+}
+
+.page-flip-book {
+  transform-style: preserve-3d;
+  transition: transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.page-flip-book-flipped {
+  transform: rotateY(180deg);
+}
+
+.page-flip-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: hidden;
+}
+
+.page-flip-front {
+  transform: rotateY(0deg);
+}
+
+.page-flip-back {
+  transform: rotateY(180deg);
+}
+
+.illustration-paper-frame {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -32px 48px rgba(15, 23, 42, 0.08),
+    0 16px 36px rgba(15, 23, 42, 0.12);
+}
+
 @keyframes page-enter {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -458,6 +495,34 @@ main {
 
 .sidebar-chapter-enter {
   animation: page-enter 0.2s ease-out both;
+}
+
+/* ===== Collaboration Cursors ===== */
+.collaboration-carets__caret {
+  border-left: 2px solid;
+  pointer-events: none;
+  position: relative;
+  display: inline-block;
+}
+
+.collaboration-carets__label {
+  position: absolute;
+  left: 2px;
+  top: -1.4em;
+  padding: 2px 6px;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  border-radius: 3px;
+  color: #fff;
+  font-weight: 500;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ProseMirror-yjs-selection {
+  display: inline !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

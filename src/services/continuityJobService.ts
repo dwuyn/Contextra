@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { deleteChapterSummary, upsertArcSummary, upsertChapterSummary } from "@/services/memoryService";
 import { processAndSaveChapterChunks } from "@/services/ragService";
 import { createCanonProposalsForChapter } from "@/services/canonService";
-import "server-only";
+import "@/lib/server-only";
 
 import { prisma } from "@/lib/prisma";
 
@@ -213,7 +213,7 @@ async function claimContinuityJob() {
   });
 }
 
-export async function processNextContinuityJob() {
+async function processNextContinuityJob() {
   const job = await claimContinuityJob();
   if (!job) return false;
 

@@ -20,6 +20,12 @@ const nextConfig: NextConfig = {
     root: process.cwd(),
   },
   async headers() {
+    const collabUrl = process.env.NEXT_PUBLIC_COLLAB_URL;
+    const devCollabHosts = process.env.NODE_ENV !== "production"
+      ? " ws://127.0.0.1:1234 ws://localhost:1234"
+      : "";
+    const collabWs = collabUrl ? ` ${collabUrl.replace(/^http/, "ws")}` : "";
+
     return [
       {
         source: "/((?!_next/static|_next/image|favicon.ico).*)",
@@ -42,7 +48,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Content-Security-Policy",
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' https://storage.googleapis.com data:; connect-src 'self'; font-src 'self'; media-src 'self' blob:;",
+            value: `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' https://storage.googleapis.com data:; connect-src 'self'${devCollabHosts}${collabWs}; font-src 'self'; media-src 'self' blob:;`,
           },
         ],
       },

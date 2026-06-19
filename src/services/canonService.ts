@@ -1,4 +1,4 @@
-import "server-only";
+import "@/lib/server-only";
 
 import { createHash } from "crypto";
 import { generateText } from "ai";
@@ -334,27 +334,29 @@ export async function createCanonProposalsForChapter(input: ChapterCanonInput) {
   await prisma.canonProposal.deleteMany({ where: { chapterId: input.chapterId, status: "pending", type: { not: "continuity_warning" } } });
   if (rows.length === 0) return;
 
-  for (const row of rows) {
-    try {
-      if (row.type === "entity") {
-        await approveEntity(input.projectId, row.payload as CanonProposalPayload);
-      } else if (row.type === "fact") {
-        await approveFact(input.projectId, {
-          chapterId: row.chapterId,
-          branchId: row.branchId,
-          payload: row.payload,
-        });
-      } else if (row.type === "relation") {
-        await approveRelation(input.projectId, {
-          chapterId: row.chapterId,
-          branchId: row.branchId,
-          payload: row.payload,
-        });
+  await Promise.all(
+    rows.map(async (row) => {
+      try {
+        if (row.type === "entity") {
+          await approveEntity(input.projectId, row.payload as CanonProposalPayload);
+        } else if (row.type === "fact") {
+          await approveFact(input.projectId, {
+            chapterId: row.chapterId,
+            branchId: row.branchId,
+            payload: row.payload,
+          });
+        } else if (row.type === "relation") {
+          await approveRelation(input.projectId, {
+            chapterId: row.chapterId,
+            branchId: row.branchId,
+            payload: row.payload,
+          });
+        }
+      } catch (error) {
+        console.error(`Failed to auto-approve ${row.type} proposal:`, row.payload, error);
       }
-    } catch (error) {
-      console.error(`Failed to auto-approve ${row.type} proposal:`, row.payload, error);
-    }
-  }
+    }),
+  );
 
   await prisma.canonProposal.createMany({
     data: rows.map((row) => ({ ...row, status: row.type === "continuity_warning" ? "pending" : "auto_approved" })),
@@ -704,7 +706,7 @@ export async function loadCanonPromptContext(input: CanonPromptContextInput) {
   };
 }
 
-export function summarizeCanonProposal(proposal: { type: string; payload: unknown }) {
+function summarizeCanonProposal(proposal: { type: string; payload: unknown }) {
   const detail = formatPayload(proposal.payload);
   return detail ? `${proposal.type}: ${detail}` : proposal.type;
 }

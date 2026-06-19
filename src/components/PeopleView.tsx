@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useReducer, useState, useEffect } from "react";
 import Image from "next/image";
 import { Search, X } from "lucide-react";
 import { searchPeople, discoverPeople } from "@/actions/people";
@@ -35,31 +35,73 @@ function asString(value: unknown) {
   return typeof value === "string" ? value : undefined;
 }
 
+type PeopleData = {
+  searchResults: PersonSummary[];
+  discoveredPeople: PersonSummary[];
+  incomingRequests: FriendRequestSummary[];
+  outgoingRequests: FriendRequestSummary[];
+  loading: boolean;
+};
+
+type PeopleAction =
+  | { type: "setSearchResults"; results: PersonSummary[] }
+  | { type: "setDiscoveredPeople"; people: PersonSummary[] }
+  | { type: "setIncomingRequests"; requests: FriendRequestSummary[] }
+  | { type: "setOutgoingRequests"; requests: FriendRequestSummary[] }
+  | { type: "setLoading"; loading: boolean }
+  | { type: "addIncomingRequest"; request: FriendRequestSummary }
+  | { type: "removeOutgoingRequest"; id: string }
+  | { type: "removeIncomingRequest"; id: string }
+  | { type: "setAll"; discovered: PersonSummary[]; incoming: FriendRequestSummary[]; outgoing: FriendRequestSummary[] };
+
+function peopleReducer(state: PeopleData, action: PeopleAction): PeopleData {
+  switch (action.type) {
+    case "setSearchResults":
+      return { ...state, searchResults: action.results };
+    case "setDiscoveredPeople":
+      return { ...state, discoveredPeople: action.people };
+    case "setIncomingRequests":
+      return { ...state, incomingRequests: action.requests };
+    case "setOutgoingRequests":
+      return { ...state, outgoingRequests: action.requests };
+    case "setLoading":
+      return { ...state, loading: action.loading };
+    case "addIncomingRequest":
+      if (state.incomingRequests.some((r) => r.id === action.request.id)) return state;
+      return { ...state, incomingRequests: [action.request, ...state.incomingRequests] };
+    case "removeOutgoingRequest":
+      return { ...state, outgoingRequests: state.outgoingRequests.filter((r) => r.id !== action.id) };
+    case "removeIncomingRequest":
+      return { ...state, incomingRequests: state.incomingRequests.filter((r) => r.id !== action.id) };
+    case "setAll":
+      return { ...state, discoveredPeople: action.discovered, incomingRequests: action.incoming, outgoingRequests: action.outgoing, loading: false };
+  }
+}
+
 export function PeopleView({ onClose }: { onClose: () => void }) {
   const t = useTranslations("peopleView");
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<PersonSummary[]>([]);
-  const [discoveredPeople, setDiscoveredPeople] = useState<PersonSummary[]>([]);
-  const [incomingRequests, setIncomingRequests] = useState<FriendRequestSummary[]>([]);
-  const [outgoingRequests, setOutgoingRequests] = useState<FriendRequestSummary[]>([]);
   const [activeTab, setActiveTab] = useState<"directory" | "incoming" | "outgoing">("directory");
-  const [loading, setLoading] = useState(false);
+  const [peopleData, dispatch] = useReducer(peopleReducer, {
+    searchResults: [],
+    discoveredPeople: [],
+    incomingRequests: [],
+    outgoingRequests: [],
+    loading: false,
+  });
 
   async function fetchInitialData() {
-    setLoading(true);
+    dispatch({ type: "setLoading", loading: true });
     try {
       const [discovered, incoming, outgoing] = await Promise.all([
         discoverPeople(),
         getFriendRequests("incoming"),
-        getFriendRequests("outgoing")
+        getFriendRequests("outgoing"),
       ]);
-      setDiscoveredPeople(discovered);
-      setIncomingRequests(incoming);
-      setOutgoingRequests(outgoing);
+      dispatch({ type: "setAll", discovered, incoming, outgoing });
     } catch (err) {
       console.error("Failed to fetch people data", err);
-    } finally {
-      setLoading(false);
+      dispatch({ type: "setLoading", loading: false });
     }
   }
 
@@ -73,84 +115,82 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
     if (event === "new_friend_request") {
       const requestId = asString(data.id);
       if (!requestId) return;
-      setIncomingRequests(prev => {
-        if (prev.some(r => r.id === requestId)) return prev;
-        // Make sure data has all required fields for rendering
-        return [{
+      dispatch({
+        type: "addIncomingRequest",
+        request: {
           id: requestId,
           senderId: asString(data.senderId) ?? "",
           senderName: asString(data.senderName),
           senderEmail: asString(data.senderEmail),
-        }, ...prev];
+        },
       });
     } else if (event === "friend_request_status_update") {
       const requestId = asString(data.id);
-      if (requestId) setOutgoingRequests(prev => prev.filter(r => r.id !== requestId));
+      if (requestId) dispatch({ type: "removeOutgoingRequest", id: requestId });
     }
   });
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (!searchQuery.trim()) return;
-    setLoading(true);
+    dispatch({ type: "setLoading", loading: true });
     try {
       const results = await searchPeople(searchQuery);
-      setSearchResults(results);
-      setActiveTab("directory"); // Switch to directory to show results
+      dispatch({ type: "setSearchResults", results });
+      setActiveTab("directory");
     } catch (err) {
       console.error("Search failed", err);
     } finally {
-      setLoading(false);
+      dispatch({ type: "setLoading", loading: false });
     }
   }
 
   async function handleSendRequest(userId: string) {
     try {
       await sendFriendRequest(userId);
-      // Refresh outgoing requests
       const outgoing = await getFriendRequests("outgoing");
-      setOutgoingRequests(outgoing);
-      // Update discovered/search results optimistically
-      setDiscoveredPeople(prev => prev.filter(p => p.id !== userId));
-      setSearchResults(prev => prev.map(p => p.id === userId ? { ...p, hasPendingRequest: true } : p));
+      dispatch({ type: "setOutgoingRequests", requests: outgoing });
+      dispatch({ type: "setDiscoveredPeople", people: peopleData.discoveredPeople.filter((p) => p.id !== userId) });
+      dispatch({
+        type: "setSearchResults",
+        results: peopleData.searchResults.map((p) => (p.id === userId ? { ...p, hasPendingRequest: true } : p)),
+      });
     } catch (err) {
       console.error("Failed to send request", err);
     }
   }
 
   async function handleAccept(requestId: string) {
-    // Optimistic UI update
-    setIncomingRequests(prev => prev.filter(r => r.id !== requestId));
-    
+    dispatch({ type: "removeIncomingRequest", id: requestId });
     try {
       await respondToFriendRequest(requestId, "accepted");
     } catch (err) {
       console.error("Failed to accept request", err);
-      // Revert optimistic change on error
       const incoming = await getFriendRequests("incoming");
-      setIncomingRequests(incoming);
+      dispatch({ type: "setIncomingRequests", requests: incoming });
     }
   }
 
   async function handleReject(requestId: string) {
-    setIncomingRequests(prev => prev.filter(r => r.id !== requestId));
+    dispatch({ type: "removeIncomingRequest", id: requestId });
     try {
       await respondToFriendRequest(requestId, "rejected");
     } catch (err) {
       console.error("Failed to reject request", err);
       const incoming = await getFriendRequests("incoming");
-      setIncomingRequests(incoming);
+      dispatch({ type: "setIncomingRequests", requests: incoming });
     }
   }
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in duration-300" aria-busy={loading}>
+    <div className="flex flex-col h-full animate-in fade-in duration-300" aria-busy={peopleData.loading}>
       <header className="flex items-center justify-between mb-8">
         <div>
           <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2">{t("workspaceLabel")}</p>
           <h2 className="text-4xl font-extrabold text-[var(--color-text)] tracking-tight">{t("title")}</h2>
         </div>
         <button 
+          type="button"
           onClick={onClose}
           className="flex h-10 items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm font-bold text-[var(--color-text)] hover:bg-[var(--color-canvas)] transition-colors shadow-sm"
         >
@@ -179,19 +219,19 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
           <nav className="space-y-1">
             <SidebarItem 
               label={t("directory")} 
-              count={discoveredPeople.length} 
+              count={peopleData.discoveredPeople.length} 
               active={activeTab === "directory"} 
               onClick={() => setActiveTab("directory")} 
             />
             <SidebarItem 
               label={t("incoming")} 
-              count={incomingRequests.length} 
+              count={peopleData.incomingRequests.length} 
               active={activeTab === "incoming"} 
               onClick={() => setActiveTab("incoming")} 
             />
             <SidebarItem 
               label={t("outgoing")} 
-              count={outgoingRequests.length} 
+              count={peopleData.outgoingRequests.length} 
               active={activeTab === "outgoing"} 
               onClick={() => setActiveTab("outgoing")} 
             />
@@ -202,14 +242,14 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
         <div className="flex-1 overflow-y-auto pr-4">
           {activeTab === "directory" && (
             <div className="space-y-10">
-              {searchResults.length > 0 && (
+              {peopleData.searchResults.length > 0 && (
                 <section>
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-xl font-bold text-[var(--color-text)]">{t("searchResults")}</h3>
-                    <button onClick={() => setSearchResults([])} className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">{t("clear")}</button>
+                    <button type="button" onClick={() => dispatch({ type: "setSearchResults", results: [] })} className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">{t("clear")}</button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {searchResults.map((person) => (
+                    {peopleData.searchResults.map((person) => (
                       <PersonCard 
                         key={person.id} 
                         person={person} 
@@ -224,18 +264,18 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold text-[var(--color-text)]">{t("discoverPeople")}</h3>
                   <span className="text-[10px] font-bold uppercase tracking-wider bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)] px-2 py-1 rounded-md">
-                    {t("usersCount", { count: discoveredPeople.length })}
+                    {t("usersCount", { count: peopleData.discoveredPeople.length })}
                   </span>
                 </div>
                 
-                {discoveredPeople.length === 0 ? (
+                {peopleData.discoveredPeople.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 rounded-[32px] border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)]">
                     <UsersIcon size={40} className="text-[var(--color-border)] mb-4" />
                     <p className="text-sm text-[var(--color-text-muted)]">{t("noDiscovered")}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {discoveredPeople.map((person) => (
+                    {peopleData.discoveredPeople.map((person) => (
                       <PersonCard 
                         key={person.id} 
                         person={person} 
@@ -251,13 +291,13 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
           {activeTab === "incoming" && (
             <section>
               <h3 className="text-xl font-bold text-[var(--color-text)] mb-6">{t("incoming")}</h3>
-              {incomingRequests.length === 0 ? (
+              {peopleData.incomingRequests.length === 0 ? (
                 <div className="p-8 rounded-[32px] border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)] text-center text-sm text-[var(--color-text-muted)]">
                   {t("noIncoming")}
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {incomingRequests.map((req) => (
+                  {peopleData.incomingRequests.map((req) => (
                     <div key={req.id} className="flex items-center justify-between p-5 rounded-[24px] bg-[var(--color-surface)] border border-[var(--color-border)] shadow-sm">
                       <div className="flex items-center gap-4">
                         <div className="h-12 w-12 rounded-full bg-[var(--color-accent-muted)] text-[var(--color-accent)] flex items-center justify-center font-bold text-lg">
@@ -270,12 +310,14 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
                       </div>
                       <div className="flex items-center gap-3">
                         <button 
+                          type="button"
                           onClick={() => handleAccept(req.id)}
                           className="bg-[var(--color-accent)] text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-[var(--color-accent)] transition-colors shadow-sm"
                         >
                           {t("accept")}
                         </button>
                         <button 
+                          type="button"
                           onClick={() => handleReject(req.id)}
                           aria-label={t("reject")}
                           className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] p-2"
@@ -293,13 +335,13 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
           {activeTab === "outgoing" && (
             <section>
               <h3 className="text-xl font-bold text-[var(--color-text)] mb-6">{t("outgoing")}</h3>
-              {outgoingRequests.length === 0 ? (
+              {peopleData.outgoingRequests.length === 0 ? (
                 <div className="p-8 rounded-[32px] border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)] text-center text-sm text-[var(--color-text-muted)]">
                   {t("noOutgoing")}
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {outgoingRequests.map((req) => (
+                  {peopleData.outgoingRequests.map((req) => (
                     <div key={req.id} className="flex items-center justify-between p-5 rounded-[24px] bg-[var(--color-surface)] border border-[var(--color-border)] shadow-sm">
                       <div className="flex items-center gap-4">
                         <div className="h-12 w-12 rounded-full bg-[var(--color-canvas)] text-[var(--color-text-muted)] flex items-center justify-center font-bold text-lg">
@@ -333,6 +375,7 @@ export function PeopleView({ onClose }: { onClose: () => void }) {
 function SidebarItem({ label, count, active, onClick }: { label: string, count: number, active?: boolean, onClick: () => void }) {
   return (
     <button 
+      type="button"
       onClick={onClick}
       className={cn(
         "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold transition-all",
@@ -379,6 +422,7 @@ function PersonCard({ person, onSendRequest }: { person: PersonSummary, onSendRe
         </div>
       ) : (
         <button 
+          type="button"
           onClick={onSendRequest}
           className="flex items-center justify-center gap-2 bg-[var(--color-accent)] text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[var(--color-accent)] transition-colors shadow-sm"
         >

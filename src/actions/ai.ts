@@ -34,11 +34,11 @@ const aiRateLimiter = createRateLimiter({
   keyPrefix: "ai:action:",
 });
 
-const STORY_BIBLE_CONTEXT_BUDGETS = {
+const STORY_BIBLE_CONTEXT_BUDGETS = Object.freeze({
   characters: 10_000,
   chapters: 16_000,
   worldRules: 4_000,
-};
+});
 
 function takeStringsByBudget(values: string[], budget: number) {
   const selected: string[] = [];
@@ -167,7 +167,7 @@ function attachLongOutlineIds(outline: Awaited<ReturnType<typeof generateLongOut
   };
 }
 
-export async function generateChapterAction(projectId: string, branchId: string, input: { title: string; instructions: string }) {
+async function generateChapterAction(projectId: string, branchId: string, input: { title: string; instructions: string }) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
 
@@ -279,7 +279,7 @@ export async function generateOutlineAction(projectId: string) {
   return updatedProject;
 }
 
-export async function generateLongOutlineAction(projectId: string, input: unknown = {}) {
+async function generateLongOutlineAction(projectId: string, input: unknown = {}) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
 

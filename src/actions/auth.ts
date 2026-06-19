@@ -42,7 +42,7 @@ export async function logout() {
   return authService.logout();
 }
 
-export async function getUser() {
+async function getUser() {
   const session = await getSession();
   if (!session) return null;
   return authService.getUser(session.userId);

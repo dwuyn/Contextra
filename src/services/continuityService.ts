@@ -1,4 +1,4 @@
-import "server-only";
+import "@/lib/server-only";
 
 import {
   enqueueChapterContinuityJob,
@@ -13,7 +13,7 @@ const CONTINUITY_STALE_WARNING =
 const CONTINUITY_QUEUED_WARNING =
   "Saved. Continuity memory refresh is queued, so AI may use previous memory until the worker completes.";
 
-export const refreshChapterContinuity = refreshChapterContinuityNow;
+const refreshChapterContinuity = refreshChapterContinuityNow;
 
 export async function refreshChapterContinuityStatus(
   input: ChapterContinuityInput,

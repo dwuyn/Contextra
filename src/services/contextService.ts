@@ -1,4 +1,4 @@
-import "server-only";
+import "@/lib/server-only";
 
 import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
@@ -135,7 +135,7 @@ function extractSearchTerms(input: string) {
 
 function getRecentChapterSummaries(lineage: ContextChapter[]) {
   const summaries = lineage
-    .map((chapter) => {
+    .flatMap((chapter) => {
       const summaryText = chapter.summaryObj?.summary?.trim() || chapter.summary.trim();
       const keyEvents = normalizeStringList(chapter.summaryObj?.keyEvents);
       const factsLearned = normalizeStringList(chapter.summaryObj?.factsLearned);
@@ -146,9 +146,8 @@ function getRecentChapterSummaries(lineage: ContextChapter[]) {
       if (factsLearned.length > 0) richSummary += ` Facts: ${factsLearned.join("; ")}.`;
       if (characters.length > 0) richSummary += ` Characters: ${characters.join(", ")}.`;
 
-      return { chapterTitle: chapter.title, summary: richSummary };
-    })
-    .filter((chapter) => chapter.summary.length > 0);
+      return richSummary.length > 0 ? [{ chapterTitle: chapter.title, summary: richSummary }] : [];
+    });
   const selected: Array<{ chapterTitle: string; summary: string }> = [];
   let used = 0;
 
@@ -445,8 +444,7 @@ export async function composeContext(
   ]);
 
   const arcSummaries = arcs
-    .filter((a) => a.arcSummary)
-    .map((a) => `${a.title}: ${a.arcSummary}`);
+    .flatMap((a) => (a.arcSummary ? [`${a.title}: ${a.arcSummary}`] : []));
 
   const result = {
     projectName: project.name,
@@ -516,7 +514,7 @@ async function buildContinuity(
   return [...lineage, ...currentBranch];
 }
 
-export function exportProject(project: ExportableProject) {
+function exportProject(project: ExportableProject) {
   const chapterBlock = project.chapters
     .map((c) => `${c.title}\n\n${c.content}`)
     .join("\n\n---\n\n");

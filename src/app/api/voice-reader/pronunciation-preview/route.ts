@@ -81,10 +81,12 @@ function validateInput(body: unknown): PreviewInput | string {
       if (typeof entry.replacement !== "string" || !entry.replacement.trim()) {
         return `entryOverride[${i}].replacement is required.`;
       }
-      if (!["sub", "phoneme", "say_as", "plain"].includes(entry.renderMode as string)) {
+      const VALID_RENDER_MODES = new Set(["sub", "phoneme", "say_as", "plain"]);
+      const VALID_MATCH_MODES = new Set(["whole_word", "literal"]);
+      if (!VALID_RENDER_MODES.has(entry.renderMode as string)) {
         return `entryOverride[${i}].renderMode must be "sub", "phoneme", "say_as", or "plain".`;
       }
-      if (!["whole_word", "literal"].includes(entry.matchMode as string)) {
+      if (!VALID_MATCH_MODES.has(entry.matchMode as string)) {
         return `entryOverride[${i}].matchMode must be "whole_word" or "literal".`;
       }
     }

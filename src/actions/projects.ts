@@ -9,10 +9,17 @@ import {
 import { enqueueProjectContinuityJobs } from "@/services/continuityJobService";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  exportCollaborativeChapter,
+  replaceCollaborativeChapter,
+  syncCollaborativeChapterDocument,
+} from "@/lib/collaboration/internal";
 import { revalidatePath } from "next/cache";
 import * as z from "@/lib/validations";
 import { sendEvent } from "@/lib/realtime";
 import type { CreateChapterResult, RemoveProjectMemberResult, RestoreVersionResult, UpdateChapterResult } from "@/types/project";
+
+const COLLABORATION_SYNC_WARNING = "Saved locally, but live collaboration may briefly lag until it resynchronizes.";
 
 async function sendProjectNotice(senderId: string, receiverId: string, content: string) {
   try {
@@ -42,13 +49,13 @@ export async function listPublicProjects(page?: number) {
   return projectService.listPublicProjects(session.userId, page);
 }
 
-export async function getHomeOverview() {
+async function getHomeOverview() {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
   return projectService.getHomeOverview(session.userId);
 }
 
-export async function getProject(projectId: string) {
+async function getProject(projectId: string) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
   return projectService.getProject(projectId, session.userId);
@@ -79,11 +86,29 @@ export async function updateChapter(projectId: string, chapterId: string, input:
   const parsed = z.UpdateChapterSchema.parse(input);
   const { revalidate = true, ...chapterInput } = parsed;
   const result = await projectService.updateChapter(projectId, session.userId, chapterId, chapterInput);
+  let collaborationWarning: string | null = null;
+
+  if (chapterInput.content !== undefined && result.contentChanged) {
+    try {
+      await syncCollaborativeChapterDocument({
+        projectId,
+        chapterId,
+        html: chapterInput.content,
+      });
+    } catch (error) {
+      console.error("Failed to sync collaboration document after local save", error);
+      collaborationWarning = COLLABORATION_SYNC_WARNING;
+    }
+  }
+
   if (revalidate) {
     revalidatePath("/");
     revalidatePath(`/project/${projectId}`);
   }
-  return result;
+
+  return collaborationWarning
+    ? { ...result, collaborationWarning }
+    : result;
 }
 
 export async function createBranch(projectId: string, input: unknown) {
@@ -95,7 +120,7 @@ export async function createBranch(projectId: string, input: unknown) {
   return result;
 }
 
-export async function mergeBranch(projectId: string, branchId: string) {
+async function mergeBranch(projectId: string, branchId: string) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
   const result = await projectService.mergeBranch(projectId, session.userId, branchId);
@@ -138,40 +163,47 @@ export async function updateOutline(projectId: string, input: unknown) {
   return result;
 }
 
-export async function approveCanonProposal(projectId: string, proposalId: string) {
+async function approveCanonProposal(projectId: string, proposalId: string) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
-  await projectService.requireProjectPermission(projectId, session.userId, "edit");
-  await approveCanonProposalService(projectId, proposalId, session.userId);
+  await Promise.all([
+    projectService.requireProjectPermission(projectId, session.userId, "edit"),
+    approveCanonProposalService(projectId, proposalId, session.userId),
+  ]);
   const result = await projectService.getProject(projectId, session.userId);
   revalidatePath(`/project/${projectId}`);
   return result;
 }
 
-export async function rejectCanonProposal(projectId: string, proposalId: string) {
+async function rejectCanonProposal(projectId: string, proposalId: string) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
-  await projectService.requireProjectPermission(projectId, session.userId, "edit");
-  await rejectCanonProposalService(projectId, proposalId, session.userId);
+  await Promise.all([
+    projectService.requireProjectPermission(projectId, session.userId, "edit"),
+    rejectCanonProposalService(projectId, proposalId, session.userId),
+  ]);
   const result = await projectService.getProject(projectId, session.userId);
   revalidatePath(`/project/${projectId}`);
   return result;
 }
 
-export async function refreshProjectMemoryAction(projectId: string) {
+async function refreshProjectMemoryAction(projectId: string) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
-  await projectService.requireProjectPermission(projectId, session.userId, "edit");
 
-  const chapters = await prisma.chapter.findMany({
-    where: { projectId },
-    orderBy: [{ index: "asc" }, { createdAt: "asc" }],
-    select: { id: true, branchId: true },
-  });
+  const [, chapters] = await Promise.all([
+    projectService.requireProjectPermission(projectId, session.userId, "edit"),
+    prisma.chapter.findMany({
+      where: { projectId },
+      orderBy: [{ index: "asc" }, { createdAt: "asc" }],
+      select: { id: true, branchId: true },
+    }),
+  ]);
 
-  await enqueueProjectContinuityJobs({ projectId, chapters });
-
-  const result = await projectService.getProject(projectId, session.userId);
+  const [, result] = await Promise.all([
+    enqueueProjectContinuityJobs({ projectId, chapters }),
+    projectService.getProject(projectId, session.userId),
+  ]);
   revalidatePath(`/project/${projectId}`);
   return result;
 }
@@ -195,7 +227,7 @@ export async function renameProject(projectId: string, input: unknown) {
   revalidatePath(`/project/${projectId}`);
 }
 
-export async function addCollaborator(projectId: string, input: unknown) {
+async function addCollaborator(projectId: string, input: unknown) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
   const parsed = z.AddCollaboratorSchema.parse(input);
@@ -321,7 +353,7 @@ export async function respondToProjectInvite(inviteId: string, input: unknown) {
   return result;
 }
 
-export async function upsertProjectPresence(projectId: string, input: unknown) {
+async function upsertProjectPresence(projectId: string, input: unknown) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
   const parsed = z.UpsertProjectPresenceSchema.parse(input);
@@ -335,7 +367,7 @@ export async function upsertProjectPresence(projectId: string, input: unknown) {
   return presence;
 }
 
-export async function leaveProjectPresence(projectId: string) {
+async function leaveProjectPresence(projectId: string) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
   const result = await projectService.leaveProjectPresence(projectId, session.userId);
@@ -400,7 +432,7 @@ export async function updateCommentThreadStatus(projectId: string, threadId: str
   return thread;
 }
 
-export async function sendProjectChat(projectId: string, input: unknown) {
+async function sendProjectChat(projectId: string, input: unknown) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
   const parsed = z.SendProjectChatSchema.parse(input);
@@ -457,10 +489,49 @@ export async function getChapterVersions(projectId: string, chapterId: string) {
   return projectService.getChapterVersions(projectId, session.userId, chapterId);
 }
 
+export async function saveCollaborativeChapter(projectId: string, chapterId: string, input: unknown): Promise<UpdateChapterResult> {
+  const session = await getSession();
+  if (!session) throw new Error("Unauthorized");
+
+  const parsed = z.UpdateChapterSchema.parse(input);
+  const { html } = await exportCollaborativeChapter(chapterId);
+  const result = await projectService.updateChapter(projectId, session.userId, chapterId, {
+    title: parsed.title,
+    summary: parsed.summary,
+    content: html,
+    createVersion: parsed.createVersion,
+  });
+
+  if (parsed.revalidate ?? parsed.createVersion) {
+    revalidatePath("/");
+    revalidatePath(`/project/${projectId}`);
+  }
+
+  return result;
+}
+
 export async function restoreVersion(projectId: string, chapterId: string, versionId: string): Promise<RestoreVersionResult> {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
-  const result = await projectService.restoreVersion(projectId, session.userId, chapterId, versionId);
+  await projectService.requireProjectPermission(projectId, session.userId, "edit");
+  const [version, current] = await Promise.all([
+    projectService.getChapterVersionForRestore(projectId, session.userId, chapterId, versionId),
+    exportCollaborativeChapter(chapterId),
+  ]);
+
+  if (current.html && current.html !== version.content) {
+    await projectService.createChapterVersionSnapshot(projectId, chapterId, session.userId, current.html);
+  }
+
+  const replaced = await replaceCollaborativeChapter({
+    projectId,
+    chapterId,
+    html: version.content,
+  });
+
   revalidatePath(`/project/${projectId}`);
-  return result;
+  return {
+    content: replaced.html,
+    continuity: replaced.continuity,
+  };
 }

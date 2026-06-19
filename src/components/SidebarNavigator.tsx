@@ -42,8 +42,10 @@ function toRichTextHtml(text: string) {
 
   return normalized
     .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean)
+    .flatMap((block) => {
+      const trimmed = block.trim();
+      return trimmed ? [trimmed] : [];
+    })
     .map((block) => {
       if (/^#{1,6}\s+/.test(block)) {
         const match = block.match(/^(#{1,6})\s+(.*)$/);
@@ -52,7 +54,10 @@ function toRichTextHtml(text: string) {
         return `<h${level}>${escapeHtml(match[2].trim())}</h${level}>`;
       }
 
-      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+      const lines = block.split("\n").flatMap((line) => {
+        const trimmed = line.trim();
+        return trimmed ? [trimmed] : [];
+      });
 
       if (lines.length > 0 && lines.every((line) => /^[-*]\s+/.test(line))) {
         return `<ul>${lines.map((line) => `<li>${escapeHtml(line.replace(/^[-*]\s+/, ""))}</li>`).join("")}</ul>`;
@@ -105,6 +110,7 @@ function SortableChapter({
     <div ref={setNodeRef} style={style} className="flex items-center gap-1 group/item">
       {canEdit && (
         <button
+          type="button"
           {...attributes}
           {...listeners}
           className="opacity-0 group-hover/item:opacity-100 cursor-grab active:cursor-grabbing p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-all touch-none"
@@ -114,6 +120,7 @@ function SortableChapter({
         </button>
       )}
       <button
+        type="button"
         onClick={onSelect}
         className={cn(
           "flex-1 text-left px-3 py-2.5 rounded-xl text-sm transition-all flex items-center gap-3",
@@ -448,6 +455,7 @@ export function SidebarNavigator() {
           <input
             ref={renameInputRef}
             type="text"
+            aria-label={st("projectName")}
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={handleSubmitRename}
@@ -456,14 +464,15 @@ export function SidebarNavigator() {
             maxLength={200}
           />
         ) : (
-          <h1
-            className="text-lg font-bold text-[var(--color-text)] leading-tight truncate"
-            onClick={canEdit ? handleStartRename : undefined}
-            title={canEdit ? st("clickToRename") : undefined}
-            style={canEdit ? { cursor: "pointer" } : undefined}
+          <button
+            type="button"
+            onClick={handleStartRename}
+            className="text-lg font-bold text-[var(--color-text)] leading-tight truncate bg-transparent border-0 p-0"
+            title={st("clickToRename")}
+            style={{ cursor: "pointer" }}
           >
             {project.metadata.name}
-          </h1>
+          </button>
         )}
       </div>
 
@@ -519,6 +528,7 @@ export function SidebarNavigator() {
             type="file"
             accept=".md,.markdown,.txt,text/markdown,text/plain"
             multiple
+            aria-label={st("importChapters")}
             className="hidden"
             onChange={(event) => void handleImportFiles(event)}
           />
@@ -631,6 +641,7 @@ export function SidebarNavigator() {
             )}
           </div>
           <button
+            type="button"
             disabled={!canManage || isUpdatingPrivacy}
             onClick={handleTogglePrivacy}
             className={cn(
@@ -662,7 +673,8 @@ export function SidebarNavigator() {
               {st("storyBible")}
             </span>
           </div>
-          <button 
+          <button
+            type="button"
             onClick={() => setIsStoryBibleOpen(!isStoryBibleOpen)}
             className={cn(
               "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2",

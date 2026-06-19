@@ -27,6 +27,7 @@ export default function ErrorBoundary({
       <p className="mb-8 text-sm text-slate-500 max-w-md">{t("workspaceErrorDescription")}</p>
       <div className="flex items-center gap-4">
         <button
+          type="button"
           onClick={() => reset()}
           className="rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white transition-transform hover:scale-105 active:scale-95"
         >

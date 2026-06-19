@@ -1,4 +1,4 @@
-import "server-only";
+import "@/lib/server-only";
 
 import { generateText } from "ai";
 import { chatModel } from "@/lib/ai";
@@ -148,7 +148,7 @@ Return only the summary text. No markdown, no heading, no commentary.
   });
 }
 
-export async function compressChapter(chapterId: string) {
+async function compressChapter(chapterId: string) {
   const chapter = await prisma.chapter.findUnique({
     where: { id: chapterId },
   });

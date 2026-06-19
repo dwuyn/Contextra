@@ -1,17 +1,17 @@
 import { z } from "zod";
 
-export const RegisterSchema = z.object({
+const RegisterSchema = z.object({
   name: z.string().min(1).max(200),
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
-export const LoginSchema = z.object({
-  email: z.string().email(),
+const LoginSchema = z.object({
+  email: z.email(),
   password: z.string().min(1),
 });
 
-export const ChangePasswordSchema = z.object({
+const ChangePasswordSchema = z.object({
   oldPassword: z.string().min(1),
   newPassword: z.string().min(8, "Password must be at least 8 characters"),
 });
@@ -21,8 +21,8 @@ export const ChatRequestSchema = z.object({
     role: z.enum(["user", "assistant"]),
     content: z.string().min(1),
   })).min(1).max(100),
-  projectId: z.string().uuid(),
-  branchId: z.string().uuid(),
+  projectId: z.uuid(),
+  branchId: z.uuid(),
 });
 
 export const RenameProjectSchema = z.object({
@@ -61,6 +61,12 @@ export const UpdateChapterSchema = z.object({
   revalidate: z.boolean().optional(),
 });
 
+export const GenerateChapterIllustrationSchema = z.object({
+  chapterTitle: z.string().trim().min(1).max(200),
+  chapterContent: z.string().trim().min(1).max(250_000),
+  customInstruction: z.string().trim().max(2_000).optional(),
+});
+
 export const CreateBranchSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
@@ -73,13 +79,13 @@ export const UpsertCharacterSchema = z.object({
   memory: z.string()
 });
 
-export const OutlineChapterSchema = z.object({
+const OutlineChapterSchema = z.object({
   id: z.string().min(1),
   title: z.string().trim().min(1).max(200),
   summary: z.string().max(5000).default(""),
 });
 
-export const OutlineActSchema = z.object({
+const OutlineActSchema = z.object({
   id: z.string().min(1),
   title: z.string().trim().min(1).max(200),
   summary: z.string().max(5000).default(""),
@@ -94,12 +100,12 @@ export const LongOutlineRequestSchema = z.object({
   targetChapterCount: z.number().int().min(20).max(1000).default(200),
 });
 
-export const GeneratedOutlineChapterSchema = z.object({
+const GeneratedOutlineChapterSchema = z.object({
   title: z.string().trim().min(1).max(200),
   summary: z.string().max(5000).default(""),
 });
 
-export const GeneratedOutlineActSchema = z.object({
+const GeneratedOutlineActSchema = z.object({
   title: z.string().trim().min(1).max(200),
   summary: z.string().max(5000).default(""),
   chapters: z.array(GeneratedOutlineChapterSchema).default([]),
@@ -109,14 +115,14 @@ export const GeneratedOutlineSchema = z.object({
   acts: z.array(GeneratedOutlineActSchema).min(1),
 });
 
-export const GeneratedLongOutlineBeatSchema = z.object({
+const GeneratedLongOutlineBeatSchema = z.object({
   chapterIndex: z.number().int().min(1),
   title: z.string().trim().min(1).max(200),
   summary: z.string().max(5000).default(""),
   focusEntities: z.array(z.string()).default([]),
 });
 
-export const GeneratedLongOutlineArcSchema = z.object({
+const GeneratedLongOutlineArcSchema = z.object({
   title: z.string().trim().min(1).max(200),
   summary: z.string().max(5000).default(""),
   startChapterIndex: z.number().int().min(1),
@@ -165,7 +171,6 @@ export const CreateCommentThreadSchema = z.object({
   chapterId: z.string().min(1),
   selectedText: z.string().trim().min(1),
   content: z.string().trim().min(1),
-  chapterContent: z.string().min(1),
 });
 
 export const ReplyToCommentThreadSchema = z.object({
@@ -189,7 +194,7 @@ export const ProjectAiChatRequestSchema = z.object({
 });
 
 export const CreatePronunciationEntrySchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.uuid(),
   language: z.enum(["en-US", "vi-VN"]),
   term: z.string().min(1).max(200),
   replacement: z.string().min(1).max(500),
@@ -201,7 +206,7 @@ export const CreatePronunciationEntrySchema = z.object({
 });
 
 export const UpdatePronunciationEntrySchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   term: z.string().min(1).max(200).optional(),
   replacement: z.string().min(1).max(500).optional(),
   renderMode: z.enum(["sub", "phoneme", "say_as", "plain"]).optional(),
@@ -211,7 +216,7 @@ export const UpdatePronunciationEntrySchema = z.object({
   notes: z.string().max(1000).optional(),
 });
 
-export const ImportPronunciationSuggestionsSchema = z.object({
-  projectId: z.string().uuid(),
+const ImportPronunciationSuggestionsSchema = z.object({
+  projectId: z.uuid(),
   language: z.enum(["en-US", "vi-VN"]),
 });

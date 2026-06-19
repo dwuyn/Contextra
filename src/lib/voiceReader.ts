@@ -25,7 +25,7 @@ export function isReaderLanguage(value: string): value is ReaderLanguage {
   return value === "en-US" || value === "vi-VN";
 }
 
-export function isReaderLanguageMode(value: string): value is ReaderLanguageMode {
+function isReaderLanguageMode(value: string): value is ReaderLanguageMode {
   return value === "auto" || isReaderLanguage(value);
 }
 
@@ -33,7 +33,7 @@ export function isSupportedSpeechRate(value: number) {
   return SPEECH_RATE_OPTIONS.includes(value as (typeof SPEECH_RATE_OPTIONS)[number]);
 }
 
-export function getReaderLanguageLabel(language: ReaderLanguage) {
+function getReaderLanguageLabel(language: ReaderLanguage) {
   return language === "vi-VN" ? "Vietnamese" : "English";
 }
 
@@ -188,7 +188,10 @@ function segmentSentences(text: string) {
     return [normalized];
   }
 
-  return regexSegments.map((segment) => normalizeWhitespace(segment)).filter(Boolean);
+  return regexSegments.flatMap((segment) => {
+    const trimmed = normalizeWhitespace(segment);
+    return trimmed ? [trimmed] : [];
+  });
 }
 
 function toSpeechSegments(text: string) {
@@ -206,8 +209,10 @@ function extractSpeechBlocks(html: string) {
 
   return plainText
     .split(/\n+/)
-    .map((block) => normalizeWhitespace(block))
-    .filter(Boolean);
+    .flatMap((block) => {
+      const trimmed = normalizeWhitespace(block);
+      return trimmed ? [trimmed] : [];
+    });
 }
 
 export function buildSpeechSegments(chapterTitle: string, chapterContent: string) {

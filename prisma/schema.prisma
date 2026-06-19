@@ -74,6 +74,7 @@ model Project {
   invites         ProjectInvite[]
   presence        ProjectPresence[]
   commentThreads  CommentThread[]
+  collaborationStates ChapterCollaborationState[]
   pronunciationEntries PronunciationEntry[]
 }
 
@@ -192,6 +193,11 @@ model Chapter {
   content   String
   source    String   @default("manual") // manual, ai
   aiContext Json?    // ChapterAIContextSnapshot
+  illustrationObjectPath String?
+  illustrationMimeType   String?
+  illustrationPrompt     String?
+  illustrationModel      String?
+  illustrationGeneratedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -205,6 +211,7 @@ model Chapter {
   continuityJobs ContinuityJob[]
   presenceEntries ProjectPresence[]
   commentThreads CommentThread[]
+  collaborationState ChapterCollaborationState?
 
   @@index([projectId, branchId, index])
   @@index([projectId, index])
@@ -405,6 +412,20 @@ model ChapterVersion {
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, chapterId, createdAt])
+}
+
+model ChapterCollaborationState {
+  chapterId      String   @id
+  projectId      String
+  state          Bytes
+  formatVersion  Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  chapter        Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, updatedAt])
 }
 
 model Usage {

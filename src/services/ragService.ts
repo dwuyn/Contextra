@@ -1,4 +1,4 @@
-import "server-only";
+import "@/lib/server-only";
 
 import { embed } from "ai";
 import { Prisma } from "@prisma/client";
@@ -26,7 +26,10 @@ function splitSentences(text: string): string[] {
   const sentences: string[] = [...matches];
   const remaining = cleaned.replace(/[^.!?]+[.!?]+(\s|$)/g, "").trim();
   if (remaining) sentences.push(remaining);
-  return sentences.map((s) => s.trim()).filter(Boolean);
+  return sentences.flatMap((s) => {
+    const trimmed = s.trim();
+    return trimmed ? [trimmed] : [];
+  });
 }
 
 function fallbackWordChunks(words: string[], maxWords: number, overlapWords: number): string[] {

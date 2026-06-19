@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type {
+  ChapterIllustrationMeta,
   ChapterMeta,
   ProjectAiMessage,
   ProjectCommentThread,
@@ -19,6 +20,16 @@ export type AiHistoryCard = {
   errorMessage?: string;
 };
 
+type ChapterContentReplacement = {
+  content: string;
+  nonce: number;
+};
+
+type ChapterDraftCache = {
+  title: string;
+  content: string;
+};
+
 interface ProjectState {
   project: ProjectData | null;
   selectedProjectId: string | null;
@@ -30,6 +41,8 @@ interface ProjectState {
   aiCards: AiHistoryCard[];
   pendingInsertion: string | null;
   chapterContentCache: Record<string, string>;
+  chapterDraftCache: Record<string, ChapterDraftCache>;
+  pendingChapterContentReplacements: Record<string, ChapterContentReplacement>;
   commentThreadsByChapter: Record<string, ProjectCommentThread[]>;
   selectedCommentThreadId: string | null;
 
@@ -51,8 +64,16 @@ interface ProjectState {
   removeAiCard: (id: string) => void;
   insertContent: (content: string) => void;
   clearPendingInsertion: () => void;
-  updateChapterMetaLocally: (chapterId: string, data: { title?: string; summary?: string }) => void;
+  updateChapterMetaLocally: (chapterId: string, data: {
+    title?: string;
+    summary?: string;
+    illustration?: ChapterIllustrationMeta | null;
+  }) => void;
+  setChapterDraft: (chapterId: string, draft: ChapterDraftCache) => void;
+  clearChapterDraft: (chapterId: string) => void;
   setChapterContent: (chapterId: string, content: string) => void;
+  replaceChapterContent: (chapterId: string, content: string) => void;
+  consumeChapterContentReplacement: (chapterId: string, nonce: number) => void;
   reorderChaptersLocally: (branchId: string, orderedIds: string[]) => void;
   appendProjectAiMessage: (message: ProjectAiMessage) => void;
   updateProjectAiMessage: (messageId: string, data: Partial<Pick<ProjectAiMessage, "content">>) => void;
@@ -81,6 +102,8 @@ function updateChapterCommentCounts(
   };
 }
 
+let chapterContentReplacementNonce = 0;
+
 export const useProjectStore = create<ProjectState>((set) => ({
   project: null,
   selectedProjectId: null,
@@ -92,6 +115,8 @@ export const useProjectStore = create<ProjectState>((set) => ({
   aiCards: [],
   pendingInsertion: null,
   chapterContentCache: {},
+  chapterDraftCache: {},
+  pendingChapterContentReplacements: {},
   commentThreadsByChapter: {},
   selectedCommentThreadId: null,
 
@@ -147,24 +172,71 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
     };
   }),
+  setChapterDraft: (chapterId, draft) => set((state) => ({
+    chapterDraftCache: {
+      ...state.chapterDraftCache,
+      [chapterId]: draft,
+    },
+  })),
+  clearChapterDraft: (chapterId) => set((state) => {
+    if (!(chapterId in state.chapterDraftCache)) {
+      return state;
+    }
+
+    const nextDraftCache = { ...state.chapterDraftCache };
+    delete nextDraftCache[chapterId];
+
+    return {
+      chapterDraftCache: nextDraftCache,
+    };
+  }),
   setChapterContent: (chapterId, content) => set((state) => ({
     chapterContentCache: { ...state.chapterContentCache, [chapterId]: content }
   })),
+  replaceChapterContent: (chapterId, content) => set((state) => {
+    chapterContentReplacementNonce += 1;
+
+    return {
+      chapterContentCache: { ...state.chapterContentCache, [chapterId]: content },
+      pendingChapterContentReplacements: {
+        ...state.pendingChapterContentReplacements,
+        [chapterId]: {
+          content,
+          nonce: chapterContentReplacementNonce,
+        },
+      },
+    };
+  }),
+  consumeChapterContentReplacement: (chapterId, nonce) => set((state) => {
+    const replacement = state.pendingChapterContentReplacements[chapterId];
+    if (!replacement || replacement.nonce !== nonce) {
+      return state;
+    }
+
+    const nextReplacements = { ...state.pendingChapterContentReplacements };
+    delete nextReplacements[chapterId];
+
+    return {
+      pendingChapterContentReplacements: nextReplacements,
+    };
+  }),
   reorderChaptersLocally: (branchId, orderedIds) => set((state) => {
     if (!state.project) return state;
 
-    const branchChapterMap = new Map(
-      state.project.chapters
-        .filter((chapter: ChapterMeta) => chapter.branchId === branchId)
-        .map((chapter: ChapterMeta) => [chapter.id, chapter] as const)
-    );
+    const branchChapterMap = new Map<string, ChapterMeta>();
+    for (const chapter of state.project.chapters) {
+      if (chapter.branchId === branchId) {
+        branchChapterMap.set(chapter.id, chapter);
+      }
+    }
 
-    const reorderedBranchChapters = orderedIds
-      .map((id, index) => {
-        const chapter = branchChapterMap.get(id);
-        return chapter ? { ...chapter, index: index + 1 } : null;
-      })
-      .filter((chapter): chapter is ChapterMeta => chapter != null);
+    const reorderedBranchChapters: (ChapterMeta & { index: number })[] = [];
+    for (let i = 0; i < orderedIds.length; i += 1) {
+      const chapter = branchChapterMap.get(orderedIds[i]);
+      if (chapter) {
+        reorderedBranchChapters.push({ ...chapter, index: i + 1 });
+      }
+    }
 
     let reorderedIndex = 0;
     const chapters = state.project.chapters.map((chapter: ChapterMeta) => {

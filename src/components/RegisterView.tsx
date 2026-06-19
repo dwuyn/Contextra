@@ -1,20 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useReducer } from "react";
 import { register } from "@/actions/auth";
 import { cn } from "@/lib/utils";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/lib/i18n-client";
 
+type FormState = {
+  name: string;
+  email: string;
+  password: string;
+  error: string;
+  pending: boolean;
+};
+
+type FormAction =
+  | { type: "setField"; field: "name" | "email" | "password"; value: string }
+  | { type: "setError"; error: string }
+  | { type: "setPending"; pending: boolean };
+
+function formReducer(state: FormState, action: FormAction): FormState {
+  switch (action.type) {
+    case "setField":
+      return { ...state, [action.field]: action.value };
+    case "setError":
+      return { ...state, error: action.error };
+    case "setPending":
+      return { ...state, pending: action.pending };
+  }
+}
+
 export function RegisterView() {
   const t = useTranslations("auth");
   const ct = useTranslations("common");
   const locale = useLocale();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
+  const [form, dispatch] = useReducer(formReducer, { name: "", email: "", password: "", error: "", pending: false });
 
   function getErrorMessage(err: unknown) {
     return err instanceof Error ? err.message : ct("somethingWentWrong");
@@ -22,20 +42,20 @@ export function RegisterView() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
-    setPending(true);
+    dispatch({ type: "setError", error: "" });
+    dispatch({ type: "setPending", pending: true });
     try {
-      const result = await register(name, email, password);
+      const result = await register(form.name, form.email, form.password);
       if (!result.ok) {
-        setError(result.message);
+        dispatch({ type: "setError", error: result.message });
         return;
       }
 
       window.location.replace(`/${locale}`);
     } catch (err) {
-      setError(getErrorMessage(err));
+      dispatch({ type: "setError", error: getErrorMessage(err) });
     } finally {
-      setPending(false);
+      dispatch({ type: "setPending", pending: false });
     }
   }
 
@@ -50,13 +70,13 @@ export function RegisterView() {
           onSubmit={handleSubmit}
           className="rounded-2xl bg-[var(--color-surface)] p-8 shadow-sm border border-[var(--color-border)]"
         >
-          {error && (
+          {form.error && (
             <div
               role="alert"
               aria-live="assertive"
               className="mb-6 rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950 dark:text-red-400"
             >
-              {error}
+              {form.error}
             </div>
           )}
 
@@ -67,8 +87,8 @@ export function RegisterView() {
               </span>
               <input
                 type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={form.name}
+                onChange={(e) => dispatch({ type: "setField", field: "name", value: e.target.value })}
                 placeholder={t("namePlaceholder")}
                 required
                 className={cn(
@@ -85,8 +105,8 @@ export function RegisterView() {
               </span>
               <input
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={form.email}
+                onChange={(e) => dispatch({ type: "setField", field: "email", value: e.target.value })}
                 placeholder={t("emailPlaceholder")}
                 required
                 className={cn(
@@ -103,8 +123,8 @@ export function RegisterView() {
               </span>
               <input
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                value={form.password}
+                onChange={(e) => dispatch({ type: "setField", field: "password", value: e.target.value })}
                 placeholder={t("passwordPlaceholder")}
                 required
                 className={cn(
@@ -117,15 +137,15 @@ export function RegisterView() {
 
             <button
               type="submit"
-              disabled={pending}
+              disabled={form.pending}
               className={cn(
                 "w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-colors",
                 "bg-[var(--color-accent)] hover:opacity-90",
                 "focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:ring-offset-2",
-                pending && "opacity-60 cursor-not-allowed"
+                form.pending && "opacity-60 cursor-not-allowed"
               )}
             >
-              {pending ? ct("loading") : t("registerAction")}
+              {form.pending ? ct("loading") : t("registerAction")}
             </button>
           </div>
 

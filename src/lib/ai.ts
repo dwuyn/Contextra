@@ -1,6 +1,7 @@
 import { createVertex } from "@ai-sdk/google-vertex";
 
 let cachedVertex: ReturnType<typeof createVertex> | null = null;
+let cachedImageVertex: ReturnType<typeof createVertex> | null = null;
 
 function requireEnv(name: "GOOGLE_CLOUD_PROJECT" | "GOOGLE_CLOUD_LOCATION") {
   const value = process.env[name]?.trim();
@@ -20,6 +21,10 @@ function getEmbeddingModelId() {
   return process.env.AI_EMBEDDING_MODEL || "gemini-embedding-001";
 }
 
+function getImageModelId() {
+  return process.env.AI_IMAGE_MODEL || "imagen-4.0-generate-001";
+}
+
 function getEmbeddingDimensions() {
   const dimensions = Number(process.env.AI_EMBEDDING_DIMENSIONS);
   return Number.isFinite(dimensions) && dimensions > 0 ? dimensions : 768;
@@ -34,6 +39,15 @@ function getVertex() {
   });
 
   return cachedVertex;
+}
+
+function getImageVertex() {
+  cachedImageVertex ??= createVertex({
+    project: requireEnv("GOOGLE_CLOUD_PROJECT"),
+    location: process.env.AI_IMAGE_LOCATION?.trim() || "global",
+  });
+
+  return cachedImageVertex;
 }
 
 export function chatModel(modelId: string = getChatModelId()) {
@@ -58,4 +72,8 @@ export function embeddingModel() {
       });
     },
   }) as typeof baseModel;
+}
+
+export function imageModel(modelId: string = getImageModelId()) {
+  return getImageVertex().imageModel(modelId);
 }

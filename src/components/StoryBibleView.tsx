@@ -575,6 +575,7 @@ export function StoryBibleView() {
             <textarea
               key={`summary-${currentProject.metadata.updatedAt}`}
               ref={braindumpRef}
+              aria-label={t("sections.braindump")}
               placeholder={t("placeholders.braindump")}
               className="w-full min-h-[180px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
               defaultValue={currentProject.metadata.summary}
@@ -587,6 +588,7 @@ export function StoryBibleView() {
             <textarea
               key={`genre-${currentProject.metadata.updatedAt}`}
               ref={genreRef}
+              aria-label={t("sections.genre")}
               placeholder={t("placeholders.genre")}
               className="w-full min-h-[120px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
               defaultValue={currentProject.metadata.genre}
@@ -600,6 +602,7 @@ export function StoryBibleView() {
               <textarea
                 key={`synopsis-${currentProject.metadata.updatedAt}`}
                 ref={synopsisRef}
+                aria-label={t("sections.synopsis")}
                 placeholder={t("placeholders.synopsis")}
                 className="w-full min-h-[160px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 pr-40 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
                 defaultValue={currentProject.contextMemory.sharedNotes}
@@ -608,6 +611,7 @@ export function StoryBibleView() {
               />
               {canEdit && (
                 <button
+                  type="button"
                   onClick={() => void handleGenerateSynopsis()}
                   disabled={busyAction === "generateSynopsis"}
                   className="absolute right-4 top-4 flex items-center gap-2 px-3 py-1.5 bg-[var(--color-accent)] text-white rounded-lg text-xs font-bold shadow-md hover:bg-[var(--color-accent)] transition-all opacity-0 group-hover:opacity-100 disabled:opacity-60"
@@ -745,6 +749,7 @@ export function StoryBibleView() {
             {!hasOutlineContent(outline) ? (
               <div className="flex flex-col items-center justify-center py-10 bg-[var(--color-surface-alt)] rounded-2xl border border-dashed border-[var(--color-border)]">
                 <button
+                  type="button"
                   onClick={() => void handleGenerateOutline()}
                   disabled={!canEdit || busyAction === "generateOutline"}
                   className="flex items-center gap-2 px-5 py-2.5 bg-[var(--color-accent)] text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-indigo-200 transition-all disabled:opacity-50"
@@ -754,6 +759,7 @@ export function StoryBibleView() {
                 </button>
                 {canEdit && (
                   <button
+                    type="button"
                     onClick={openActCreate}
                     className="mt-4 text-xs font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors"
                   >
@@ -767,6 +773,7 @@ export function StoryBibleView() {
                   {canEdit && (
                     <div className="flex gap-2">
                       <button
+                        type="button"
                         onClick={() => void handleGenerateOutline()}
                         disabled={busyAction === "generateOutline"}
                         className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent-muted)] text-[var(--color-accent)] rounded-xl text-xs font-bold hover:bg-[var(--color-accent-muted)] transition-colors disabled:opacity-50"
@@ -795,6 +802,7 @@ export function StoryBibleView() {
                       {canEdit && (
                         <div className="flex items-center gap-2 shrink-0">
                           <button
+                            type="button"
                             onClick={() => openChapterCreate(act.id)}
                             className="flex items-center gap-1.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[11px] font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
                           >
@@ -1021,7 +1029,7 @@ function BibleSection({
   return (
     <div className="border border-[var(--color-border)] rounded-2xl overflow-hidden shadow-sm transition-all hover:shadow-md bg-[var(--color-surface)]">
       <div className="flex items-center justify-between px-6 py-4 gap-4">
-        <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-4 group">
+        <button type="button" onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-4 group">
           <div className="text-[var(--color-text-muted)] group-hover:text-[var(--color-text)] transition-colors">
             {isOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
           </div>
@@ -1054,6 +1062,7 @@ function EmptyState({
       <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-muted)] max-w-lg mx-auto">{description}</p>
       {actionLabel && onAction && (
         <button
+          type="button"
           onClick={onAction}
           className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-xs font-bold text-[var(--color-text)] hover:bg-[var(--color-surface-alt)] transition-colors"
         >
@@ -1076,6 +1085,7 @@ function SectionActionButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:text-[var(--color-text-muted)] disabled:cursor-not-allowed transition-colors"
@@ -1100,6 +1110,7 @@ function IconActionButton({
 }) {
   return (
     <button
+      type="button"
       aria-label={label}
       onClick={onClick}
       disabled={disabled}
@@ -1150,7 +1161,7 @@ function EntityDialog({
                 <Dialog.Description className="mt-2 text-sm text-[var(--color-text-secondary)]">{description}</Dialog.Description>
               </div>
               <Dialog.Close asChild>
-                <button aria-label={storyBibleT("dialogs.closeDialog")} className="p-2 hover:bg-[var(--color-surface-alt)] rounded-full transition-colors">
+                <button type="button" aria-label={storyBibleT("dialogs.closeDialog")} className="p-2 hover:bg-[var(--color-surface-alt)] rounded-full transition-colors">
                   <X size={20} className="text-[var(--color-text-muted)]" />
                 </button>
               </Dialog.Close>
@@ -1160,11 +1171,12 @@ function EntityDialog({
 
             <div className="mt-8 flex items-center justify-end gap-3">
               <Dialog.Close asChild>
-                <button className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors">
+                <button type="button" className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors">
                   {commonT("cancel")}
                 </button>
               </Dialog.Close>
               <button
+                type="button"
                 onClick={onSubmit}
                 disabled={busy}
                 className="inline-flex items-center gap-2 rounded-2xl bg-[var(--color-text)] px-5 py-3 text-sm font-bold text-white hover:opacity-90 transition-colors disabled:opacity-50"
@@ -1226,11 +1238,12 @@ function ConfirmDialog({
 
             <div className="mt-8 flex items-center justify-end gap-3">
               <Dialog.Close asChild>
-                <button className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors">
+                <button type="button" className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors">
                   {commonT("cancel")}
                 </button>
               </Dialog.Close>
               <button
+                type="button"
                 onClick={onConfirm}
                 disabled={busy}
                 className={cn(

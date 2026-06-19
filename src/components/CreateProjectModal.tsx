@@ -62,7 +62,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
             <div className="flex items-center justify-between mb-6">
               <Dialog.Title className="text-2xl font-bold text-[var(--color-text)]">{t("modalTitle")}</Dialog.Title>
               <Dialog.Close asChild>
-                <button aria-label={t("closeDialog")} className="p-2 hover:bg-[var(--color-surface-alt)] rounded-full transition-colors">
+                <button type="button" aria-label={t("closeDialog")} className="p-2 hover:bg-[var(--color-surface-alt)] rounded-full transition-colors">
                   <X size={20} className="text-[var(--color-text-muted)]" />
                 </button>
               </Dialog.Close>
@@ -77,7 +77,6 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                 <label htmlFor="project-title" className="block text-sm font-semibold text-[var(--color-text)] mb-2">{t("titleLabel")}</label>
                 <input
                   id="project-title"
-                  autoFocus
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}

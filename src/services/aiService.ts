@@ -1,6 +1,6 @@
 import { chatModel } from "@/lib/ai";
 import * as z from "@/lib/validations";
-import "server-only";
+import "@/lib/server-only";
 
 import { generateText } from "ai";
 import type { ModelMessage } from "ai";
@@ -177,19 +177,21 @@ function normalizeLongOutlineSegment(
 ): GeneratedLongOutline {
   return {
     arcs: outline.arcs
-      .map((arc) => ({
-        ...arc,
-        startChapterIndex: Math.max(segmentStart, arc.startChapterIndex),
-        endChapterIndex: Math.min(segmentEnd, arc.endChapterIndex),
-        beats: arc.beats.filter(
-          (beat) => beat.chapterIndex >= segmentStart && beat.chapterIndex <= segmentEnd,
-        ),
-      }))
-      .filter((arc) => arc.startChapterIndex <= arc.endChapterIndex),
+      .flatMap((arc) => {
+        const sliced = {
+          ...arc,
+          startChapterIndex: Math.max(segmentStart, arc.startChapterIndex),
+          endChapterIndex: Math.min(segmentEnd, arc.endChapterIndex),
+          beats: arc.beats.filter(
+            (beat) => beat.chapterIndex >= segmentStart && beat.chapterIndex <= segmentEnd,
+          ),
+        };
+        return sliced.startChapterIndex <= sliced.endChapterIndex ? [sliced] : [];
+      }),
   };
 }
 
-export async function chatWithAi(messages: ModelMessage[], context: PromptContext) {
+async function chatWithAi(messages: ModelMessage[], context: PromptContext) {
   const { text, usage } = await generateText({
     model: chatModel(),
     system: buildChatSystemPrompt(context, extractLatestUserText(messages)),

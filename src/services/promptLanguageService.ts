@@ -268,8 +268,10 @@ export function buildRecentSummaryLanguageSignal(
   return {
     label,
     text: summaries
-      .map(({ chapterTitle, summary }) => `${chapterTitle} ${summary}`.trim())
-      .filter(Boolean)
+      .flatMap(({ chapterTitle, summary }) => {
+        const combined = `${chapterTitle} ${summary}`.trim();
+        return combined ? [combined] : [];
+      })
       .join("\n"),
   };
 }
@@ -292,22 +294,21 @@ export function extractLatestUserText(
 
     if (Array.isArray(message.content)) {
       return message.content
-        .map((part) => {
+        .flatMap((part) => {
           if (typeof part === "string") {
-            return part;
+            return [part];
           }
 
           if (!part || typeof part !== "object") {
-            return "";
+            return [];
           }
 
           if ("text" in part && typeof part.text === "string") {
-            return part.text;
+            return [part.text];
           }
 
-          return "";
+          return [];
         })
-        .filter(Boolean)
         .join("\n");
     }
   }

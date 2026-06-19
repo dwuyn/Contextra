@@ -1,4 +1,4 @@
-import "server-only";
+import "@/lib/server-only";
 
 import { prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword, encrypt } from "@/lib/auth";
@@ -55,14 +55,16 @@ type SessionUser = {
 
 export async function createSession(user: SessionUser) {
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  const session = await encrypt({
-    userId: user.id,
-    email: user.email,
-    name: user.name,
-    expires: expires.toISOString(),
-  });
+  const [session, cookieStore] = await Promise.all([
+    encrypt({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      expires: expires.toISOString(),
+    }),
+    cookies(),
+  ]);
 
-  const cookieStore = await cookies();
   cookieStore.set("session", session, { 
     expires, 
     httpOnly: true,

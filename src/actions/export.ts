@@ -8,14 +8,14 @@ export async function exportProjectAction(projectId: string): Promise<string> {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
 
-  const project = await requireHydratedProjectAccess(projectId, session.userId, "view");
-
-  // Fetch full chapter content (not included in the skeleton getProject)
-  const chapters = await prisma.chapter.findMany({
-    where: { projectId },
-    orderBy: { index: "asc" },
-    select: { id: true, title: true, content: true, summary: true, index: true },
-  });
+  const [project, chapters] = await Promise.all([
+    requireHydratedProjectAccess(projectId, session.userId, "view"),
+    prisma.chapter.findMany({
+      where: { projectId },
+      orderBy: { index: "asc" },
+      select: { id: true, title: true, content: true, summary: true, index: true },
+    }),
+  ]);
 
   const chapterBlock = chapters
     .map((c) => {
