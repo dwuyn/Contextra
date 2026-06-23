@@ -21,6 +21,10 @@ export function parseChapterDocumentName(documentName: string) {
   };
 }
 
+export function isAuthorizedDocument(documentName: string, chapterId: string) {
+  return documentName === getChapterDocumentName(chapterId);
+}
+
 export function createChapterYDocFromHtml(html: string | null | undefined) {
   const normalizedHtml = html?.trim() ? html : EMPTY_CHAPTER_HTML;
   const json = generateJSON(normalizedHtml, chapterTransformerExtensions);

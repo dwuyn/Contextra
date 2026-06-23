@@ -30,7 +30,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Run ESLint
         run: npm run lint
@@ -119,17 +119,17 @@ jobs:
             export COLLAB_IMAGE="${{ env.COLLAB_IMAGE }}:${{ github.sha }}"
             export MIGRATE_IMAGE="${{ env.MIGRATE_IMAGE }}:${{ github.sha }}"
 
-            docker compose pull migrate next-app collab
+            docker compose pull migrate next-app collab continuity-worker
 
             docker compose up -d postgres
 
             docker compose run --rm migrate
 
-            docker compose up -d next-app collab proxy
+            docker compose up -d next-app collab continuity-worker proxy
 
             container_id="$(docker compose ps -q proxy)"
             if [ -z "$container_id" ]; then
-              docker compose logs next-app collab proxy
+              docker compose logs next-app collab continuity-worker proxy
               exit 1
             fi
 
@@ -143,7 +143,7 @@ jobs:
               fi
 
               if [ "$health_status" = "unhealthy" ] || [ "$health_status" = "exited" ]; then
-                docker compose logs next-app collab proxy
+                docker compose logs next-app collab continuity-worker proxy
                 exit 1
               fi
 
@@ -154,7 +154,7 @@ jobs:
             final_status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id")"
 
             if [ "$final_status" != "healthy" ] && [ "$final_status" != "running" ]; then
-              docker compose logs next-app collab proxy
+              docker compose logs next-app collab continuity-worker proxy
               exit 1
             fi
 

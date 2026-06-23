@@ -121,3 +121,15 @@ export function sseConnectionRelease(userId: string): void {
     sseConnections.set(userId, current - 1);
   }
 }
+
+export async function rateLimitByIp(keyPrefix: string, limit: number, windowMs: number): Promise<boolean> {
+  let ip = "127.0.0.1";
+  try {
+    const { headers } = await import("next/headers");
+    const headerStore = await headers();
+    const forwarded = headerStore.get("x-forwarded-for");
+    ip = forwarded?.split(",")[0]?.trim() ?? "127.0.0.1";
+  } catch {}
+  const result = await redisCheck(`${keyPrefix}:${ip}`, windowMs, limit);
+  return result.allowed;
+}

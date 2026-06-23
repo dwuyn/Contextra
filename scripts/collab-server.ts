@@ -9,6 +9,7 @@ import {
   encodeChapterState,
   getChapterDocumentName,
   getChapterHtmlFromYDoc,
+  isAuthorizedDocument,
   replaceChapterDocumentContent,
   shouldUseStoredChapterState,
 } from "@/lib/collaboration/document";
@@ -74,6 +75,8 @@ function ensureInternalSecret(headers: Record<string, string | string[] | undefi
   }
 }
 
+const documentHealthMap = new Map<string, "healthy" | "unhealthy">();
+
 const extensions: Array<Database | Redis> = [
   new Database({
     fetch: async ({ documentName }) => {
@@ -112,6 +115,19 @@ const extensions: Array<Database | Redis> = [
             html,
           );
           await projectService.saveChapterCollaborationState(bootstrap.projectId, bootstrap.id, state);
+
+          const currentHealth = documentHealthMap.get(documentName);
+          if (currentHealth === "unhealthy") {
+            documentHealthMap.set(documentName, "healthy");
+            if (typeof (document as any).broadcastStateless === "function") {
+              (document as any).broadcastStateless(JSON.stringify({
+                event: "chapter_persistence_recovered",
+              }));
+            }
+          } else if (currentHealth === undefined) {
+            documentHealthMap.set(documentName, "healthy");
+          }
+
           return;
         } catch (error) {
           lastError = error instanceof Error ? error : new Error(String(error));
@@ -125,6 +141,17 @@ const extensions: Array<Database | Redis> = [
       }
 
       console.error(`[collab] Store failed after ${maxRetries} attempts for ${documentName}:`, lastError?.message);
+
+      const currentHealth = documentHealthMap.get(documentName);
+      if (currentHealth !== "unhealthy") {
+        documentHealthMap.set(documentName, "unhealthy");
+        if (typeof (document as any).broadcastStateless === "function") {
+          (document as any).broadcastStateless(JSON.stringify({
+            event: "chapter_persistence_warning",
+            message: lastError?.message || "Durability storage failure",
+          }));
+        }
+      }
     },
   }),
 ];
@@ -140,14 +167,22 @@ const server = new Server({
   quiet: true,
   extensions,
   async onStoreDocument({ documentName, context }) {
-    console.log("[collab] onStoreDocument triggered:", { documentName, internal: context?.internal, operation: context?.operation });
+    if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+      console.log("[collab] onStoreDocument triggered:", { documentName, internal: context?.internal, operation: context?.operation });
+    }
   },
   async onDisconnect({ documentName, context }) {
-    console.log("[collab] onDisconnect:", { documentName, userId: context?.userId });
+    if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+      console.log("[collab] onDisconnect:", { documentName, userId: context?.userId });
+    }
   },
-  async onAuthenticate({ token, connectionConfig }) {
+  async onAuthenticate({ token, connectionConfig, documentName }) {
     try {
       const payload = await verifyCollaborationToken(token);
+      if (!isAuthorizedDocument(documentName, payload.chapterId)) {
+        throw new Error("Unauthorized document name");
+      }
+
       const { viewerAccess } = await projectService.getChapterCollaborationAccess(
         payload.projectId,
         payload.userId,
@@ -157,7 +192,9 @@ const server = new Server({
       const readOnly = !viewerAccess.canEdit;
       connectionConfig.readOnly = readOnly;
 
-      console.log("[collab] Auth success:", { userId: payload.userId, chapterId: payload.chapterId, readOnly });
+      if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+        console.log("[collab] Auth success:", { userId: payload.userId, chapterId: payload.chapterId, readOnly });
+      }
 
       return {
         chapterId: payload.chapterId,
@@ -167,7 +204,9 @@ const server = new Server({
         readOnly,
       } satisfies CollaborationContext;
     } catch (error) {
-      console.error("[collab] Auth failed:", error instanceof Error ? error.message : error);
+      if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+        console.error("[collab] Auth failed:", error instanceof Error ? error.message : error);
+      }
       throw error;
     }
   },
@@ -190,13 +229,17 @@ const server = new Server({
         ensureInternalSecret(request.headers);
         const body = await readJsonBody(request);
         const chapterId = typeof body.chapterId === "string" ? body.chapterId : null;
-        if (!chapterId) {
-          sendJson(response, 400, { error: "Missing chapterId" });
+        const projectId = typeof body.projectId === "string" ? body.projectId : null;
+        if (!chapterId || !projectId) {
+          sendJson(response, 400, { error: "Missing chapterId or projectId" });
           throw null;
         }
 
         const bootstrap = await projectService.getChapterCollaborationBootstrap(getChapterDocumentName(chapterId));
-        sendJson(response, 200, await snapshotDocument(instance, chapterId, bootstrap.projectId));
+        if (bootstrap.projectId !== projectId) {
+          throw new Error("Project ID mismatch");
+        }
+        sendJson(response, 200, await snapshotDocument(instance, chapterId, projectId));
         throw null;
       }
 
@@ -210,6 +253,11 @@ const server = new Server({
         if (!chapterId || !projectId || html == null) {
           sendJson(response, 400, { error: "Missing chapterId, projectId, or html" });
           throw null;
+        }
+
+        const bootstrap = await projectService.getChapterCollaborationBootstrap(getChapterDocumentName(chapterId));
+        if (bootstrap.projectId !== projectId) {
+          throw new Error("Project ID mismatch");
         }
 
         sendJson(response, 200, await replaceDocument(instance, chapterId, projectId, html));
@@ -228,6 +276,11 @@ const server = new Server({
           throw null;
         }
 
+        const bootstrap = await projectService.getChapterCollaborationBootstrap(getChapterDocumentName(chapterId));
+        if (bootstrap.projectId !== projectId) {
+          throw new Error("Project ID mismatch");
+        }
+
         sendJson(response, 200, await syncDocument(instance, chapterId, projectId, html));
         throw null;
       }
@@ -237,9 +290,71 @@ const server = new Server({
       }
 
       const message = error instanceof Error ? error.message : "Internal Server Error";
-      const status = message === "Unauthorized" ? 401 : message === "Chapter not found" ? 404 : 500;
+      const status =
+        message === "Unauthorized" || message === "Unauthorized document name"
+          ? 401
+          : message === "Chapter not found"
+            ? 404
+            : message === "Project ID mismatch"
+              ? 400
+              : 500;
       sendJson(response, status, { error: message });
       throw null;
+    }
+  },
+  async onStateless({ connection, document, payload }) {
+    try {
+      const data = JSON.parse(payload);
+      if (data.event === "chapter_snapshot_request") {
+        const requestId = data.requestId;
+        if (!requestId) {
+          throw new Error("Missing requestId");
+        }
+        if (!connection.context || connection.context.readOnly) {
+          connection.sendStateless(JSON.stringify({
+            event: "chapter_snapshot_response",
+            requestId,
+            ok: false,
+            error: "Unauthorized",
+          }));
+          return;
+        }
+
+        const chapterId = connection.context.chapterId;
+        const projectId = connection.context.projectId;
+        if (!chapterId || !projectId) {
+          throw new Error("Missing context fields");
+        }
+
+        const html = getChapterHtmlFromYDoc(document);
+        const state = encodeChapterState(document);
+
+        // eagerly persist chapterCollaborationState from that same document before replying
+        await projectService.saveChapterCollaborationState(projectId, chapterId, state);
+
+        connection.sendStateless(JSON.stringify({
+          event: "chapter_snapshot_response",
+          requestId,
+          ok: true,
+          html,
+        }));
+      } else if (data.requestId) {
+        throw new Error("Invalid event: " + data.event);
+      }
+    } catch (err) {
+      try {
+        const data = JSON.parse(payload);
+        if (data.requestId) {
+          connection.sendStateless(JSON.stringify({
+            event: "chapter_snapshot_response",
+            requestId: data.requestId,
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          }));
+        }
+      } catch {
+        console.error("[collab] Malformed stateless payload:", payload);
+      }
     }
   },
 });
@@ -344,7 +459,11 @@ async function main() {
   await server.listen(readPort());
 }
 
-main().catch((error) => {
-  console.error("Collaboration server crashed:", error);
-  process.exit(1);
-});
+if (process.env.NODE_ENV !== "test") {
+  main().catch((error) => {
+    console.error("Collaboration server crashed:", error);
+    process.exit(1);
+  });
+}
+
+export { server };

@@ -52,7 +52,7 @@ beforeEach(() => {
     email: "user@example.com",
     name: "User",
   });
-  (isManagedAvatarContentType as ReturnType<typeof vi.fn>).mockImplementation(
+  (isManagedAvatarContentType as unknown as ReturnType<typeof vi.fn>).mockImplementation(
     (contentType: string) => contentType === "image/png",
   );
   (storeAvatarFile as ReturnType<typeof vi.fn>).mockResolvedValue({

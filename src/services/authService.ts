@@ -5,10 +5,16 @@ import { hashPassword, verifyPassword, encrypt } from "@/lib/auth";
 import { cookies } from "next/headers";
 import * as peopleService from "./peopleService";
 import * as friendsService from "./friendsService";
+import { rateLimitByIp } from "@/lib/rateLimit";
 
 export const INVALID_LOGIN_MESSAGE = "Invalid email or password";
 
 export async function register(name: string, email: string, password: string) {
+  const allowed = await rateLimitByIp("register", 5, 60 * 1000);
+  if (!allowed) {
+    throw new Error("Too many registration attempts. Please try again later.");
+  }
+
   if (!password || password.length < 8) {
     throw new Error("Password must be at least 8 characters");
   }
@@ -18,7 +24,7 @@ export async function register(name: string, email: string, password: string) {
   });
 
   if (existing) {
-    throw new Error("Email already exists");
+    throw new Error("Registration failed. Please check your details.");
   }
 
   const passwordHash = await hashPassword(password);
@@ -34,6 +40,11 @@ export async function register(name: string, email: string, password: string) {
 }
 
 export async function login(email: string, password: string) {
+  const allowed = await rateLimitByIp("login", 5, 60 * 1000);
+  if (!allowed) {
+    throw new Error("Too many login attempts. Please try again later.");
+  }
+
   const normalizedEmail = email.trim().toLowerCase();
   const user = await prisma.user.findUnique({
     where: { email: normalizedEmail },

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getChapterDocumentName,
+  isAuthorizedDocument,
   parseChapterDocumentName,
   shouldUseStoredChapterState,
 } from "@/lib/collaboration/document";
@@ -17,6 +18,12 @@ describe("collaboration document naming", () => {
 
   it("rejects invalid document names", () => {
     expect(() => parseChapterDocumentName("project:chapter-123")).toThrow("Invalid collaboration document name");
+  });
+
+  it("authorizes correct document names and rejects mismatches", () => {
+    expect(isAuthorizedDocument("chapter:chapter-123:body", "chapter-123")).toBe(true);
+    expect(isAuthorizedDocument("chapter:chapter-456:body", "chapter-123")).toBe(false);
+    expect(isAuthorizedDocument("chapter:chapter-123:body-alt", "chapter-123")).toBe(false);
   });
 
   it("reuses stored collaboration state only when it is at least as new as the chapter row", () => {

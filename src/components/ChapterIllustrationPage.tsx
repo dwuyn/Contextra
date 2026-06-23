@@ -117,10 +117,14 @@ export function ChapterIllustrationPage({
                   {t("editor.illustration.generateDescription")}
                 </p>
 
-                <label className="mt-5 block text-xs font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
+                <label
+                  htmlFor="chapter-illustration-custom-instruction"
+                  className="mt-5 block text-xs font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]"
+                >
                   {t("editor.illustration.customInstruction")}
                 </label>
                 <textarea
+                  id="chapter-illustration-custom-instruction"
                   value={customInstruction}
                   onChange={(event) => setCustomInstruction(event.target.value)}
                   disabled={!canGenerate || isGenerating}

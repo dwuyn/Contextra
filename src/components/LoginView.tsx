@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { login } from "@/actions/auth";
+import { login } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/lib/i18n-client";

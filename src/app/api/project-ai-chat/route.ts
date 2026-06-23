@@ -58,7 +58,7 @@ export async function POST(req: Request) {
   });
 
   const [messages, context] = await Promise.all([
-    listProjectAiMessages(projectId),
+    listProjectAiMessages(projectId, branchId),
     composeContext(projectId, branchId, content, semanticSearch),
   ]);
 

@@ -70,8 +70,6 @@ type ChapterDialogState =
   | { mode: "edit"; actId: string; chapter: OutlineChapter }
   | null;
 
-
-
 type ConfirmDialogState =
   | { kind: "replaceSynopsis" }
   | { kind: "replaceOutline" }
@@ -92,8 +90,6 @@ type TextDraft = {
   summary: string;
 };
 
-
-
 const EMPTY_OUTLINE: ProjectOutline = { acts: [] };
 
 function getErrorMessage(error: unknown, fallbackMessage: string) {
@@ -111,8 +107,6 @@ function createClientId(prefix: string) {
 function getWorldRules(worldRules: unknown): string[] {
   return Array.isArray(worldRules) ? worldRules.filter((rule): rule is string => typeof rule === "string") : [];
 }
-
-
 
 function hasOutlineContent(outline: ProjectOutline) {
   return outline.acts.length > 0;
@@ -133,113 +127,28 @@ function createEmptyTextDraft(): TextDraft {
   };
 }
 
+// Sub-components:
 
-
-export function StoryBibleView() {
-  const commonT = useTranslations("common");
+function CharactersSection({
+  projectId,
+  characters,
+  canEdit,
+  syncProjectUpdate,
+  setConfirmDialog,
+  busyAction,
+  setErrorMessage,
+}: {
+  projectId: string;
+  characters: ProjectCharacter[];
+  canEdit: boolean;
+  syncProjectUpdate: (action: BusyAction, updater: () => Promise<ProjectData | null>) => Promise<ProjectData | null>;
+  setConfirmDialog: (state: ConfirmDialogState) => void;
+  busyAction: BusyAction;
+  setErrorMessage: (msg: string | null) => void;
+}) {
   const t = useTranslations("storyBible");
-  const project = useProjectStore((state) => state.project);
-  const setProject = useProjectStore((state) => state.setProject);
-
-  const [busyAction, setBusyAction] = useState<BusyAction>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
   const [characterDialog, setCharacterDialog] = useState<CharacterDialogState>(null);
   const [characterDraft, setCharacterDraft] = useState<CharacterDraft>(createEmptyCharacterDraft);
-
-  const [worldRuleDialog, setWorldRuleDialog] = useState<WorldRuleDialogState>(null);
-  const [worldRuleDraft, setWorldRuleDraft] = useState("");
-
-  const [actDialog, setActDialog] = useState<ActDialogState>(null);
-  const [actDraft, setActDraft] = useState<TextDraft>(createEmptyTextDraft);
-
-  const [chapterDialog, setChapterDialog] = useState<ChapterDialogState>(null);
-  const [chapterDraft, setChapterDraft] = useState<{ actId: string; title: string; summary: string }>({
-    actId: "",
-    title: "",
-    summary: "",
-  });
-
-  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>(null);
-  const braindumpRef = useRef<HTMLTextAreaElement | null>(null);
-  const genreRef = useRef<HTMLTextAreaElement | null>(null);
-  const synopsisRef = useRef<HTMLTextAreaElement | null>(null);
-
-
-  if (!project) return null;
-
-  const currentProject = project;
-  const outline = currentProject.outline ?? EMPTY_OUTLINE;
-  const worldRules = getWorldRules(currentProject.contextMemory.worldRules);
-
-  const canEdit = currentProject.viewerAccess.canEdit;
-  const canManage = currentProject.viewerAccess.canManage;
-
-  async function syncProjectUpdate(action: BusyAction, updater: () => Promise<ProjectData | null>) {
-    setBusyAction(action);
-    setErrorMessage(null);
-
-    try {
-      const nextProject = await updater();
-      if (nextProject) {
-        setProject(nextProject);
-      }
-      return nextProject;
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error, t("genericError")));
-      return null;
-    } finally {
-      setBusyAction(null);
-    }
-  }
-
-  async function handleUpdateSummary() {
-    if (!canManage) return;
-    const nextSummary = braindumpRef.current?.value.trim() ?? currentProject.metadata.summary;
-    if (nextSummary === currentProject.metadata.summary) return;
-
-    await syncProjectUpdate("summary", () =>
-      updateSettings(currentProject.metadata.id, {
-        summary: nextSummary,
-      })
-    );
-  }
-
-  async function handleUpdateGenre() {
-    if (!canManage) return;
-    const nextGenre = genreRef.current?.value.trim() ?? currentProject.metadata.genre;
-    if (nextGenre === currentProject.metadata.genre) return;
-
-    await syncProjectUpdate("genre", () =>
-      updateSettings(currentProject.metadata.id, {
-        genre: nextGenre,
-      })
-    );
-  }
-
-  async function handleUpdateSynopsis() {
-    if (!canEdit) return;
-    const nextSynopsis = synopsisRef.current?.value.trim() ?? currentProject.contextMemory.sharedNotes;
-    if (nextSynopsis === currentProject.contextMemory.sharedNotes) return;
-
-    await syncProjectUpdate("synopsis", () =>
-      updateContext(currentProject.metadata.id, {
-        sharedNotes: nextSynopsis,
-      })
-    );
-  }
-
-  async function persistWorldRules(nextWorldRules: string[]) {
-    return syncProjectUpdate("worldRule", () =>
-      updateContext(currentProject.metadata.id, {
-        worldRules: nextWorldRules,
-      })
-    );
-  }
-
-  async function persistOutline(nextOutline: ProjectOutline) {
-    return syncProjectUpdate("outline", () => updateOutlineAction(currentProject.metadata.id, nextOutline));
-  }
 
   function openCharacterCreate() {
     setCharacterDraft(createEmptyCharacterDraft());
@@ -267,7 +176,7 @@ export function StoryBibleView() {
 
     const updated = await syncProjectUpdate("character", () =>
       upsertCharacter(
-        currentProject.metadata.id,
+        projectId,
         {
           name,
           role,
@@ -282,6 +191,118 @@ export function StoryBibleView() {
       setCharacterDraft(createEmptyCharacterDraft());
     }
   }
+
+  return (
+    <>
+      <BibleSection
+        icon={<Users size={18} />}
+        title={t("sections.characters")}
+        actions={
+          canEdit ? (
+            <SectionActionButton onClick={openCharacterCreate}>
+              <Plus size={14} /> {t("actions.addCharacter")}
+            </SectionActionButton>
+          ) : undefined
+        }
+      >
+        {characters.length === 0 ? (
+          <EmptyState
+            title={t("empty.charactersTitle")}
+            description={t("empty.charactersDescription")}
+            actionLabel={canEdit ? t("actions.addCharacter") : undefined}
+            onAction={canEdit ? openCharacterCreate : undefined}
+          />
+        ) : (
+          <div className="space-y-3">
+            {characters.map((character) => (
+              <div
+                key={character.id}
+                className="p-4 bg-[var(--color-surface-alt)] rounded-xl border border-[var(--color-border)] flex items-start justify-between gap-4"
+              >
+                <div>
+                  <h4 className="font-bold text-[var(--color-text)] text-sm">{character.name}</h4>
+                  <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">{character.role}</p>
+                  <p className="text-xs text-[var(--color-text-muted)] mt-2 italic leading-relaxed whitespace-pre-wrap">
+                    &ldquo;{character.memory}&rdquo;
+                  </p>
+                </div>
+                {canEdit && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <IconActionButton
+                      label={t("aria.editCharacter", { name: character.name })}
+                      onClick={() => openCharacterEdit(character)}
+                    >
+                      <Pencil size={14} />
+                    </IconActionButton>
+                    <IconActionButton
+                      label={t("aria.deleteCharacter", { name: character.name })}
+                      variant="danger"
+                      onClick={() => setConfirmDialog({ kind: "deleteCharacter", character })}
+                    >
+                      <Trash2 size={14} />
+                    </IconActionButton>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </BibleSection>
+
+      <EntityDialog
+        open={characterDialog != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCharacterDialog(null);
+          }
+        }}
+        title={characterDialog?.mode === "edit" ? t("dialogs.editCharacterTitle") : t("dialogs.addCharacterTitle")}
+        description={t("dialogs.characterDescription")}
+        onSubmit={() => void handleSaveCharacter()}
+        submitLabel={characterDialog?.mode === "edit" ? t("dialogs.saveCharacter") : t("dialogs.createCharacter")}
+        busy={busyAction === "character"}
+      >
+        <FormInput
+          label={t("labels.name")}
+          value={characterDraft.name}
+          onChange={(value) => setCharacterDraft((draft) => ({ ...draft, name: value }))}
+          placeholder={t("placeholders.characterName")}
+        />
+        <FormInput
+          label={t("labels.role")}
+          value={characterDraft.role}
+          onChange={(value) => setCharacterDraft((draft) => ({ ...draft, role: value }))}
+          placeholder={t("placeholders.characterRole")}
+        />
+        <FormTextarea
+          label={t("labels.memory")}
+          value={characterDraft.memory}
+          onChange={(value) => setCharacterDraft((draft) => ({ ...draft, memory: value }))}
+          placeholder={t("placeholders.characterMemory")}
+        />
+      </EntityDialog>
+    </>
+  );
+}
+
+function WorldbuildingSection({
+  worldRules,
+  canEdit,
+  persistWorldRules,
+  setConfirmDialog,
+  busyAction,
+  setErrorMessage,
+}: {
+  worldRules: string[];
+  canEdit: boolean;
+  persistWorldRules: (rules: string[]) => Promise<ProjectData | null>;
+  setConfirmDialog: (state: ConfirmDialogState) => void;
+  busyAction: BusyAction;
+  setErrorMessage: (msg: string | null) => void;
+}) {
+  const t = useTranslations("storyBible");
+  const [worldRuleDialog, setWorldRuleDialog] = useState<WorldRuleDialogState>(null);
+  const [worldRuleDraft, setWorldRuleDraft] = useState("");
 
   function openWorldRuleCreate() {
     setWorldRuleDraft("");
@@ -312,6 +333,216 @@ export function StoryBibleView() {
       setWorldRuleDraft("");
     }
   }
+
+  return (
+    <>
+      <BibleSection
+        icon={<Globe size={18} />}
+        title={t("sections.worldbuilding")}
+        actions={
+          canEdit ? (
+            <SectionActionButton onClick={openWorldRuleCreate}>
+              <Plus size={14} /> {t("actions.addElement")}
+            </SectionActionButton>
+          ) : undefined
+        }
+      >
+        {worldRules.length === 0 ? (
+          <EmptyState
+            title={t("empty.worldbuildingTitle")}
+            description={t("empty.worldbuildingDescription")}
+            actionLabel={canEdit ? t("actions.addElement") : undefined}
+            onAction={canEdit ? openWorldRuleCreate : undefined}
+          />
+        ) : (
+          <div className="space-y-2">
+            {worldRules.map((rule, index) => (
+              <div
+                key={`${rule}-${index}`}
+                className="px-4 py-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text-secondary)] flex items-center justify-between gap-4"
+              >
+                <span className="leading-relaxed whitespace-pre-wrap">{rule}</span>
+                {canEdit && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <IconActionButton
+                      label={t("aria.editWorldRule", { number: index + 1 })}
+                      onClick={() => openWorldRuleEdit(index, rule)}
+                    >
+                      <Pencil size={14} />
+                    </IconActionButton>
+                    <IconActionButton
+                      label={t("aria.deleteWorldRule", { number: index + 1 })}
+                      variant="danger"
+                      onClick={() => setConfirmDialog({ kind: "deleteWorldRule", index, label: rule })}
+                    >
+                      <Trash2 size={14} />
+                    </IconActionButton>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </BibleSection>
+
+      <EntityDialog
+        open={worldRuleDialog != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setWorldRuleDialog(null);
+          }
+        }}
+        title={worldRuleDialog?.mode === "edit" ? t("dialogs.editElementTitle") : t("dialogs.addElementTitle")}
+        description={t("dialogs.elementDescription")}
+        onSubmit={() => void handleSaveWorldRule()}
+        submitLabel={worldRuleDialog?.mode === "edit" ? t("dialogs.saveElement") : t("dialogs.createElement")}
+        busy={busyAction === "worldRule"}
+      >
+        <FormTextarea
+          label={t("labels.worldbuildingElement")}
+          value={worldRuleDraft}
+          onChange={setWorldRuleDraft}
+          placeholder={t("placeholders.worldbuildingElement")}
+        />
+      </EntityDialog>
+    </>
+  );
+}
+
+function ActCard({
+  act,
+  index,
+  canEdit,
+  openChapterCreate,
+  openActEdit,
+  setConfirmDialog,
+  openChapterEdit,
+}: {
+  act: OutlineAct;
+  index: number;
+  canEdit: boolean;
+  openChapterCreate: (actId: string) => void;
+  openActEdit: (act: OutlineAct) => void;
+  setConfirmDialog: (state: ConfirmDialogState) => void;
+  openChapterEdit: (actId: string, chapter: OutlineChapter) => void;
+}) {
+  const t = useTranslations("storyBible");
+  return (
+    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
+            {t("labels.act", { number: index + 1 })}
+          </p>
+          <h4 className="mt-1 text-lg font-bold text-[var(--color-text)]">{act.title}</h4>
+          {act.summary && (
+            <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
+              {act.summary}
+            </p>
+          )}
+        </div>
+        {canEdit && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => openChapterCreate(act.id)}
+              className="flex items-center gap-1.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[11px] font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
+            >
+              <Plus size={12} />
+              {t("actions.addChapter")}
+            </button>
+            <IconActionButton label={t("aria.editAct", { title: act.title })} onClick={() => openActEdit(act)}>
+              <Pencil size={14} />
+            </IconActionButton>
+            <IconActionButton
+              label={t("aria.deleteAct", { title: act.title })}
+              variant="danger"
+              onClick={() => setConfirmDialog({ kind: "deleteAct", actId: act.id, title: act.title })}
+            >
+              <Trash2 size={14} />
+            </IconActionButton>
+          </div>
+        )}
+      </div>
+
+      {act.chapters.length === 0 ? (
+        <div className="mt-4 rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/80 px-4 py-5 text-sm text-[var(--color-text-muted)]">
+          {t("empty.outlineChapters")}
+        </div>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {act.chapters.map((chapter) => (
+            <div
+              key={chapter.id}
+              className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 flex items-start justify-between gap-4"
+            >
+              <div>
+                <h5 className="text-sm font-bold text-[var(--color-text)]">{chapter.title}</h5>
+                {chapter.summary && (
+                  <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
+                    {chapter.summary}
+                  </p>
+                )}
+              </div>
+              {canEdit && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <IconActionButton
+                    label={t("aria.editChapter", { title: chapter.title })}
+                    onClick={() => openChapterEdit(act.id, chapter)}
+                  >
+                    <Pencil size={14} />
+                  </IconActionButton>
+                  <IconActionButton
+                    label={t("aria.deleteChapter", { title: chapter.title })}
+                    variant="danger"
+                    onClick={() =>
+                      setConfirmDialog({
+                        kind: "deleteChapter",
+                        actId: act.id,
+                        chapterId: chapter.id,
+                        title: chapter.title,
+                      })
+                    }
+                  >
+                    <Trash2 size={14} />
+                  </IconActionButton>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OutlineSection({
+  outline,
+  canEdit,
+  persistOutline,
+  busyAction,
+  setConfirmDialog,
+  setErrorMessage,
+  handleGenerateOutline,
+}: {
+  outline: ProjectOutline;
+  canEdit: boolean;
+  persistOutline: (outline: ProjectOutline) => Promise<ProjectData | null>;
+  busyAction: BusyAction;
+  setConfirmDialog: (state: ConfirmDialogState) => void;
+  setErrorMessage: (msg: string | null) => void;
+  handleGenerateOutline: () => Promise<void>;
+}) {
+  const t = useTranslations("storyBible");
+  const [actDialog, setActDialog] = useState<ActDialogState>(null);
+  const [actDraft, setActDraft] = useState<TextDraft>(createEmptyTextDraft);
+
+  const [chapterDialog, setChapterDialog] = useState<ChapterDialogState>(null);
+  const [chapterDraft, setChapterDraft] = useState<{ actId: string; title: string; summary: string }>({
+    actId: "",
+    title: "",
+    summary: "",
+  });
 
   function openActCreate() {
     setActDraft(createEmptyTextDraft());
@@ -438,8 +669,341 @@ export function StoryBibleView() {
     }
   }
 
+  return (
+    <>
+      <BibleSection
+        icon={<ListOrdered size={18} />}
+        title={t("sections.outline")}
+        actions={
+          canEdit ? (
+            <div className="flex gap-4">
+              <SectionActionButton onClick={openActCreate}>
+                <Plus size={14} /> {t("actions.addAct")}
+              </SectionActionButton>
+              <SectionActionButton
+                onClick={() => openChapterCreate()}
+                disabled={outline.acts.length === 0}
+              >
+                <Plus size={14} /> {t("actions.addChapter")}
+              </SectionActionButton>
+            </div>
+          ) : undefined
+        }
+      >
+        {!hasOutlineContent(outline) ? (
+          <div className="flex flex-col items-center justify-center py-10 bg-[var(--color-surface-alt)] rounded-2xl border border-dashed border-[var(--color-border)]">
+            <button
+              type="button"
+              onClick={() => void handleGenerateOutline()}
+              disabled={!canEdit || busyAction === "generateOutline"}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[var(--color-accent)] text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-indigo-200 transition-all disabled:opacity-50"
+            >
+              {busyAction === "generateOutline" ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+              {t("actions.generateOutline")}
+            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={openActCreate}
+                className="mt-4 text-xs font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors"
+              >
+                {t("actions.startManualAct")}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              {canEdit && (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerateOutline()}
+                    disabled={busyAction === "generateOutline"}
+                    className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent-muted)] text-[var(--color-accent)] rounded-xl text-xs font-bold hover:bg-[var(--color-accent-muted)] transition-colors disabled:opacity-50"
+                  >
+                    {busyAction === "generateOutline" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    {t("actions.regenerateOutline")}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {outline.acts.map((act, index) => (
+              <ActCard
+                key={act.id}
+                act={act}
+                index={index}
+                canEdit={canEdit}
+                openChapterCreate={openChapterCreate}
+                openActEdit={openActEdit}
+                setConfirmDialog={setConfirmDialog}
+                openChapterEdit={openChapterEdit}
+              />
+            ))}
+          </div>
+        )}
+      </BibleSection>
+
+      <EntityDialog
+        open={actDialog != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setActDialog(null);
+          }
+        }}
+        title={actDialog?.mode === "edit" ? t("dialogs.editActTitle") : t("dialogs.addActTitle")}
+        description={t("dialogs.actDescription")}
+        onSubmit={() => void handleSaveAct()}
+        submitLabel={actDialog?.mode === "edit" ? t("dialogs.saveAct") : t("dialogs.createAct")}
+        busy={busyAction === "outline"}
+      >
+        <FormInput
+          label={t("labels.actTitle")}
+          value={actDraft.title}
+          onChange={(value) => setActDraft((draft) => ({ ...draft, title: value }))}
+          placeholder={t("placeholders.actTitle")}
+        />
+        <FormTextarea
+          label={t("labels.actSummary")}
+          value={actDraft.summary}
+          onChange={(value) => setActDraft((draft) => ({ ...draft, summary: value }))}
+          placeholder={t("placeholders.actSummary")}
+        />
+      </EntityDialog>
+
+      <EntityDialog
+        open={chapterDialog != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setChapterDialog(null);
+          }
+        }}
+        title={chapterDialog?.mode === "edit" ? t("dialogs.editOutlineChapterTitle") : t("dialogs.addOutlineChapterTitle")}
+        description={t("dialogs.chapterDescription")}
+        onSubmit={() => void handleSaveChapter()}
+        submitLabel={chapterDialog?.mode === "edit" ? t("dialogs.saveChapter") : t("dialogs.createChapter")}
+        busy={busyAction === "outline"}
+      >
+        <FormSelect
+          label={t("labels.actField")}
+          value={chapterDraft.actId}
+          onChange={(value) => setChapterDraft((draft) => ({ ...draft, actId: value }))}
+          options={outline.acts.map((act) => ({ value: act.id, label: act.title }))}
+        />
+        <FormInput
+          label={t("labels.chapterTitle")}
+          value={chapterDraft.title}
+          onChange={(value) => setChapterDraft((draft) => ({ ...draft, title: value }))}
+          placeholder={t("placeholders.chapterTitle")}
+        />
+        <FormTextarea
+          label={t("labels.chapterSummary")}
+          value={chapterDraft.summary}
+          onChange={(value) => setChapterDraft((draft) => ({ ...draft, summary: value }))}
+          placeholder={t("placeholders.chapterSummary")}
+        />
+      </EntityDialog>
+    </>
+  );
+}
+
+function BraindumpSection({
+  braindumpRef,
+  defaultValue,
+  onBlur,
+  disabled,
+}: {
+  braindumpRef: React.RefObject<HTMLTextAreaElement | null>;
+  defaultValue: string;
+  onBlur: () => void;
+  disabled: boolean;
+}) {
+  const t = useTranslations("storyBible");
+  return (
+    <BibleSection icon={<Type size={18} />} title={t("sections.braindump")} defaultOpen>
+      <textarea
+        ref={braindumpRef}
+        aria-label={t("sections.braindump")}
+        placeholder={t("placeholders.braindump")}
+        className="w-full min-h-[180px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
+        defaultValue={defaultValue}
+        onBlur={onBlur}
+        disabled={disabled}
+      />
+    </BibleSection>
+  );
+}
+
+function GenreSection({
+  genreRef,
+  defaultValue,
+  onBlur,
+  disabled,
+}: {
+  genreRef: React.RefObject<HTMLTextAreaElement | null>;
+  defaultValue: string;
+  onBlur: () => void;
+  disabled: boolean;
+}) {
+  const t = useTranslations("storyBible");
+  return (
+    <BibleSection icon={<Palette size={18} />} title={t("sections.genre")}>
+      <textarea
+        ref={genreRef}
+        aria-label={t("sections.genre")}
+        placeholder={t("placeholders.genre")}
+        className="w-full min-h-[120px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
+        defaultValue={defaultValue}
+        onBlur={onBlur}
+        disabled={disabled}
+      />
+    </BibleSection>
+  );
+}
+
+function SynopsisSection({
+  synopsisRef,
+  defaultValue,
+  onBlur,
+  disabled,
+  canEdit,
+  onGenerateSynopsis,
+  generating,
+}: {
+  synopsisRef: React.RefObject<HTMLTextAreaElement | null>;
+  defaultValue: string;
+  onBlur: () => void;
+  disabled: boolean;
+  canEdit: boolean;
+  onGenerateSynopsis: () => void;
+  generating: boolean;
+}) {
+  const t = useTranslations("storyBible");
+  return (
+    <BibleSection icon={<FileText size={18} />} title={t("sections.synopsis")}>
+      <div className="relative group">
+        <textarea
+          ref={synopsisRef}
+          aria-label={t("sections.synopsis")}
+          placeholder={t("placeholders.synopsis")}
+          className="w-full min-h-[160px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 pr-40 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
+          defaultValue={defaultValue}
+          onBlur={onBlur}
+          disabled={disabled}
+        />
+        {canEdit && (
+          <button
+            type="button"
+            onClick={onGenerateSynopsis}
+            disabled={generating}
+            className="absolute right-4 top-4 flex items-center gap-2 px-3 py-1.5 bg-[var(--color-accent)] text-white rounded-lg text-xs font-bold shadow-md hover:bg-[var(--color-accent)] transition-all opacity-0 group-hover:opacity-100 disabled:opacity-60"
+          >
+            {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            {t("actions.generateSynopsis")}
+          </button>
+        )}
+      </div>
+    </BibleSection>
+  );
+}
+
+function useStoryBibleState({
+  project,
+  setProject,
+  braindumpRef,
+  genreRef,
+  synopsisRef,
+}: {
+  project: ProjectData | null;
+  setProject: (project: ProjectData) => void;
+  braindumpRef: React.RefObject<HTMLTextAreaElement | null>;
+  genreRef: React.RefObject<HTMLTextAreaElement | null>;
+  synopsisRef: React.RefObject<HTMLTextAreaElement | null>;
+}) {
+  const t = useTranslations("storyBible");
+  const commonT = useTranslations("common");
+  const [busyAction, setBusyAction] = useState<BusyAction>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>(null);
+
+  const currentProject = project;
+  const outline = currentProject?.outline ?? EMPTY_OUTLINE;
+  const worldRules = currentProject ? getWorldRules(currentProject.contextMemory.worldRules) : [];
+
+  const canEdit = currentProject?.viewerAccess?.canEdit ?? false;
+  const canManage = currentProject?.viewerAccess?.canManage ?? false;
+
+  async function syncProjectUpdate(action: BusyAction, updater: () => Promise<ProjectData | null>) {
+    setBusyAction(action);
+    setErrorMessage(null);
+
+    try {
+      const nextProject = await updater();
+      if (nextProject) {
+        setProject(nextProject);
+      }
+      return nextProject;
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, t("genericError")));
+      return null;
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleUpdateSummary() {
+    if (!currentProject || !canManage) return;
+    const nextSummary = braindumpRef.current?.value.trim() ?? currentProject.metadata.summary;
+    if (nextSummary === currentProject.metadata.summary) return;
+
+    await syncProjectUpdate("summary", () =>
+      updateSettings(currentProject.metadata.id, {
+        summary: nextSummary,
+      })
+    );
+  }
+
+  async function handleUpdateGenre() {
+    if (!currentProject || !canManage) return;
+    const nextGenre = genreRef.current?.value.trim() ?? currentProject.metadata.genre;
+    if (nextGenre === currentProject.metadata.genre) return;
+
+    await syncProjectUpdate("genre", () =>
+      updateSettings(currentProject.metadata.id, {
+        genre: nextGenre,
+      })
+    );
+  }
+
+  async function handleUpdateSynopsis() {
+    if (!currentProject || !canEdit) return;
+    const nextSynopsis = synopsisRef.current?.value.trim() ?? currentProject.contextMemory.sharedNotes;
+    if (nextSynopsis === currentProject.contextMemory.sharedNotes) return;
+
+    await syncProjectUpdate("synopsis", () =>
+      updateContext(currentProject.metadata.id, {
+        sharedNotes: nextSynopsis,
+      })
+    );
+  }
+
+  async function persistWorldRules(nextWorldRules: string[]) {
+    if (!currentProject) return null;
+    return syncProjectUpdate("worldRule", () =>
+      updateContext(currentProject.metadata.id, {
+        worldRules: nextWorldRules,
+      })
+    );
+  }
+
+  async function persistOutline(nextOutline: ProjectOutline) {
+    if (!currentProject) return null;
+    return syncProjectUpdate("outline", () => updateOutlineAction(currentProject.metadata.id, nextOutline));
+  }
+
   async function handleGenerateSynopsis(forceReplace: boolean = false) {
-    if (!canEdit) return;
+    if (!currentProject || !canEdit) return;
     const currentSynopsis = synopsisRef.current?.value.trim() ?? currentProject.contextMemory.sharedNotes;
     const hasExistingSynopsis = currentSynopsis.length > 0;
     if (hasExistingSynopsis && !forceReplace) {
@@ -451,7 +1015,7 @@ export function StoryBibleView() {
   }
 
   async function handleGenerateOutline(forceReplace: boolean = false) {
-    if (!canEdit) return;
+    if (!currentProject || !canEdit) return;
     if (hasOutlineContent(outline) && !forceReplace) {
       setConfirmDialog({ kind: "replaceOutline" });
       return;
@@ -461,7 +1025,7 @@ export function StoryBibleView() {
   }
 
   async function handleConfirmDialog() {
-    if (!confirmDialog) return;
+    if (!currentProject || !confirmDialog) return;
 
     switch (confirmDialog.kind) {
       case "replaceSynopsis":
@@ -557,6 +1121,73 @@ export function StoryBibleView() {
       ? ("primary" as const)
       : ("danger" as const);
 
+  return {
+    busyAction,
+    errorMessage,
+    confirmDialog,
+    setConfirmDialog,
+    setErrorMessage,
+    canEdit,
+    canManage,
+    worldRules,
+    outline,
+    syncProjectUpdate,
+    persistWorldRules,
+    persistOutline,
+    handleUpdateSummary,
+    handleUpdateGenre,
+    handleUpdateSynopsis,
+    handleGenerateSynopsis,
+    handleGenerateOutline,
+    handleConfirmDialog,
+    confirmTitle,
+    confirmDescription,
+    confirmLabel,
+    confirmTone,
+  };
+}
+
+export function StoryBibleView() {
+  const t = useTranslations("storyBible");
+  const project = useProjectStore((state) => state.project);
+  const setProject = useProjectStore((state) => state.setProject);
+
+  const braindumpRef = useRef<HTMLTextAreaElement | null>(null);
+  const genreRef = useRef<HTMLTextAreaElement | null>(null);
+  const synopsisRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const {
+    busyAction,
+    errorMessage,
+    confirmDialog,
+    setConfirmDialog,
+    setErrorMessage,
+    canEdit,
+    canManage,
+    worldRules,
+    outline,
+    persistWorldRules,
+    persistOutline,
+    handleUpdateSummary,
+    handleUpdateGenre,
+    handleUpdateSynopsis,
+    handleGenerateSynopsis,
+    handleGenerateOutline,
+    handleConfirmDialog,
+    confirmTitle,
+    confirmDescription,
+    confirmLabel,
+    confirmTone,
+  } = useStoryBibleState({
+    project,
+    setProject,
+    braindumpRef,
+    genreRef,
+    synopsisRef,
+  });
+
+  if (!project) return null;
+
   return (
     <div className="h-full flex flex-col bg-[var(--color-surface)] overflow-y-auto">
       <div className="max-w-5xl mx-auto w-full px-12 py-10">
@@ -571,427 +1202,60 @@ export function StoryBibleView() {
         </header>
 
         <div className="space-y-4">
-          <BibleSection icon={<Type size={18} />} title={t("sections.braindump")} defaultOpen>
-            <textarea
-              key={`summary-${currentProject.metadata.updatedAt}`}
-              ref={braindumpRef}
-              aria-label={t("sections.braindump")}
-              placeholder={t("placeholders.braindump")}
-              className="w-full min-h-[180px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
-              defaultValue={currentProject.metadata.summary}
-              onBlur={() => void handleUpdateSummary()}
-              disabled={!canManage || busyAction === "summary"}
-            />
-          </BibleSection>
+          <BraindumpSection
+            braindumpRef={braindumpRef}
+            defaultValue={project.metadata.summary}
+            onBlur={() => void handleUpdateSummary()}
+            disabled={!canManage || busyAction === "summary"}
+          />
 
-          <BibleSection icon={<Palette size={18} />} title={t("sections.genre")}>
-            <textarea
-              key={`genre-${currentProject.metadata.updatedAt}`}
-              ref={genreRef}
-              aria-label={t("sections.genre")}
-              placeholder={t("placeholders.genre")}
-              className="w-full min-h-[120px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
-              defaultValue={currentProject.metadata.genre}
-              onBlur={() => void handleUpdateGenre()}
-              disabled={!canManage || busyAction === "genre"}
-            />
-          </BibleSection>
+          <GenreSection
+            genreRef={genreRef}
+            defaultValue={project.metadata.genre}
+            onBlur={() => void handleUpdateGenre()}
+            disabled={!canManage || busyAction === "genre"}
+          />
 
-          <BibleSection icon={<FileText size={18} />} title={t("sections.synopsis")}>
-            <div className="relative group">
-              <textarea
-                key={`synopsis-${currentProject.metadata.updatedAt}`}
-                ref={synopsisRef}
-                aria-label={t("sections.synopsis")}
-                placeholder={t("placeholders.synopsis")}
-                className="w-full min-h-[160px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 pr-40 text-sm text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-text-secondary)] transition-colors resize-none"
-                defaultValue={currentProject.contextMemory.sharedNotes}
-                onBlur={() => void handleUpdateSynopsis()}
-                disabled={!canEdit || busyAction === "synopsis" || busyAction === "generateSynopsis"}
-              />
-              {canEdit && (
-                <button
-                  type="button"
-                  onClick={() => void handleGenerateSynopsis()}
-                  disabled={busyAction === "generateSynopsis"}
-                  className="absolute right-4 top-4 flex items-center gap-2 px-3 py-1.5 bg-[var(--color-accent)] text-white rounded-lg text-xs font-bold shadow-md hover:bg-[var(--color-accent)] transition-all opacity-0 group-hover:opacity-100 disabled:opacity-60"
-                >
-                  {busyAction === "generateSynopsis" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  {t("actions.generateSynopsis")}
-                </button>
-              )}
-            </div>
-          </BibleSection>
+          <SynopsisSection
+            synopsisRef={synopsisRef}
+            defaultValue={project.contextMemory.sharedNotes}
+            onBlur={() => void handleUpdateSynopsis()}
+            disabled={!canEdit || busyAction === "synopsis" || busyAction === "generateSynopsis"}
+            canEdit={!!canEdit}
+            onGenerateSynopsis={() => void handleGenerateSynopsis()}
+            generating={busyAction === "generateSynopsis"}
+          />
 
-          <BibleSection
-            icon={<Users size={18} />}
-            title={t("sections.characters")}
-            actions={
-              canEdit ? (
-                <SectionActionButton onClick={openCharacterCreate}>
-                  <Plus size={14} /> {t("actions.addCharacter")}
-                </SectionActionButton>
-              ) : undefined
-            }
-          >
-            {currentProject.characters.length === 0 ? (
-              <EmptyState
-                title={t("empty.charactersTitle")}
-                description={t("empty.charactersDescription")}
-                actionLabel={canEdit ? t("actions.addCharacter") : undefined}
-                onAction={canEdit ? openCharacterCreate : undefined}
-              />
-            ) : (
-              <div className="space-y-3">
-                {currentProject.characters.map((character) => (
-                  <div
-                    key={character.id}
-                    className="p-4 bg-[var(--color-surface-alt)] rounded-xl border border-[var(--color-border)] flex items-start justify-between gap-4"
-                  >
-                    <div>
-                      <h4 className="font-bold text-[var(--color-text)] text-sm">{character.name}</h4>
-                      <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">{character.role}</p>
-                      <p className="text-xs text-[var(--color-text-muted)] mt-2 italic leading-relaxed whitespace-pre-wrap">
-                        &ldquo;{character.memory}&rdquo;
-                      </p>
-                    </div>
-                    {canEdit && (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <IconActionButton
-                          label={t("aria.editCharacter", { name: character.name })}
-                          onClick={() => openCharacterEdit(character)}
-                        >
-                          <Pencil size={14} />
-                        </IconActionButton>
-                        <IconActionButton
-                          label={t("aria.deleteCharacter", { name: character.name })}
-                          variant="danger"
-                          onClick={() => setConfirmDialog({ kind: "deleteCharacter", character })}
-                        >
-                          <Trash2 size={14} />
-                        </IconActionButton>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </BibleSection>
+          <CharactersSection
+            projectId={project.metadata.id}
+            characters={project.characters}
+            canEdit={!!canEdit}
+            syncProjectUpdate={syncProjectUpdate}
+            setConfirmDialog={setConfirmDialog}
+            busyAction={busyAction}
+            setErrorMessage={setErrorMessage}
+          />
 
-          <BibleSection
-            icon={<Globe size={18} />}
-            title={t("sections.worldbuilding")}
-            actions={
-              canEdit ? (
-                <SectionActionButton onClick={openWorldRuleCreate}>
-                  <Plus size={14} /> {t("actions.addElement")}
-                </SectionActionButton>
-              ) : undefined
-            }
-          >
-            {worldRules.length === 0 ? (
-              <EmptyState
-                title={t("empty.worldbuildingTitle")}
-                description={t("empty.worldbuildingDescription")}
-                actionLabel={canEdit ? t("actions.addElement") : undefined}
-                onAction={canEdit ? openWorldRuleCreate : undefined}
-              />
-            ) : (
-              <div className="space-y-2">
-                {worldRules.map((rule, index) => (
-                  <div
-                    key={`${rule}-${index}`}
-                    className="px-4 py-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text-secondary)] flex items-center justify-between gap-4"
-                  >
-                    <span className="leading-relaxed whitespace-pre-wrap">{rule}</span>
-                    {canEdit && (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <IconActionButton
-                          label={t("aria.editWorldRule", { number: index + 1 })}
-                          onClick={() => openWorldRuleEdit(index, rule)}
-                        >
-                          <Pencil size={14} />
-                        </IconActionButton>
-                        <IconActionButton
-                          label={t("aria.deleteWorldRule", { number: index + 1 })}
-                          variant="danger"
-                          onClick={() => setConfirmDialog({ kind: "deleteWorldRule", index, label: rule })}
-                        >
-                          <Trash2 size={14} />
-                        </IconActionButton>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </BibleSection>
+          <WorldbuildingSection
+            worldRules={worldRules}
+            canEdit={!!canEdit}
+            persistWorldRules={persistWorldRules}
+            setConfirmDialog={setConfirmDialog}
+            busyAction={busyAction}
+            setErrorMessage={setErrorMessage}
+          />
 
-          <BibleSection
-            icon={<ListOrdered size={18} />}
-            title={t("sections.outline")}
-            actions={
-              canEdit ? (
-                <div className="flex gap-4">
-                  <SectionActionButton onClick={openActCreate}>
-                    <Plus size={14} /> {t("actions.addAct")}
-                  </SectionActionButton>
-                  <SectionActionButton
-                    onClick={() => openChapterCreate()}
-                    disabled={outline.acts.length === 0}
-                  >
-                    <Plus size={14} /> {t("actions.addChapter")}
-                  </SectionActionButton>
-                </div>
-              ) : undefined
-            }
-          >
-            {!hasOutlineContent(outline) ? (
-              <div className="flex flex-col items-center justify-center py-10 bg-[var(--color-surface-alt)] rounded-2xl border border-dashed border-[var(--color-border)]">
-                <button
-                  type="button"
-                  onClick={() => void handleGenerateOutline()}
-                  disabled={!canEdit || busyAction === "generateOutline"}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-[var(--color-accent)] text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-indigo-200 transition-all disabled:opacity-50"
-                >
-                  {busyAction === "generateOutline" ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                  {t("actions.generateOutline")}
-                </button>
-                {canEdit && (
-                  <button
-                    type="button"
-                    onClick={openActCreate}
-                    className="mt-4 text-xs font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors"
-                  >
-                    {t("actions.startManualAct")}
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex justify-end">
-                  {canEdit && (
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void handleGenerateOutline()}
-                        disabled={busyAction === "generateOutline"}
-                        className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent-muted)] text-[var(--color-accent)] rounded-xl text-xs font-bold hover:bg-[var(--color-accent-muted)] transition-colors disabled:opacity-50"
-                      >
-                        {busyAction === "generateOutline" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                        {t("actions.regenerateOutline")}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {outline.acts.map((act, index) => (
-                  <div key={act.id} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
-                          {t("labels.act", { number: index + 1 })}
-                        </p>
-                        <h4 className="mt-1 text-lg font-bold text-[var(--color-text)]">{act.title}</h4>
-                        {act.summary && (
-                          <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
-                            {act.summary}
-                          </p>
-                        )}
-                      </div>
-                      {canEdit && (
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => openChapterCreate(act.id)}
-                            className="flex items-center gap-1.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[11px] font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
-                          >
-                            <Plus size={12} />
-                            {t("actions.addChapter")}
-                          </button>
-                          <IconActionButton label={t("aria.editAct", { title: act.title })} onClick={() => openActEdit(act)}>
-                            <Pencil size={14} />
-                          </IconActionButton>
-                          <IconActionButton
-                            label={t("aria.deleteAct", { title: act.title })}
-                            variant="danger"
-                            onClick={() => setConfirmDialog({ kind: "deleteAct", actId: act.id, title: act.title })}
-                          >
-                            <Trash2 size={14} />
-                          </IconActionButton>
-                        </div>
-                      )}
-                    </div>
-
-                    {act.chapters.length === 0 ? (
-                      <div className="mt-4 rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/80 px-4 py-5 text-sm text-[var(--color-text-muted)]">
-                        {t("empty.outlineChapters")}
-                      </div>
-                    ) : (
-                      <div className="mt-4 space-y-3">
-                        {act.chapters.map((chapter) => (
-                          <div
-                            key={chapter.id}
-                            className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 flex items-start justify-between gap-4"
-                          >
-                            <div>
-                              <h5 className="text-sm font-bold text-[var(--color-text)]">{chapter.title}</h5>
-                              {chapter.summary && (
-                                <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
-                                  {chapter.summary}
-                                </p>
-                              )}
-                            </div>
-                            {canEdit && (
-                              <div className="flex items-center gap-2 shrink-0">
-                                <IconActionButton
-                                  label={t("aria.editChapter", { title: chapter.title })}
-                                  onClick={() => openChapterEdit(act.id, chapter)}
-                                >
-                                  <Pencil size={14} />
-                                </IconActionButton>
-                                <IconActionButton
-                                  label={t("aria.deleteChapter", { title: chapter.title })}
-                                  variant="danger"
-                                  onClick={() =>
-                                    setConfirmDialog({
-                                      kind: "deleteChapter",
-                                      actId: act.id,
-                                      chapterId: chapter.id,
-                                      title: chapter.title,
-                                    })
-                                  }
-                                >
-                                  <Trash2 size={14} />
-                                </IconActionButton>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </BibleSection>
+          <OutlineSection
+            outline={outline}
+            canEdit={!!canEdit}
+            persistOutline={persistOutline}
+            busyAction={busyAction}
+            setConfirmDialog={setConfirmDialog}
+            setErrorMessage={setErrorMessage}
+            handleGenerateOutline={handleGenerateOutline}
+          />
         </div>
       </div>
-
-      <EntityDialog
-        open={characterDialog != null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setCharacterDialog(null);
-          }
-        }}
-        title={characterDialog?.mode === "edit" ? t("dialogs.editCharacterTitle") : t("dialogs.addCharacterTitle")}
-        description={t("dialogs.characterDescription")}
-        onSubmit={() => void handleSaveCharacter()}
-        submitLabel={characterDialog?.mode === "edit" ? t("dialogs.saveCharacter") : t("dialogs.createCharacter")}
-        busy={busyAction === "character"}
-      >
-        <FormInput
-          label={t("labels.name")}
-          value={characterDraft.name}
-          onChange={(value) => setCharacterDraft((draft) => ({ ...draft, name: value }))}
-          placeholder={t("placeholders.characterName")}
-        />
-        <FormInput
-          label={t("labels.role")}
-          value={characterDraft.role}
-          onChange={(value) => setCharacterDraft((draft) => ({ ...draft, role: value }))}
-          placeholder={t("placeholders.characterRole")}
-        />
-        <FormTextarea
-          label={t("labels.memory")}
-          value={characterDraft.memory}
-          onChange={(value) => setCharacterDraft((draft) => ({ ...draft, memory: value }))}
-          placeholder={t("placeholders.characterMemory")}
-        />
-      </EntityDialog>
-
-      <EntityDialog
-        open={worldRuleDialog != null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setWorldRuleDialog(null);
-          }
-        }}
-        title={worldRuleDialog?.mode === "edit" ? t("dialogs.editElementTitle") : t("dialogs.addElementTitle")}
-        description={t("dialogs.elementDescription")}
-        onSubmit={() => void handleSaveWorldRule()}
-        submitLabel={worldRuleDialog?.mode === "edit" ? t("dialogs.saveElement") : t("dialogs.createElement")}
-        busy={busyAction === "worldRule"}
-      >
-        <FormTextarea
-          label={t("labels.worldbuildingElement")}
-          value={worldRuleDraft}
-          onChange={setWorldRuleDraft}
-          placeholder={t("placeholders.worldbuildingElement")}
-        />
-      </EntityDialog>
-
-      <EntityDialog
-        open={actDialog != null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setActDialog(null);
-          }
-        }}
-        title={actDialog?.mode === "edit" ? t("dialogs.editActTitle") : t("dialogs.addActTitle")}
-        description={t("dialogs.actDescription")}
-        onSubmit={() => void handleSaveAct()}
-        submitLabel={actDialog?.mode === "edit" ? t("dialogs.saveAct") : t("dialogs.createAct")}
-        busy={busyAction === "outline"}
-      >
-        <FormInput
-          label={t("labels.actTitle")}
-          value={actDraft.title}
-          onChange={(value) => setActDraft((draft) => ({ ...draft, title: value }))}
-          placeholder={t("placeholders.actTitle")}
-        />
-        <FormTextarea
-          label={t("labels.actSummary")}
-          value={actDraft.summary}
-          onChange={(value) => setActDraft((draft) => ({ ...draft, summary: value }))}
-          placeholder={t("placeholders.actSummary")}
-        />
-      </EntityDialog>
-
-      <EntityDialog
-        open={chapterDialog != null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setChapterDialog(null);
-          }
-        }}
-        title={chapterDialog?.mode === "edit" ? t("dialogs.editOutlineChapterTitle") : t("dialogs.addOutlineChapterTitle")}
-        description={t("dialogs.chapterDescription")}
-        onSubmit={() => void handleSaveChapter()}
-        submitLabel={chapterDialog?.mode === "edit" ? t("dialogs.saveChapter") : t("dialogs.createChapter")}
-        busy={busyAction === "outline"}
-      >
-        <FormSelect
-          label={t("labels.actField")}
-          value={chapterDraft.actId}
-          onChange={(value) => setChapterDraft((draft) => ({ ...draft, actId: value }))}
-          options={outline.acts.map((act) => ({ value: act.id, label: act.title }))}
-        />
-        <FormInput
-          label={t("labels.chapterTitle")}
-          value={chapterDraft.title}
-          onChange={(value) => setChapterDraft((draft) => ({ ...draft, title: value }))}
-          placeholder={t("placeholders.chapterTitle")}
-        />
-        <FormTextarea
-          label={t("labels.chapterSummary")}
-          value={chapterDraft.summary}
-          onChange={(value) => setChapterDraft((draft) => ({ ...draft, summary: value }))}
-          placeholder={t("placeholders.chapterSummary")}
-        />
-      </EntityDialog>
-
 
       <ConfirmDialog
         open={confirmDialog != null}
@@ -1004,7 +1268,7 @@ export function StoryBibleView() {
         description={confirmDescription}
         confirmLabel={confirmLabel}
         confirmTone={confirmTone}
-        busy={busyAction === "generateSynopsis" || busyAction === "generateOutline" || busyAction === "deleteCharacter" || busyAction === "worldRule" || busyAction === "outline"}
+        busy={busyAction === "generateOutline" || busyAction === "generateSynopsis" || busyAction === "deleteCharacter" || busyAction === "worldRule" || busyAction === "outline"}
         onConfirm={() => void handleConfirmDialog()}
       />
     </div>

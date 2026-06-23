@@ -255,16 +255,20 @@ export async function processContinuityJobs({ limit = 10 } = {}) {
   let processed = 0;
   let failures = 0;
 
-  for (let index = 0; index < limit; index += 1) {
+  async function processSegment(index: number): Promise<void> {
+    if (index >= limit) return;
     try {
       const didProcess = await processNextContinuityJob();
-      if (!didProcess) break;
+      if (!didProcess) return;
       processed += 1;
     } catch (error) {
       failures += 1;
       console.error("Continuity job failed:", error);
     }
+    await processSegment(index + 1);
   }
+
+  await processSegment(0);
 
   return { processed, failures };
 }

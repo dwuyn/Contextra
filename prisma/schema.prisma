@@ -35,6 +35,8 @@ model User {
   authoredCommentThreads CommentThread[] @relation("CommentThreadAuthor")
   resolvedCommentThreads CommentThread[] @relation("CommentThreadResolver")
   commentReplies    CommentReply[] @relation("CommentReplyAuthor")
+  chatMessages      ChatMessage[]
+  chapterVersions   ChapterVersion[]
 }
 
 model Project {
@@ -150,6 +152,7 @@ model DirectMessage {
   receiver  User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
 
   @@index([senderId, receiverId, createdAt])
+  @@index([receiverId, senderId, createdAt])
 }
 
 model Character {
@@ -213,7 +216,7 @@ model Chapter {
   commentThreads CommentThread[]
   collaborationState ChapterCollaborationState?
 
-  @@index([projectId, branchId, index])
+  @@unique([projectId, branchId, index])
   @@index([projectId, index])
 }
 
@@ -410,6 +413,7 @@ model ChapterVersion {
   createdAt   DateTime @default(now())
 
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator     User     @relation(fields: [createdBy], references: [id])
 
   @@index([projectId, chapterId, createdAt])
 }
@@ -439,6 +443,8 @@ model Usage {
   createdAt DateTime @default(now())
 
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
 }
 
 model Version {
@@ -449,6 +455,8 @@ model Version {
   createdAt DateTime @default(now())
 
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
 }
 
 model ChatMessage {
@@ -461,6 +469,9 @@ model ChatMessage {
   createdAt  DateTime @default(now())
 
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sender     User     @relation(fields: [senderId], references: [id])
+
+  @@index([projectId, createdAt])
 }
 
 model ProjectPresence {
@@ -528,7 +539,7 @@ model ProjectAiMessage {
 
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@index([projectId, createdAt])
+  @@index([projectId, branchId, createdAt])
 }
 
 model PronunciationEntry {

@@ -124,13 +124,17 @@ export async function processAndSaveChapterChunks(chapterId: string, content: st
   const embeddings: number[][] = [];
   const BATCH_SIZE = 5;
 
-  for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+  async function processBatch(i: number): Promise<void> {
+    if (i >= chunks.length) return;
     const batch = chunks.slice(i, i + BATCH_SIZE);
     const batchEmbeddings = await Promise.all(
       batch.map((chunkContent) => generateEmbedding(chunkContent, "RETRIEVAL_DOCUMENT")),
     );
     embeddings.push(...batchEmbeddings);
+    await processBatch(i + BATCH_SIZE);
   }
+
+  await processBatch(0);
 
   const embeddedChunks: Array<{ chunkContent: string; vectorLiteral: string; index: number }> = [];
   for (let i = 0; i < embeddings.length; i++) {
@@ -143,14 +147,14 @@ export async function processAndSaveChapterChunks(chapterId: string, content: st
   await prisma.$transaction(async tx => {
     await tx.sceneChunk.deleteMany({ where: { chapterId } });
 
-    for (const { chunkContent, vectorLiteral, index } of embeddedChunks) {
-      // Store in Prisma using raw SQL because Prisma doesn't natively support creating vectors with the ORM client methods yet,
-      // though the Unsupported("vector") type is there, inserting usually requires string casting.
-      await tx.$executeRaw`
-      INSERT INTO "SceneChunk" ("id", "chapterId", "content", "vector", "index", "createdAt")
-      VALUES (gen_random_uuid(), ${chapterId}, ${chunkContent}, ${vectorLiteral}::vector, ${index}, NOW())
-    `;
-    }
+    await Promise.all(
+      embeddedChunks.map(({ chunkContent, vectorLiteral, index }) =>
+        tx.$executeRaw`
+          INSERT INTO "SceneChunk" ("id", "chapterId", "content", "vector", "index", "createdAt")
+          VALUES (gen_random_uuid(), ${chapterId}, ${chunkContent}, ${vectorLiteral}::vector, ${index}, NOW())
+        `
+      )
+    );
   });
 }
 

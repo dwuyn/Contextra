@@ -34,6 +34,7 @@ import { ChapterIllustrationPage } from "@/components/ChapterIllustrationPage";
 import { PublicVoiceReader } from "@/components/PublicVoiceReader";
 import {
   canFinalizeLiveCollaborationSync,
+  executeLiveSnapshot,
   getPreferredDraftContent,
   getPreservedEditorContent,
   getEditorTransportKey,
@@ -42,6 +43,7 @@ import {
   shouldFlushLiveCollaborativeContent,
   shouldPreservePreviousEditorContent,
   shouldPublishSavedTitle,
+  shouldScheduleReconnect,
   type DraftPersistenceReason,
   type DraftMode,
 } from "@/components/mainEditorCollaboration";
@@ -57,6 +59,7 @@ type SaveRequest = {
   reason: SaveReason;
   flushCollaborativeContent?: boolean;
   draft?: DraftSnapshot;
+  isRetry?: boolean;
 };
 
 type ChapterSnapshot = {
@@ -229,11 +232,11 @@ function buildRewriteInstruction(language: PromptLanguage) {
     : "Make it more vivid and emotional.";
 }
 
-export function MainEditor({
-  onToggleHistory,
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function useMainEditorState({
   onOpenAiHistory,
 }: {
-  onToggleHistory?: () => void;
   onOpenAiHistory?: () => void;
 }) {
   const project = useProjectStore((state) => state.project);
@@ -282,18 +285,25 @@ export function MainEditor({
     state: CollaborationState;
     error: string | null;
   }>({ session: null, provider: null, state: "idle", error: null });
+  const [collabPersistenceWarning, setCollabPersistenceWarning] = useState<string | null>(null);
+  const collabRef = useRef(collab);
+  useEffect(() => {
+    collabRef.current = collab;
+  }, [collab]);
+  const pendingRetryRequestRef = useRef<SaveRequest | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [hasCheckpointChanges, setHasCheckpointChanges] = useState(false);
+  const [hasPendingPersistence, setHasPendingPersistence] = useState(false);
+  const [hasPendingCheckpoint, setHasPendingCheckpoint] = useState(false);
   const [hasSelection, setHasSelection] = useState(false);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
+  const [recoveredUnsavedChanges, setRecoveredUnsavedChanges] = useState(false);
   const [pendingCommentDraft, setPendingCommentDraft] = useState<PendingCommentDraft | null>(null);
   const [isCreatingComment, setIsCreatingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
-  const [flippedIllustrationChapterId, setFlippedIllustrationChapterId] = useState<string | null>(null);
+  const [setFlippedIllustrationChapterId] = useState<string | null>(null);
   const [generatingIllustrationChapterId, setGeneratingIllustrationChapterId] = useState<string | null>(null);
   const [illustrationErrorsByChapter, setIllustrationErrorsByChapter] = useState<Record<string, string>>({});
 
@@ -406,6 +416,14 @@ export function MainEditor({
     collaborativeFlushedContentRef.current[chapterId] !== content
   ), []);
 
+  const hasPendingDraftPersistence = useCallback((
+    draft: Pick<DraftSnapshot, "chapterId" | "title" | "content">,
+    mode: DraftMode,
+  ) => (
+    hasPendingDraftChanges(draft.chapterId, draft, mode)
+    || (mode === "live" && hasPendingCollaborativeContentFlush(draft.chapterId, draft.content))
+  ), [hasPendingCollaborativeContentFlush, hasPendingDraftChanges]);
+
   const syncSaveState = useCallback((
     chapterId: string,
     nextTitle: string,
@@ -414,17 +432,16 @@ export function MainEditor({
   ) => {
     const persisted = persistedSnapshotsRef.current[chapterId];
     const checkpoint = checkpointSnapshotsRef.current[chapterId];
-    const hasUnsaved = hasPendingDraftChanges(
-      chapterId,
-      { title: nextTitle, content: nextContent },
+    const hasUnsaved = hasPendingDraftPersistence(
+      { chapterId, title: nextTitle, content: nextContent },
       mode,
     );
     const checkpointBaseline = checkpoint?.content ?? persisted?.content ?? nextContent;
     const checkpointDirty = checkpointBaseline !== nextContent;
 
     if (isMountedRef.current && activeChapterIdRef.current === chapterId) {
-      setHasUnsavedChanges(hasUnsaved);
-      setHasCheckpointChanges(checkpointDirty);
+      setHasPendingPersistence(hasUnsaved);
+      setHasPendingCheckpoint(checkpointDirty);
     }
 
     return { hasUnsaved, checkpointDirty };
@@ -506,6 +523,8 @@ export function MainEditor({
     collaborationProviderSyncedRef.current = false;
     collaborationEditorRenderedRef.current = false;
     setCollab({ session: null, provider: null, state: "idle", error: null });
+    setCollabPersistenceWarning(null);
+    pendingRetryRequestRef.current = null;
     collaborationHasSyncedRef.current = false;
     collaborationRetryCountRef.current = 0;
   }, [clearCollaborativeFlushTimer, clearCollaborationReadyFrame, clearCollaborationRetryTimer, clearCollaborationSyncTimeout]);
@@ -515,10 +534,12 @@ export function MainEditor({
       providerSynced: collaborationProviderSyncedRef.current,
       editorRendered: collaborationEditorRenderedRef.current,
     })) {
-      console.log("[collab] finalizeLiveCollaborationSync - not ready yet", {
-        providerSynced: collaborationProviderSyncedRef.current,
-        editorRendered: collaborationEditorRenderedRef.current,
-      });
+      if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+        console.log("[collab] finalizeLiveCollaborationSync - not ready yet", {
+          providerSynced: collaborationProviderSyncedRef.current,
+          editorRendered: collaborationEditorRenderedRef.current,
+        });
+      }
       return;
     }
 
@@ -532,15 +553,25 @@ export function MainEditor({
         return;
       }
 
-      console.log("[collab] finalizeLiveCollaborationSync - synced!");
+      if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+        console.log("[collab] finalizeLiveCollaborationSync - synced!");
+      }
       setCollab((prev) => ({ ...prev, state: "synced", error: null }));
       clearCollaborationSyncTimeout();
       setIsLoadingContent(false);
+
+      if (pendingRetryRequestRef.current) {
+        const retryReq = pendingRetryRequestRef.current;
+        pendingRetryRequestRef.current = null;
+        requestSaveRef.current(retryReq);
+      }
     });
   }, [clearCollaborationReadyFrame, clearCollaborationSyncTimeout]);
 
   const handleCollaborationFirstRender = useCallback(() => {
-    console.log("[collab] handleCollaborationFirstRender - providerSynced:", collaborationProviderSyncedRef.current);
+    if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+      console.log("[collab] handleCollaborationFirstRender - providerSynced:", collaborationProviderSyncedRef.current);
+    }
     collaborationEditorRenderedRef.current = true;
     finalizeLiveCollaborationSync();
   }, [finalizeLiveCollaborationSync]);
@@ -658,9 +689,40 @@ export function MainEditor({
     }
 
     try {
+      let contentToSave: string | undefined = undefined;
+
+      if (shouldFlushCollaborativeContent && request.reason !== "unmount") {
+        const activeProvider = collabRef.current.provider;
+        if (collabRef.current.state !== "synced" || !activeProvider) {
+          throw new Error("Live collaboration is not connected/synced");
+        }
+
+        if (collabRef.current.provider !== activeProvider) {
+          throw new Error("Stale provider");
+        }
+
+        const timeoutMs = request.reason === "manual" ? 5000 : 1500;
+        const snapshotRes = await executeLiveSnapshot(
+          activeProvider,
+          timeoutMs,
+          () => collabRef.current.provider === activeProvider && collabRef.current.state === "synced"
+        );
+
+        if (collabRef.current.provider !== activeProvider) {
+          throw new Error("Stale provider");
+        }
+
+        if (!snapshotRes.ok || !snapshotRes.html) {
+          throw new Error(snapshotRes.error || "Snapshot handshake failed");
+        }
+
+        contentToSave = snapshotRes.html;
+      }
+
       const result = shouldFlushCollaborativeContent
         ? await saveCollaborativeChapter(draft.projectId, draft.chapterId, {
             title: draft.title,
+            content: contentToSave,
             createVersion: shouldCreateVersion,
             revalidate: request.reason === "manual" || shouldCreateVersion,
           })
@@ -671,9 +733,13 @@ export function MainEditor({
             revalidate: request.reason === "manual",
           });
 
-      persistedSnapshotsRef.current[draft.chapterId] = toChapterSnapshot(draft);
+      persistedSnapshotsRef.current[draft.chapterId] = toChapterSnapshot({
+        title: draft.title,
+        content: contentToSave ?? draft.content,
+      });
+
       if (shouldFlushCollaborativeContent) {
-        collaborativeFlushedContentRef.current[draft.chapterId] = draft.content;
+        collaborativeFlushedContentRef.current[draft.chapterId] = contentToSave ?? draft.content;
         clearCollaborativeFlushTimer();
       }
       const latestDraft = draftsByChapterIdRef.current[draft.chapterId] ?? draft;
@@ -699,7 +765,10 @@ export function MainEditor({
       }
 
       if (shouldCreateVersion) {
-        checkpointSnapshotsRef.current[draft.chapterId] = toChapterSnapshot(draft);
+        checkpointSnapshotsRef.current[draft.chapterId] = toChapterSnapshot({
+          title: draft.title,
+          content: contentToSave ?? draft.content,
+        });
       }
 
       syncSaveState(draft.chapterId, latestDraft.title, latestDraft.content, draftMode);
@@ -716,24 +785,6 @@ export function MainEditor({
         setSaveWarning(nextWarning || null);
       }
     } catch (error) {
-      // If collaborative flush fails, save content locally as fallback
-      if (isCollaborativeDraft && draft.content) {
-        console.warn("[collab] Flush failed, saving locally as fallback:", error);
-        try {
-          await updateChapter(draft.projectId, draft.chapterId, {
-            title: draft.title,
-            content: draft.content,
-            createVersion: false,
-            revalidate: false,
-          });
-          // Mark as successfully saved locally
-          persistedSnapshotsRef.current[draft.chapterId] = toChapterSnapshot(draft);
-          collaborativeFlushedContentRef.current[draft.chapterId] = draft.content;
-        } catch (fallbackError) {
-          console.error("[collab] Local fallback save also failed:", fallbackError);
-        }
-      }
-
       if (
         isMountedRef.current &&
         activeChapterIdRef.current === draft.chapterId &&
@@ -789,53 +840,93 @@ export function MainEditor({
     void persistDraft(nextRequest)
       .catch((error) => {
         console.error(`${nextRequest.reason} save failed:`, error);
+        const isStaleError = error instanceof Error && (
+          error.message?.includes("Live collaboration is not connected/synced") ||
+          error.message?.includes("Stale provider") ||
+          error.message?.includes("Snapshot request timeout") ||
+          error.message?.includes("Unsynced changes timeout")
+        );
+        const isManual = nextRequest.reason === "manual";
+        if (isStaleError && !isManual && !nextRequest.isRetry) {
+          pendingRetryRequestRef.current = {
+            ...nextRequest,
+            isRetry: true,
+          };
+        }
       })
       .finally(() => {
         saveInFlightRef.current = false;
 
         const queuedRequest = queuedSaveRef.current.shift();
         if (queuedRequest) {
-          requestSave(queuedRequest);
+          requestSaveRef.current(queuedRequest);
         }
       });
   };
   const requestSaveEffect = useEffectEvent((request: SaveRequest) => {
     requestSave(request);
   });
-  const hasPendingDraftPersistence = useCallback((
-    draft: Pick<DraftSnapshot, "chapterId" | "title" | "content">,
-    mode: DraftMode,
-  ) => (
-    hasPendingDraftChanges(draft.chapterId, draft, mode)
-    || (mode === "live" && hasPendingCollaborativeContentFlush(draft.chapterId, draft.content))
-  ), [hasPendingCollaborativeContentFlush, hasPendingDraftChanges]);
   const handleUnmountSave = useEffectEvent(() => {
     const draft = createDraftSnapshot();
-    if (!draft.chapterId) return;
+    if (!draft.projectId || !draft.chapterId) return;
 
     const draftMode = draftModesByChapterRef.current[draft.chapterId] ?? "local";
     const hasPendingSave = hasPendingDraftPersistence(draft, draftMode);
     if (!hasPendingSave) return;
 
-    const savePromise = new Promise<void>((resolve) => {
-      requestSaveEffect({
-        createVersion: false,
-        reason: "unmount",
-        flushCollaborativeContent: draftMode === "live",
-        draft,
+    if (draftMode === "live") {
+      setChapterDraft(draft.chapterId, {
+        title: draft.title,
+        content: draft.content,
+        origin: "live-recovery",
+        savedAt: Date.now(),
       });
-      // Give the save some time to complete, but don't block forever
-      window.setTimeout(resolve, 2000);
+
+      if (collab.provider) {
+        try {
+          collab.provider.forceSync();
+        } catch (err) {
+          console.warn("[collab] forceSync on unmount failed", err);
+        }
+      }
+      return;
+    }
+
+    // Local mode: Immediately save local draft to localStorage to prevent data loss on sudden exit
+    setChapterDraft(draft.chapterId, {
+      title: draft.title,
+      content: draft.content,
+      origin: "local",
+      savedAt: Date.now(),
     });
+
+    const url = `/api/projects/${encodeURIComponent(draft.projectId)}/chapters/${encodeURIComponent(draft.chapterId)}/save`;
+    const body = JSON.stringify({
+      title: draft.title,
+      content: draft.content,
+      isCollaborative: false,
+    });
+
+    const savePromise = fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true,
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("keepalive save failed");
+        useProjectStore.getState().clearChapterDraft(draft.chapterId);
+      })
+      .catch((err) => {
+        console.error("keepalive save failed:", err);
+      });
 
     pendingUnmountSaveRef.current = savePromise;
   });
 
   const waitForPendingSaves = useCallback(async () => {
     while (saveInFlightRef.current || queuedSaveRef.current.length > 0) {
-      await new Promise<void>((resolve) => {
-        window.setTimeout(resolve, 50);
-      });
+      await delay(50);
     }
   }, []);
 
@@ -1005,7 +1096,9 @@ export function MainEditor({
 
     void (async () => {
       try {
-        console.log("[collab] Starting session fetch", { chapterId: selectedChapterId, mode: collaborationModeRef.current });
+        if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+          console.log("[collab] Starting session fetch", { chapterId: selectedChapterId, mode: collaborationModeRef.current });
+        }
         if (collaborationModeRef.current === "local") {
           await flushLocalDraftForCollaboration();
         }
@@ -1039,7 +1132,9 @@ export function MainEditor({
         }
 
         const session = await response.json() as ProjectCollaborationSession;
-        console.log("[collab] Session fetched", { websocketUrl: session.websocketUrl, documentName: session.documentName });
+        if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+          console.log("[collab] Session fetched", { websocketUrl: session.websocketUrl, documentName: session.documentName });
+        }
         if (!active) return;
         setCollab((prev) => ({ ...prev, session }));
       } catch (error) {
@@ -1083,15 +1178,18 @@ export function MainEditor({
     }
 
     let active = true;
+    let isDestroying = false;
     collaborationProviderSyncedRef.current = false;
     collaborationEditorRenderedRef.current = false;
     clearCollaborationSyncTimeout();
     clearCollaborationReadyFrame();
 
-    console.log("[collab] Creating HocuspocusProvider", {
-      url: collab.session.websocketUrl,
-      documentName: collab.session.documentName,
-    });
+    if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+      console.log("[collab] Creating HocuspocusProvider", {
+        url: collab.session.websocketUrl,
+        documentName: collab.session.documentName,
+      });
+    }
 
     collaborationSyncTimeoutRef.current = window.setTimeout(() => {
       if (!active) {
@@ -1114,15 +1212,21 @@ export function MainEditor({
       name: collab.session.documentName,
       token: collab.session.token,
       onOpen: () => {
-        console.log("[collab] Provider onOpen");
+        if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+          console.log("[collab] Provider onOpen");
+        }
         setCollab((prev) => ({ ...prev, state: "connected" }));
       },
       onConnect: () => {
-        console.log("[collab] Provider onConnect");
+        if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+          console.log("[collab] Provider onConnect");
+        }
         setCollab((prev) => ({ ...prev, state: "connected" }));
       },
       onSynced: () => {
-        console.log("[collab] Provider onSynced - editorRendered:", collaborationEditorRenderedRef.current);
+        if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+          console.log("[collab] Provider onSynced - editorRendered:", collaborationEditorRenderedRef.current);
+        }
         collaborationHasSyncedRef.current = true;
         collaborationProviderSyncedRef.current = true;
         clearCollaborationRetryTimer();
@@ -1131,13 +1235,39 @@ export function MainEditor({
         finalizeLiveCollaborationSync();
       },
       onDisconnect: () => {
-        console.log("[collab] Provider onDisconnect - hasSynced:", collaborationHasSyncedRef.current);
+        if (!shouldScheduleReconnect({
+          isDestroying,
+          isActive: active,
+          selectedChapterId,
+          activeChapterId: activeChapterIdRef.current,
+        })) {
+          if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+            console.log("[collab] Provider onDisconnect ignored (intentional destroy or stale provider)");
+          }
+          return;
+        }
+        if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+          console.log("[collab] Provider onDisconnect - hasSynced:", collaborationHasSyncedRef.current);
+        }
         scheduleCollaborationReconnect({
           recoverLocally: collaborationHasSyncedRef.current,
         });
       },
       onClose: () => {
-        console.log("[collab] Provider onClose - hasSynced:", collaborationHasSyncedRef.current);
+        if (!shouldScheduleReconnect({
+          isDestroying,
+          isActive: active,
+          selectedChapterId,
+          activeChapterId: activeChapterIdRef.current,
+        })) {
+          if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+            console.log("[collab] Provider onClose ignored (intentional destroy or stale provider)");
+          }
+          return;
+        }
+        if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+          console.log("[collab] Provider onClose - hasSynced:", collaborationHasSyncedRef.current);
+        }
         scheduleCollaborationReconnect({
           recoverLocally: collaborationHasSyncedRef.current,
         });
@@ -1150,6 +1280,19 @@ export function MainEditor({
       },
     });
 
+    provider.on("stateless", ({ payload }: { payload: string }) => {
+      try {
+        const data = JSON.parse(payload);
+        if (data.event === "chapter_persistence_warning") {
+          setCollabPersistenceWarning(data.message || "Durability failure");
+        } else if (data.event === "chapter_persistence_recovered") {
+          setCollabPersistenceWarning(null);
+        }
+      } catch (err) {
+        // ignore JSON parse or other errors
+      }
+    });
+
     provider.awareness?.setLocalStateField("user", collab.session.user);
     queueMicrotask(() => {
       if (!active) return;
@@ -1158,6 +1301,7 @@ export function MainEditor({
 
     return () => {
       active = false;
+      isDestroying = true;
       clearCollaborationSyncTimeout();
       clearCollaborationReadyFrame();
       provider.destroy();
@@ -1280,7 +1424,9 @@ export function MainEditor({
   const hasLiveTransport = editorTransportKey.startsWith("live:");
 
   useEffect(() => {
-    console.log("[collab] Transport key:", editorTransportKey, "collab.state:", collab.state);
+    if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+      console.log("[collab] Transport key:", editorTransportKey, "collab.state:", collab.state);
+    }
   }, [editorTransportKey, collab.state]);
 
   const editorCanEdit =
@@ -1509,6 +1655,7 @@ export function MainEditor({
     if (!projectId) return;
 
     let cancelled = false;
+    setRecoveredUnsavedChanges(false);
     const previousChapterId = activeChapterIdRef.current;
     const previousChapterStillExists = previousChapterId
       ? useProjectStore.getState().project?.chapters.some((chapter) => chapter.id === previousChapterId)
@@ -1577,8 +1724,9 @@ export function MainEditor({
 
     const storeState = useProjectStore.getState();
     const cachedDraft = storeState.chapterDraftCache[selectedChapterId];
+    const isLiveRecoveryDraft = cachedDraft?.origin === "live-recovery" && isLiveCollaborationRequested;
     const localDraft = draftsByChapterIdRef.current[selectedChapterId] ?? (
-      cachedDraft
+      (cachedDraft && !isLiveRecoveryDraft)
         ? {
             projectId,
             chapterId: selectedChapterId,
@@ -1588,6 +1736,9 @@ export function MainEditor({
         : undefined
     );
     if (localDraft) {
+      if (cachedDraft) {
+        setRecoveredUnsavedChanges(true);
+      }
       loadChapter({ ...localDraft, projectId, chapterId: selectedChapterId }, "local");
       return () => {
         cancelled = true;
@@ -1855,57 +2006,114 @@ export function MainEditor({
       }
 
       const syncedContent = isInitialLiveSync
-        ? getPreservedEditorContent({
-            nextHtml: rawSyncedContent,
-            previousHtml: previousContent,
-          })
+        ? (rawSyncedContent.includes("text-[var(--color-text-muted)] italic")
+            ? getPreservedEditorContent({
+                nextHtml: rawSyncedContent,
+                previousHtml: previousContent,
+              })
+            : rawSyncedContent)
         : rawSyncedContent;
+
+      const storeState = useProjectStore.getState();
+      const cachedDraft = storeState.chapterDraftCache[selectedChapterId];
+      if (isInitialLiveSync && cachedDraft && cachedDraft.origin === "live-recovery") {
+        const syncedTitle = currentChapter?.title ?? "";
+        const titleMatch = cachedDraft.title === syncedTitle;
+        const contentMatch = cachedDraft.content === syncedContent;
+
+        if (titleMatch && contentMatch) {
+          clearChapterDraft(selectedChapterId);
+        } else {
+          disableLiveCollaboration(selectedChapterId);
+
+          editor.commands.setContent(cachedDraft.content);
+          setTitle(cachedDraft.title);
+
+          const nextDraft = {
+            projectId: project.metadata.id,
+            chapterId: selectedChapterId,
+            title: cachedDraft.title,
+            content: cachedDraft.content,
+          };
+          setActiveDraft(nextDraft);
+          lastEditorContentRef.current = cachedDraft.content;
+          setChapterContent(selectedChapterId, cachedDraft.content);
+
+          setChapterDraft(selectedChapterId, {
+            title: cachedDraft.title,
+            content: cachedDraft.content,
+            origin: "local",
+            savedAt: Date.now(),
+          });
+
+          setRecoveredUnsavedChanges(true);
+          syncSaveState(selectedChapterId, cachedDraft.title, cachedDraft.content, "local");
+          return;
+        }
+      }
+
       const chapterDraft = latestDraftRef.current.chapterId === selectedChapterId
         ? latestDraftRef.current
         : draftsByChapterIdRef.current[selectedChapterId];
-
-      collaborationExpectedContentRef.current = syncedContent;
-      lastEditorContentRef.current = syncedContent;
-      setChapterContent(selectedChapterId, syncedContent);
-      const syncedDraft = setStoredDraft({
-        projectId: project.metadata.id,
-        chapterId: selectedChapterId,
-        title: chapterDraft?.title ?? currentChapterTitleRef.current,
-        content: syncedContent,
-      });
-      clearChapterDraft(selectedChapterId);
-
-      if (!persistedSnapshotsRef.current[selectedChapterId]) {
-        persistedSnapshotsRef.current[selectedChapterId] = toChapterSnapshot(syncedDraft);
-      }
-      if (!checkpointSnapshotsRef.current[selectedChapterId]) {
-        checkpointSnapshotsRef.current[selectedChapterId] = toChapterSnapshot(syncedDraft);
-      }
-
-      draftModesByChapterRef.current[selectedChapterId] = "live";
-      collaborationModeRef.current = "live";
-      collaborativeFlushedContentRef.current[selectedChapterId] = syncedContent;
-      syncSaveState(selectedChapterId, syncedDraft.title, syncedContent, "live");
-    };
-
-    finalizeSyncedDraft();
-
-    return () => {
-      cancelled = true;
-      if (frame !== null) {
-        window.cancelAnimationFrame(frame);
-      }
-    };
-  }, [
-    collab.state,
-    clearChapterDraft,
-    editor,
-    project?.metadata.id,
-    selectedChapterId,
-    setChapterContent,
-    syncSaveState,
-    usesCollaborativeBody,
-  ]);
+ 
+       collaborationExpectedContentRef.current = syncedContent;
+       lastEditorContentRef.current = syncedContent;
+       setChapterContent(selectedChapterId, syncedContent);
+       const syncedDraft = setStoredDraft({
+         projectId: project.metadata.id,
+         chapterId: selectedChapterId,
+         title: isInitialLiveSync ? (currentChapter?.title ?? currentChapterTitleRef.current ?? "") : (chapterDraft?.title ?? currentChapterTitleRef.current),
+         content: syncedContent,
+       });
+       clearChapterDraft(selectedChapterId);
+ 
+       if (isInitialLiveSync) {
+         setTitle(currentChapter?.title ?? currentChapterTitleRef.current ?? "");
+         persistedSnapshotsRef.current[selectedChapterId] = {
+           title: currentChapter?.title ?? currentChapterTitleRef.current ?? "",
+           content: syncedContent,
+         };
+         checkpointSnapshotsRef.current[selectedChapterId] = {
+           title: currentChapter?.title ?? currentChapterTitleRef.current ?? "",
+           content: syncedContent,
+         };
+       } else {
+         if (!persistedSnapshotsRef.current[selectedChapterId]) {
+           persistedSnapshotsRef.current[selectedChapterId] = toChapterSnapshot(syncedDraft);
+         }
+         if (!checkpointSnapshotsRef.current[selectedChapterId]) {
+           checkpointSnapshotsRef.current[selectedChapterId] = toChapterSnapshot(syncedDraft);
+         }
+       }
+ 
+       draftModesByChapterRef.current[selectedChapterId] = "live";
+       collaborationModeRef.current = "live";
+       collaborativeFlushedContentRef.current[selectedChapterId] = syncedContent;
+       syncSaveState(selectedChapterId, syncedDraft.title, syncedContent, "live");
+     };
+ 
+     finalizeSyncedDraft();
+ 
+     return () => {
+       cancelled = true;
+       if (frame !== null) {
+         window.cancelAnimationFrame(frame);
+       }
+     };
+   }, [
+     collab.state,
+     clearChapterDraft,
+     editor,
+     project?.metadata.id,
+     selectedChapterId,
+     setChapterContent,
+     syncSaveState,
+     usesCollaborativeBody,
+     currentChapter?.title,
+     disableLiveCollaboration,
+     setChapterDraft,
+     setRecoveredUnsavedChanges,
+   ]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -1936,7 +2144,7 @@ export function MainEditor({
       return;
     }
 
-    if (!usesCollaborativeBody && (hasUnsavedChanges || hasCheckpointChanges || isSaving)) {
+    if (!usesCollaborativeBody && (hasPendingPersistence || isSaving)) {
       setCommentError("Save the latest prose changes before attaching a comment.");
       return;
     }
@@ -2283,7 +2491,175 @@ export function MainEditor({
   const illustration = currentChapter.illustration;
   const illustrationContent = editor.getHTML();
 
-  const readOnlyEditorPage = (
+  return {
+    editor,
+    currentChapter,
+    t,
+    isCommentOnly,
+    isLiveConnectionIssue,
+    isLiveConnecting,
+    isLocalEditingFallback,
+    canReconnectLiveCollaboration,
+    isIllustrationFlipped,
+    isGeneratingIllustration,
+    illustrationError,
+    canManualSave,
+    selectedChapterDraft,
+    voiceReaderTitle,
+    voiceReaderContent,
+    isLoadingContent,
+    title,
+    setTitle,
+    isAutoSaving,
+    hasPendingDraftPersistence,
+    handleManualSave,
+    saveError,
+    setSaveError,
+    collab,
+    triggerCollaborationReconnect,
+    collabPersistenceWarning,
+    commentError,
+    setCommentError,
+    pendingCommentDraft,
+    setPendingCommentDraft,
+    saveWarning,
+    recoveredUnsavedChanges,
+    setRecoveredUnsavedChanges,
+    isCreatingComment,
+    setIsCreatingComment,
+    handleCreateComment,
+    canCollaborate,
+    illustrationContent,
+    illustration,
+    showIllustrationGenerationPanel,
+    setFlippedIllustrationChapterId,
+    handleGenerateIllustration,
+    project,
+    isGenerating,
+    hasSelection,
+    handleWrite,
+    handleRewrite,
+    handleDescribe,
+    handleBrainstorm,
+    canEdit,
+    flippedIllustrationChapterId,
+    activeBranchId,
+    isSaving,
+    setIsSaving,
+    hasPendingPersistence,
+    setHasPendingPersistence,
+    hasPendingCheckpoint,
+    setHasPendingCheckpoint,
+    isExporting,
+    setIsExporting,
+    toggleZen,
+    handleOpenCommentComposer,
+    usesCollaborativeBody,
+    setActiveDraft,
+    storeLocalDraft,
+    syncSaveState,
+    scheduleAutosave,
+    draftModesByChapterRef,
+    latestDraftRef,
+    titleInputRef,
+    activeChapterIdRef,
+    lastEditorContentRef,
+    currentCachedContentRef,
+  };
+}
+
+type MainEditorState = ReturnType<typeof useMainEditorState>;
+
+export function MainEditor({
+  onToggleHistory,
+  onOpenAiHistory,
+}: {
+  onToggleHistory?: () => void;
+  onOpenAiHistory?: () => void;
+}) {
+  const state = useMainEditorState({ onOpenAiHistory });
+
+  if (!state.editor) return null;
+
+  if (!state.currentChapter) {
+    return (
+      <div className="flex h-full flex-col bg-[var(--background)]">
+        <div className="flex-1 px-20 py-20">
+          <div className="mx-auto flex h-full max-w-3xl items-center justify-center">
+            <div className="rounded-3xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/70 px-10 py-12 text-center shadow-sm">
+              <h2 className="text-2xl font-bold text-[var(--color-text)]">
+                {state.t("editor.noChapter.title")}
+              </h2>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-[var(--color-text-secondary)]">
+                {state.t("editor.noChapter.description")}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const {
+    canEdit,
+    canCollaborate,
+    isIllustrationFlipped,
+    setFlippedIllustrationChapterId,
+    handleGenerateIllustration,
+    illustrationContent,
+    illustration,
+    showIllustrationGenerationPanel,
+    isGeneratingIllustration,
+    illustrationError,
+    project,
+    title,
+    t,
+    currentChapter,
+  } = state;
+
+  const readOnlyPage = <ReadOnlyEditorPage state={state} />;
+  const editablePage = <EditableEditorPage state={state} onToggleHistory={onToggleHistory} />;
+  const editorPage = !canEdit && !canCollaborate ? readOnlyPage : editablePage;
+
+  return (
+    <div className="page-flip-stage h-full">
+      <div className={cn("page-flip-book relative h-full", isIllustrationFlipped && "page-flip-book-flipped")}>
+        <div className={cn("page-flip-face page-flip-front", isIllustrationFlipped && "pointer-events-none")}>
+          {editorPage}
+        </div>
+        <div className={cn("page-flip-face page-flip-back", !isIllustrationFlipped && "pointer-events-none")}>
+          <ChapterIllustrationPage
+            key={currentChapter.id}
+            chapterTitle={title || currentChapter.title || t("editor.untitledChapter")}
+            projectName={project?.metadata.name ?? ""}
+            chapterContent={illustrationContent}
+            illustration={illustration}
+            showGenerationPanel={showIllustrationGenerationPanel}
+            canGenerate={canEdit}
+            isGenerating={isGeneratingIllustration}
+            error={illustrationError}
+            onFlipBack={() => setFlippedIllustrationChapterId(null)}
+            onGenerate={handleGenerateIllustration}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReadOnlyEditorPage({ state }: { state: MainEditorState }) {
+  const {
+    t,
+    project,
+    setFlippedIllustrationChapterId,
+    currentChapter,
+    editor,
+    voiceReaderTitle,
+    voiceReaderContent,
+    isLoadingContent,
+  } = state;
+
+  return (
     <div className="flex h-full flex-col bg-[var(--color-canvas)]">
       <div className="border-b border-[var(--color-border)]/50 bg-[var(--color-canvas)] px-6 py-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -2328,174 +2704,271 @@ export function MainEditor({
       />
     </div>
   );
+}
 
-  const editableEditorPage = (
-    <div className="flex h-full flex-col bg-[var(--color-canvas)]">
-      <div className="flex items-center gap-2 border-b border-[var(--color-border)]/50 bg-[var(--color-canvas)] px-6 py-2">
-        <div className="flex items-center gap-1 rounded-xl bg-[var(--color-canvas)] p-1">
-          <button
-            type="button"
-            onClick={() => void handleWrite()}
-            disabled={isGenerating || !canEdit}
-            className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-sm font-bold text-[var(--color-text)] shadow-sm transition-all hover:bg-[var(--color-surface-alt)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Wand2 size={16} className="text-[var(--color-accent)]" />
-            {t("editor.ai.write")}
-          </button>
+function EditableEditorHeader({
+  state,
+  onToggleHistory,
+}: {
+  state: MainEditorState;
+  onToggleHistory?: () => void;
+}) {
+  const {
+    isGenerating,
+    canEdit,
+    hasSelection,
+    handleWrite,
+    handleRewrite,
+    handleDescribe,
+    handleBrainstorm,
+    isCommentOnly,
+    isLocalEditingFallback,
+    isLiveConnectionIssue,
+    isLiveConnecting,
+    onToggleHistory,
+    handleManualSave,
+    canManualSave,
+    t,
+    project,
+    currentChapter,
+    setFlippedIllustrationChapterId,
+    isSaving,
+    hasPendingPersistence,
+    hasPendingCheckpoint,
+    saveError,
+    collabPersistenceWarning,
+    saveWarning,
+    isExporting,
+    setIsExporting,
+    toggleZen,
+  } = state;
 
-          <button
-            type="button"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => void handleRewrite()}
-            disabled={isGenerating || !hasSelection || !canEdit}
-            className="flex cursor-pointer items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-bold text-[var(--color-text-secondary)] transition-all hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Sparkles size={16} className="text-[var(--color-accent)]" />
-            {t("editor.ai.rewrite")}
-          </button>
+  return (
+    <div className="flex items-center gap-2 border-b border-[var(--color-border)]/50 bg-[var(--color-canvas)] px-6 py-2">
+      <div className="flex items-center gap-1 rounded-xl bg-[var(--color-canvas)] p-1">
+        <button
+          type="button"
+          onClick={() => void handleWrite()}
+          disabled={isGenerating || !canEdit}
+          className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-sm font-bold text-[var(--color-text)] shadow-sm transition-all hover:bg-[var(--color-surface-alt)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Wand2 size={16} className="text-[var(--color-accent)]" />
+          {t("editor.ai.write")}
+        </button>
 
-          <button
-            type="button"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => void handleDescribe()}
-            disabled={isGenerating || !hasSelection || !canEdit}
-            className="flex cursor-pointer items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-bold text-[var(--color-text-secondary)] transition-all hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <MessageSquare size={16} className="text-[var(--color-accent)]" />
-            {t("editor.ai.describe")}
-          </button>
+        <button
+          type="button"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => void handleRewrite()}
+          disabled={isGenerating || !hasSelection || !canEdit}
+          className="flex cursor-pointer items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-bold text-[var(--color-text-secondary)] transition-all hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Sparkles size={16} className="text-[var(--color-accent)]" />
+          {t("editor.ai.rewrite")}
+        </button>
 
-          <button
-            type="button"
-            onClick={() => void handleBrainstorm()}
-            disabled={isGenerating || !canEdit}
-            className="flex cursor-pointer items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-bold text-[var(--color-text-secondary)] transition-all hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Zap size={16} className="text-[var(--color-accent)]" />
-            {t("editor.ai.brainstorm")}
-          </button>
-        </div>
+        <button
+          type="button"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => void handleDescribe()}
+          disabled={isGenerating || !hasSelection || !canEdit}
+          className="flex cursor-pointer items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-bold text-[var(--color-text-secondary)] transition-all hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <MessageSquare size={16} className="text-[var(--color-accent)]" />
+          {t("editor.ai.describe")}
+        </button>
 
-        <div className="ml-auto flex items-center gap-3">
-          {isCommentOnly && (
-            <div className="rounded-full bg-sky-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-sky-700">
-              {t("editor.comment.commentingMode")}
-            </div>
-          )}
-          {isLocalEditingFallback && (
-            <div className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-semibold text-amber-800">
-              <AlertTriangle size={10} className="text-amber-600" />
-              {t("editor.collaboration.localFallbackBadge")}
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => setFlippedIllustrationChapterId(currentChapter.id)}
-            className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm font-bold text-[var(--color-text)] shadow-sm transition-all hover:bg-[var(--color-surface-alt)]"
-          >
-            <BookOpen size={15} className="text-[var(--color-accent)]" />
-            {t("editor.illustration.flip")}
-          </button>
-          <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
-            <div
-              className={cn(
-                "h-2 w-2 rounded-full transition-colors",
-                saveError || isLiveConnectionIssue
-                  ? "bg-[var(--color-destructive)]"
-                  : isSaving || isLiveConnecting
-                    ? "animate-pulse bg-[var(--color-accent)]/60"
-                    : saveWarning
-                      ? "bg-[var(--color-accent)]"
-                      : hasUnsavedChanges || hasCheckpointChanges
-                        ? "bg-[var(--color-text-muted)]"
-                        : "bg-[var(--color-success)]",
-              )}
-            />
-            {saveError
-              ? t("editor.status.saveFailed")
-              : isLiveConnectionIssue
-                ? t("editor.collaboration.liveOffline")
-              : isSaving
-                ? t("editor.status.saving")
-                : isLiveConnecting
-                  ? t("editor.collaboration.liveSyncing")
-                : saveWarning
-                  ? t("editor.status.memoryStale")
-                  : hasUnsavedChanges || hasCheckpointChanges
-                    ? t("editor.status.unsavedChanges")
-                    : t("editor.status.saved")}
-          </div>
-          <button
-            type="button"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={handleManualSave}
-            disabled={!canManualSave || isSaving}
-            className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm font-bold text-[var(--color-text)] shadow-sm transition-all hover:bg-[var(--color-surface-alt)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Save size={15} className="text-[var(--color-accent)]" />
-            {isSaving ? t("editor.status.saving") : t("editor.save")}
-          </button>
-          {onToggleHistory && (
-            <button
-              type="button"
-              onClick={onToggleHistory}
-              title={t("editor.history.historyButton")}
-              className="cursor-pointer rounded-lg p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)]"
-            >
-              <History size={16} />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={async () => {
-              if (!project || isExporting) return;
-              setIsExporting(true);
-              try {
-                const md = await exportProjectAction(project.metadata.id);
-                const blob = new Blob([md], { type: "text/markdown" });
-                const url = URL.createObjectURL(blob);
-                const anchor = document.createElement("a");
-                anchor.href = url;
-                anchor.download = `${project.metadata.name.replace(/[^a-z0-9]/gi, "_")}.md`;
-                anchor.click();
-                URL.revokeObjectURL(url);
-              } catch (error) {
-                console.error(error);
-              } finally {
-                setIsExporting(false);
-              }
-            }}
-            title={t("workspace.exportMarkdown")}
-            disabled={isExporting}
-            className="cursor-pointer rounded-lg p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Download size={16} />
-          </button>
-          <Tooltip.Provider delayDuration={300}>
-            <Tooltip.Root>
-              <Tooltip.Trigger asChild>
-                <button
-                  type="button"
-                  onClick={toggleZen}
-                  className="cursor-pointer rounded-lg p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)]"
-                  aria-label={t("zen.enter")}
-                >
-                  <Maximize2 size={16} />
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="rounded-lg bg-[var(--color-text)] px-3 py-2 text-xs text-[var(--color-canvas)] shadow-lg"
-                  sideOffset={5}
-                >
-                  {t("zen.enter")}
-                  <Tooltip.Arrow className="fill-[var(--color-text)]" />
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
-        </div>
+        <button
+          type="button"
+          onClick={() => void handleBrainstorm()}
+          disabled={isGenerating || !canEdit}
+          className="flex cursor-pointer items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-bold text-[var(--color-text-secondary)] transition-all hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Zap size={16} className="text-[var(--color-accent)]" />
+          {t("editor.ai.brainstorm")}
+        </button>
       </div>
+
+      <div className="ml-auto flex items-center gap-3">
+        {isCommentOnly && (
+          <div className="rounded-full bg-sky-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-sky-700">
+            {t("editor.comment.commentingMode")}
+          </div>
+        )}
+        {isLocalEditingFallback && (
+          <div className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-semibold text-amber-800">
+            <AlertTriangle size={10} className="text-amber-600" />
+            {t("editor.collaboration.localFallbackBadge")}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setFlippedIllustrationChapterId(currentChapter.id)}
+          className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm font-bold text-[var(--color-text)] shadow-sm transition-all hover:bg-[var(--color-surface-alt)]"
+        >
+          <BookOpen size={15} className="text-[var(--color-accent)]" />
+          {t("editor.illustration.flip")}
+        </button>
+        <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
+          <div
+            className={cn(
+              "h-2 w-2 rounded-full transition-colors",
+              saveError || isLiveConnectionIssue
+                ? "bg-[var(--color-destructive)]"
+                : collabPersistenceWarning
+                  ? "bg-[var(--color-destructive)] animate-pulse"
+                : isSaving || isLiveConnecting
+                  ? "animate-pulse bg-[var(--color-accent)]/60"
+                  : saveWarning
+                    ? "bg-[var(--color-accent)]"
+                    : hasPendingPersistence
+                      ? "bg-[var(--color-text-muted)]"
+                      : hasPendingCheckpoint
+                        ? "bg-[var(--color-accent)]"
+                        : "bg-[var(--color-success)]",
+            )}
+          />
+          {saveError
+            ? t("editor.status.saveFailed")
+            : collabPersistenceWarning
+              ? collabPersistenceWarning
+            : isLiveConnectionIssue
+              ? t("editor.collaboration.liveOffline")
+            : isSaving
+              ? t("editor.status.saving")
+            : isLiveConnecting
+              ? t("editor.collaboration.liveSyncing")
+            : saveWarning
+              ? t("editor.status.memoryStale")
+            : hasPendingPersistence
+              ? t("editor.status.unsavedChanges")
+            : hasPendingCheckpoint
+              ? t("editor.status.autosavedCheckpointPending")
+              : t("editor.status.saved")}
+        </div>
+        <button
+          type="button"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={handleManualSave}
+          disabled={!canManualSave || isSaving}
+          className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm font-bold text-[var(--color-text)] shadow-sm transition-all hover:bg-[var(--color-surface-alt)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Save size={15} className="text-[var(--color-accent)]" />
+          {isSaving ? t("editor.status.saving") : t("editor.saveCheckpoint")}
+        </button>
+        {onToggleHistory && (
+          <button
+            type="button"
+            onClick={onToggleHistory}
+            title={t("editor.history.historyButton")}
+            className="cursor-pointer rounded-lg p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)]"
+          >
+            <History size={16} />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={async () => {
+            if (!project || isExporting) return;
+            setIsExporting(true);
+            try {
+              const md = await exportProjectAction(project.metadata.id);
+              const blob = new Blob([md], { type: "text/markdown" });
+              const url = URL.createObjectURL(blob);
+              const anchor = document.createElement("a");
+              anchor.href = url;
+              anchor.download = project.metadata.name.replace(/[^a-z0-9]/gi, "_") + ".md";
+              anchor.click();
+              URL.revokeObjectURL(url);
+            } catch (error) {
+              console.error(error);
+            } finally {
+              setIsExporting(false);
+            }
+          }}
+          title={t("workspace.exportMarkdown")}
+          disabled={isExporting}
+          className="cursor-pointer rounded-lg p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Download size={16} />
+        </button>
+        <Tooltip.Provider delayDuration={300}>
+          <Tooltip.Root>
+            <Tooltip.Trigger asChild>
+              <button
+                type="button"
+                onClick={toggleZen}
+                className="cursor-pointer rounded-lg p-2 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-secondary)]"
+                aria-label={t("zen.enter")}
+              >
+                <Maximize2 size={16} />
+              </button>
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Content
+                className="rounded-lg bg-[var(--color-text)] px-3 py-2 text-xs text-[var(--color-canvas)] shadow-lg"
+                sideOffset={5}
+              >
+                {t("zen.enter")}
+                <Tooltip.Arrow className="fill-[var(--color-text)]" />
+              </Tooltip.Content>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+        </Tooltip.Provider>
+      </div>
+    </div>
+  );
+}
+
+function EditableEditorPage({
+  state,
+  onToggleHistory,
+}: {
+  state: MainEditorState;
+  onToggleHistory?: () => void;
+}) {
+  const {
+    editor,
+    currentChapter,
+    t,
+    canEdit,
+    hasSelection,
+    handleRewrite,
+    handleDescribe,
+    isLocalEditingFallback,
+    recoveredUnsavedChanges,
+    setRecoveredUnsavedChanges,
+    voiceReaderTitle,
+    voiceReaderContent,
+    isLoadingContent,
+    project,
+    title,
+    setTitle,
+    setSaveError,
+    activeChapterIdRef,
+    latestDraftRef,
+    draftModesByChapterRef,
+    titleInputRef,
+    lastEditorContentRef,
+    usesCollaborativeBody,
+    hasPendingPersistence,
+    isSaving,
+    collab,
+    isCreatingComment,
+    handleOpenCommentComposer,
+    saveError,
+    collabPersistenceWarning,
+    commentError,
+    setCommentError,
+    saveWarning,
+    pendingCommentDraft,
+    setPendingCommentDraft,
+    handleCreateComment,
+  } = state;
+
+  return (
+    <div className="flex h-full flex-col bg-[var(--color-canvas)]">
+      <EditableEditorHeader state={state} onToggleHistory={onToggleHistory} />
 
       <EditorFormattingToolbar
         editor={editor}
@@ -2522,7 +2995,7 @@ export function MainEditor({
           onClick={() => handleOpenCommentComposer()}
           disabled={
             !hasSelection ||
-            (!usesCollaborativeBody && (hasUnsavedChanges || hasCheckpointChanges || isSaving)) ||
+            (!usesCollaborativeBody && (hasPendingPersistence || isSaving)) ||
             (usesCollaborativeBody && collab.state !== "synced") ||
             isCreatingComment
           }
@@ -2569,15 +3042,15 @@ export function MainEditor({
 
               if (!chapterId) return;
 
-              const nextDraft = setActiveDraft({
+              const nextDraft = state.setActiveDraft({
                 ...latestDraftRef.current,
                 title: nextTitle,
               });
               if ((draftModesByChapterRef.current[chapterId] ?? "local") === "local") {
-                storeLocalDraft(nextDraft);
+                state.storeLocalDraft(nextDraft);
               }
-              const { hasUnsaved } = syncSaveState(chapterId, nextTitle, lastEditorContentRef.current);
-              scheduleAutosave(nextDraft, hasUnsaved);
+              const { hasUnsaved } = state.syncSaveState(chapterId, nextTitle, lastEditorContentRef.current);
+              state.scheduleAutosave(nextDraft, hasUnsaved);
             }}
             placeholder={t("editor.chapterTitle")}
             aria-label={t("editor.chapterTitle")}
@@ -2596,16 +3069,21 @@ export function MainEditor({
             <div className="mt-6 rounded-2xl border border-[var(--color-destructive)]/20 bg-[var(--color-destructive)]/10 px-4 py-3 text-sm font-medium text-[var(--color-destructive)]">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span>{collab.error}</span>
-                {canReconnectLiveCollaboration && (
+                {state.canReconnectLiveCollaboration && (
                   <button
                     type="button"
-                    onClick={triggerCollaborationReconnect}
+                    onClick={state.triggerCollaborationReconnect}
                     className="rounded-xl border border-[var(--color-destructive)]/25 bg-white/70 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-[var(--color-destructive)] transition-colors hover:bg-white"
                   >
                     {t("editor.collaboration.reconnect")}
                   </button>
                 )}
               </div>
+            </div>
+          )}
+          {collabPersistenceWarning && (
+            <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
+              {collabPersistenceWarning}
             </div>
           )}
           {commentError && !pendingCommentDraft && (
@@ -2621,6 +3099,18 @@ export function MainEditor({
           {isLocalEditingFallback && (
             <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
               {t("editor.collaboration.localFallback")}
+            </div>
+          )}
+          {recoveredUnsavedChanges && (
+            <div className="mt-6 flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 animate-fade-in shadow-sm">
+              <span>{t("editor.recoveredUnsavedChanges")}</span>
+              <button
+                type="button"
+                onClick={() => setRecoveredUnsavedChanges(false)}
+                className="text-xs font-bold text-amber-600 hover:text-amber-700 bg-transparent border-0 cursor-pointer ml-3 px-2 py-1 rounded hover:bg-amber-100/50 transition-all"
+              >
+                Dismiss
+              </button>
             </div>
           )}
         </div>
@@ -2673,7 +3163,7 @@ export function MainEditor({
               </div>
 
               <div className="mt-6 rounded-2xl bg-[var(--color-canvas)] px-4 py-4 text-sm font-medium leading-relaxed text-[var(--color-text)]">
-                “{pendingCommentDraft?.selectedText ?? ""}”
+                {"“" + (pendingCommentDraft?.selectedText ?? "") + "”"}
               </div>
 
               <div className="mt-5">
@@ -2726,33 +3216,6 @@ export function MainEditor({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-    </div>
-  );
-
-  const editorPage = !canEdit && !canCollaborate ? readOnlyEditorPage : editableEditorPage;
-
-  return (
-    <div className="page-flip-stage h-full">
-      <div className={cn("page-flip-book relative h-full", isIllustrationFlipped && "page-flip-book-flipped")}>
-        <div className={cn("page-flip-face page-flip-front", isIllustrationFlipped && "pointer-events-none")}>
-          {editorPage}
-        </div>
-        <div className={cn("page-flip-face page-flip-back", !isIllustrationFlipped && "pointer-events-none")}>
-          <ChapterIllustrationPage
-            key={currentChapter.id}
-            chapterTitle={title || currentChapter.title || t("editor.untitledChapter")}
-            projectName={project?.metadata.name ?? ""}
-            chapterContent={illustrationContent}
-            illustration={illustration}
-            showGenerationPanel={showIllustrationGenerationPanel}
-            canGenerate={canEdit}
-            isGenerating={isGeneratingIllustration}
-            error={illustrationError}
-            onFlipBack={() => setFlippedIllustrationChapterId(null)}
-            onGenerate={handleGenerateIllustration}
-          />
-        </div>
-      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useReducer } from "react";
-import { register } from "@/actions/auth";
+import { register } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/lib/i18n-client";

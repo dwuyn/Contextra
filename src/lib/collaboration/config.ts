@@ -10,8 +10,8 @@ export function getCollaborationInternalSecret(env: NodeJS.ProcessEnv = process.
     return secret;
   }
 
-  if (env.NODE_ENV === "production") {
-    throw new Error("COLLAB_INTERNAL_SECRET must be set in production");
+  if (env.NODE_ENV !== "development" && env.NODE_ENV !== "test") {
+    throw new Error("COLLAB_INTERNAL_SECRET must be set in non-development environments");
   }
 
   return DEVELOPMENT_COLLAB_INTERNAL_SECRET;

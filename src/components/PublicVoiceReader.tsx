@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronUp, Loader2, Pause, Play, Square, Volume2, X } from "lucide-react";
 import { useLocale } from "next-intl";
+import useSWR from "swr";
 import { cn } from "@/lib/utils";
 import {
   buildSpeechSegments,
@@ -54,6 +55,31 @@ function getPlaybackErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+async function loadVoiceOptions(projectId: string) {
+  const languages: ReaderLanguage[] = ["en-US", "vi-VN"];
+  const voiceEntries = await Promise.all(
+    languages.map(async (language) => {
+      const params = new URLSearchParams({ projectId, lang: language });
+      const response = await fetch(`/api/voice-reader/voices?${params.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error((await response.text()) || "Failed to load Google Cloud voices.");
+      }
+
+      const json = (await response.json()) as VoiceResponse;
+      return [language, Array.isArray(json.voices) ? json.voices : []] as const;
+    })
+  );
+
+  return {
+    "en-US": voiceEntries.find(([language]) => language === "en-US")?.[1] ?? [],
+    "vi-VN": voiceEntries.find(([language]) => language === "vi-VN")?.[1] ?? [],
+  } satisfies Record<ReaderLanguage, VoiceOption[]>;
+}
+
 function useVoiceReader(props: PublicVoiceReaderProps) {
   const { projectId, chapterId, chapterTitle, chapterContent, isLoading } = props;
   const isVietnamese = useLocale() === "vi";
@@ -66,9 +92,6 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
   const setReaderVoice = usePreferencesStore((state) => state.setReaderVoice);
 
   const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [voicesByLanguage, setVoicesByLanguage] = useState<Record<ReaderLanguage, VoiceOption[]>>(EMPTY_VOICE_OPTIONS);
-  const [isLoadingVoices, setIsLoadingVoices] = useState(false);
-  const [voiceLoadError, setVoiceLoadError] = useState<string | null>(null);
   const [playbackState, setPlaybackState] = useState<PlaybackState>("idle");
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [currentSegmentNumber, setCurrentSegmentNumber] = useState(0);
@@ -88,6 +111,18 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
   const languageLabel = (language: ReaderLanguage) =>
     language === "vi-VN" ? (isVietnamese ? "Tiếng Việt" : "Vietnamese") : (isVietnamese ? "Tiếng Anh" : "English");
   const playbackErrorFallback = isVietnamese ? "Không thể phát giọng đọc. Vui lòng thử lại." : "Voice playback failed. Please try again.";
+  const {
+    data: voicesByLanguage = EMPTY_VOICE_OPTIONS,
+    error: voiceLoadFailure,
+    isLoading: isLoadingVoices,
+  } = useSWR<Record<ReaderLanguage, VoiceOption[]>, Error>(
+    projectId ? ["voice-reader-voices", projectId] : null,
+    ([, currentProjectId]) => loadVoiceOptions(currentProjectId),
+    {
+      revalidateOnFocus: false,
+    }
+  );
+  const voiceLoadError = voiceLoadFailure ? getPlaybackErrorMessage(voiceLoadFailure, playbackErrorFallback) : null;
   const activeLanguage: ReaderLanguage = readerLanguageMode === "auto" ? detectedLanguage : readerLanguageMode;
   const availableVoices = voicesByLanguage[activeLanguage] ?? [];
   const preferredVoiceId = activeLanguage === "vi-VN" ? readerVoiceVi : readerVoiceEn;
@@ -289,48 +324,6 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
       audio.onerror = null;
     };
   }, [isVietnamese, playSegment, speechSegments.length, stopPlayback]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const loadVoices = async () => {
-      setIsLoadingVoices(true);
-      setVoiceLoadError(null);
-
-      try {
-        const languages: ReaderLanguage[] = ["en-US", "vi-VN"];
-        const voiceEntries = await Promise.all(
-          languages.map(async (language) => {
-            const params = new URLSearchParams({ projectId, lang: language });
-            const response = await fetch(`/api/voice-reader/voices?${params.toString()}`, {
-              method: "GET",
-              cache: "no-store",
-              signal: controller.signal,
-            });
-
-            if (!response.ok) throw new Error((await response.text()) || "Failed to load Google Cloud voices.");
-
-            const json = (await response.json()) as VoiceResponse;
-            return [language, Array.isArray(json.voices) ? json.voices : []] as const;
-          })
-        );
-
-        setVoicesByLanguage({
-          "en-US": voiceEntries.find(([language]) => language === "en-US")?.[1] ?? [],
-          "vi-VN": voiceEntries.find(([language]) => language === "vi-VN")?.[1] ?? [],
-        });
-      } catch (error) {
-        if (!isAbortError(error)) {
-          setVoicesByLanguage(EMPTY_VOICE_OPTIONS);
-          setVoiceLoadError(getPlaybackErrorMessage(error, playbackErrorFallback));
-        }
-      } finally {
-        if (!controller.signal.aborted) setIsLoadingVoices(false);
-      }
-    };
-
-    void loadVoices();
-    return () => controller.abort();
-  }, [playbackErrorFallback, projectId]);
 
   useEffect(() => {
     return () => { stopPlayback(); };

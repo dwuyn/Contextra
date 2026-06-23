@@ -147,19 +147,26 @@ function MembersTab() {
   const setProject = useProjectStore((state) => state.setProject);
   const formatTimestamp = useFormatTimestamp();
 
-  const [state, dispatch] = useReducer(membersReducer, {
-    friends: [],
-    friendSearch: "",
-    selectedFriendId: "",
-    permissionLevel: "2",
-    inviteError: null,
-    memberError: null,
-    isInviteBusy: false,
-    inviteActionId: null,
-    memberActionUserId: null,
-    membershipDialog: null,
-    now: Date.now()
-  });
+  const [state, dispatch] = useReducer(
+    membersReducer,
+    {
+      friends: [],
+      friendSearch: "",
+      selectedFriendId: "",
+      permissionLevel: "2",
+      inviteError: null,
+      memberError: null,
+      isInviteBusy: false,
+      inviteActionId: null,
+      memberActionUserId: null,
+      membershipDialog: null,
+      now: 0,
+    },
+    (initialState) => ({
+      ...initialState,
+      now: Date.now(),
+    })
+  );
 
   const deferredFriendSearch = useDeferredValue(state.friendSearch);
 
@@ -375,7 +382,7 @@ function MembersTab() {
             </div>
           </div>
           <div className="mt-4 space-y-3">
-            <input type="text" value={state.friendSearch} onChange={(e) => dispatch({ type: "setFriendSearch", search: e.target.value })} placeholder={t("invites.filterFriends")} className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-canvas)] px-4 py-2.5 text-sm outline-none" />
+            <input type="text" value={state.friendSearch} onChange={(e) => dispatch({ type: "setFriendSearch", search: e.target.value })} placeholder={t("invites.filterFriends")} aria-label={t("invites.filterFriends")} className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-canvas)] px-4 py-2.5 text-sm outline-none" />
             <select value={state.selectedFriendId} onChange={(e) => dispatch({ type: "setSelectedFriendId", id: e.target.value })} className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-sm outline-none">
               <option value="">{t("invites.chooseFriend")}</option>
               {inviteableFriends.map((f) => <option key={f.id} value={f.id}>{f.name} • {f.email}</option>)}

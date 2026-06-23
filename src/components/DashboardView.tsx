@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, Suspense } from "react";
+import { useEffect, useRef, useReducer, Suspense } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
@@ -8,7 +8,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { CreateProjectModal } from "./CreateProjectModal";
 import { ProjectDeleteDialog } from "./ProjectDeleteDialog";
 import { LoadingState } from "@/components/LoadingState";
-import { Link, useRouter } from "@/lib/i18n-client";
+import { Link } from "@/lib/i18n-client";
 import {
   Home,
   Layers,
@@ -85,36 +85,112 @@ type MembershipBanner = {
   projectName: string;
 };
 
+type DashboardState = {
+  activeView: ViewType;
+  activeModal: "create" | "allProjects" | "preferences" | null;
+  socialData: SocialOverview | null;
+  pendingProjectInvites: PendingProjectInviteCard[];
+  inviteActionId: string | null;
+  recentProjects: ProjectListItem[];
+  projectDeletion: {
+    project: { id: string; name: string } | null;
+    isBusy: boolean;
+  };
+  isMembershipBannerDismissed: boolean;
+  membershipBanner: MembershipBanner | null;
+};
+
+type DashboardAction =
+  | { type: "setActiveView"; view: ViewType }
+  | { type: "setActiveModal"; modal: DashboardState["activeModal"] }
+  | { type: "setSocialData"; data: SocialOverview | null }
+  | { type: "setPendingProjectInvites"; invites: PendingProjectInviteCard[] | ((prev: PendingProjectInviteCard[]) => PendingProjectInviteCard[]) }
+  | { type: "setInviteActionId"; id: string | null }
+  | { type: "setRecentProjects"; projects: ProjectListItem[] | ((prev: ProjectListItem[]) => ProjectListItem[]) }
+  | { type: "setProjectDeletion"; project: { id: string; name: string } | null; isBusy?: boolean }
+  | { type: "dismissMembershipBanner" };
+
+function dashboardReducer(state: DashboardState, action: DashboardAction): DashboardState {
+  switch (action.type) {
+    case "setActiveView":
+      return { ...state, activeView: action.view };
+    case "setActiveModal":
+      return { ...state, activeModal: action.modal };
+    case "setSocialData":
+      return { ...state, socialData: action.data };
+    case "setPendingProjectInvites":
+      return {
+        ...state,
+        pendingProjectInvites: typeof action.invites === "function"
+          ? action.invites(state.pendingProjectInvites)
+          : action.invites
+      };
+    case "setInviteActionId":
+      return { ...state, inviteActionId: action.id };
+    case "setRecentProjects":
+      return {
+        ...state,
+        recentProjects: typeof action.projects === "function"
+          ? action.projects(state.recentProjects)
+          : action.projects
+      };
+    case "setProjectDeletion":
+      return {
+        ...state,
+        projectDeletion: {
+          project: action.project,
+          isBusy: action.isBusy ?? state.projectDeletion.isBusy,
+        },
+      };
+    case "dismissMembershipBanner":
+      return { ...state, isMembershipBannerDismissed: true };
+    default:
+      return state;
+  }
+}
+
 export function DashboardView({ user, overview }: DashboardViewProps) {
-  const router = useRouter();
+
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [activeView, setActiveView] = useState<ViewType>("home");
-  const [activeModal, setActiveModal] = useState<"create" | "allProjects" | "preferences" | null>(null);
-  const [socialData, setSocialData] = useState<SocialOverview | null>(null);
-  const hasRequestedSocialData = useRef(false);
-  const [pendingProjectInvites, setPendingProjectInvites] = useState<PendingProjectInviteCard[]>(overview.pendingProjectInvites);
-  const [inviteActionId, setInviteActionId] = useState<string | null>(null);
-  const [recentProjects, setRecentProjects] = useState<ProjectListItem[]>(overview.recentProjects);
-  const [deleteProjectState, setDeleteProjectState] = useState<{ id: string; name: string } | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+
   const dt = useTranslations("dashboard");
   const membershipKind = searchParams.get("membership");
   const membershipProjectName = searchParams.get("project");
-  const [membershipBanner] = useState<MembershipBanner | null>(() => {
-    if (!membershipProjectName || (membershipKind !== "removed" && membershipKind !== "left")) {
-      return null;
+
+  const [state, dispatch] = useReducer(dashboardReducer, null, () => {
+    let initialMembershipBanner: MembershipBanner | null = null;
+    if (membershipProjectName && (membershipKind === "removed" || membershipKind === "left")) {
+      initialMembershipBanner = {
+        kind: membershipKind,
+        projectName: membershipProjectName,
+      };
     }
 
     return {
-      kind: membershipKind,
-      projectName: membershipProjectName,
+      activeView: "home" as ViewType,
+      activeModal: null as DashboardState["activeModal"],
+      socialData: null,
+      pendingProjectInvites: overview.pendingProjectInvites,
+      inviteActionId: null,
+      recentProjects: overview.recentProjects,
+      projectDeletion: { project: null, isBusy: false },
+      isMembershipBannerDismissed: false,
+      membershipBanner: initialMembershipBanner,
     };
   });
-  const [isMembershipBannerDismissed, setIsMembershipBannerDismissed] = useState(false);
+  const hasRequestedSocialData = useRef(false);
 
   useEffect(() => {
-    if (activeView === "home" || hasRequestedSocialData.current) return;
+    dispatch({ type: "setRecentProjects", projects: overview.recentProjects });
+  }, [overview.recentProjects]);
+
+  useEffect(() => {
+    dispatch({ type: "setPendingProjectInvites", invites: overview.pendingProjectInvites });
+  }, [overview.pendingProjectInvites]);
+
+  useEffect(() => {
+    if (state.activeView === "home" || hasRequestedSocialData.current) return;
 
     let cancelled = false;
 
@@ -123,7 +199,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
       try {
         const data = await getSocialOverview();
         if (!cancelled) {
-          setSocialData(data);
+          dispatch({ type: "setSocialData", data });
         }
       } catch (err) {
         console.error("Failed to fetch social overview", err);
@@ -135,7 +211,7 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [activeView]);
+  }, [state.activeView]);
 
   useSSE((event, data) => {
     if (event === "project_invite_created") {
@@ -157,25 +233,31 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
       const projectName = data.projectName;
       const projectSummary = data.projectSummary;
 
-      setPendingProjectInvites((currentInvites) => {
-        const nextInvite: PendingProjectInviteCard = {
-          id: invite.id,
-          projectId,
-          projectName,
-          projectSummary,
-          permissionLevel: invite.permissionLevel,
-          sender: invite.sender,
-          createdAt: new Date().toISOString(),
-        };
+      dispatch({
+        type: "setPendingProjectInvites",
+        invites: (currentInvites) => {
+          const nextInvite: PendingProjectInviteCard = {
+            id: invite.id,
+            projectId,
+            projectName,
+            projectSummary,
+            permissionLevel: invite.permissionLevel,
+            sender: invite.sender,
+            createdAt: new Date().toISOString(),
+          };
 
-        return [nextInvite, ...currentInvites.filter((item) => item.id !== nextInvite.id)];
+          return [nextInvite, ...currentInvites.filter((item) => item.id !== nextInvite.id)];
+        }
       });
     }
 
     if (event === "project_invite_updated" && typeof data.invite === "object" && data.invite) {
       const invite = data.invite as { id: string; status: string };
       if (invite.status !== "pending") {
-        setPendingProjectInvites((currentInvites) => currentInvites.filter((item) => item.id !== invite.id));
+        dispatch({
+          type: "setPendingProjectInvites",
+          invites: (currentInvites) => currentInvites.filter((item) => item.id !== invite.id)
+        });
       }
     }
   });
@@ -191,38 +273,44 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
     nextSearchParams.delete("membership");
     nextSearchParams.delete("project");
     const nextUrl = nextSearchParams.size > 0 ? `${pathname}?${nextSearchParams.toString()}` : pathname;
-    router.replace(nextUrl);
-  }, [membershipKind, membershipProjectName, pathname, router, searchParams]);
+    window.history.replaceState(null, "", nextUrl);
+  }, [membershipKind, membershipProjectName, pathname, searchParams]);
 
   const firstName = user.name.split(" ")[0];
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? dt("greeting_morning") : hour < 17 ? dt("greeting_afternoon") : hour < 21 ? dt("greeting_evening") : dt("greeting_night");
-  const visibleMembershipBanner = isMembershipBannerDismissed ? null : membershipBanner;
+  const visibleMembershipBanner = state.isMembershipBannerDismissed ? null : state.membershipBanner;
 
   async function handleDeleteProject() {
-    if (!deleteProjectState) return;
-    setIsDeleting(true);
+    if (!state.projectDeletion.project) return;
+    dispatch({ type: "setProjectDeletion", project: state.projectDeletion.project, isBusy: true });
     try {
-      await deleteProject(deleteProjectState.id);
-      setRecentProjects((current) => current.filter((p) => p.id !== deleteProjectState.id));
-      setDeleteProjectState(null);
+      await deleteProject(state.projectDeletion.project.id);
+      const deletedId = state.projectDeletion.project.id;
+      dispatch({
+        type: "setRecentProjects",
+        projects: (current) => current.filter((p) => p.id !== deletedId)
+      });
+      dispatch({ type: "setProjectDeletion", project: null, isBusy: false });
     } catch (error) {
       console.error("Failed to delete project", error);
-    } finally {
-      setIsDeleting(false);
+      dispatch({ type: "setProjectDeletion", project: state.projectDeletion.project, isBusy: false });
     }
   }
 
   async function handleProjectInvite(inviteId: string, status: "accepted" | "declined") {
-    setInviteActionId(inviteId);
+    dispatch({ type: "setInviteActionId", id: inviteId });
     try {
       await respondToProjectInvite(inviteId, { status });
-      setPendingProjectInvites((currentInvites) => currentInvites.filter((invite) => invite.id !== inviteId));
+      dispatch({
+        type: "setPendingProjectInvites",
+        invites: (currentInvites) => currentInvites.filter((invite) => invite.id !== inviteId)
+      });
     } catch (error) {
       console.error("Failed to respond to project invite", error);
     } finally {
-      setInviteActionId(null);
+      dispatch({ type: "setInviteActionId", id: null });
     }
   }
 
@@ -230,41 +318,41 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
     <div className="flex min-h-screen w-full flex-col bg-[var(--background)] lg:h-screen lg:flex-row">
       <DashboardSidebar
         user={user}
-        activeView={activeView}
+        activeView={state.activeView}
         recentProjectCount={overview.recentProjects.length}
-        socialData={socialData}
-        onNavigate={setActiveView}
-        onAllProjects={() => setActiveModal("allProjects")}
-        onPreferences={() => setActiveModal("preferences")}
+        socialData={state.socialData}
+        onNavigate={(view) => dispatch({ type: "setActiveView", view })}
+        onAllProjects={() => dispatch({ type: "setActiveModal", modal: "allProjects" })}
+        onPreferences={() => dispatch({ type: "setActiveModal", modal: "preferences" })}
       />
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto px-6 py-8 lg:px-12 lg:py-10">
-        {activeView === "people" ? (
-          <PeopleView onClose={() => setActiveView("home")} />
-        ) : activeView === "friends" ? (
+        {state.activeView === "people" ? (
+          <PeopleView onClose={() => dispatch({ type: "setActiveView", view: "home" })} />
+        ) : state.activeView === "friends" ? (
           <FriendsView />
         ) : (
           <>
             <DashboardHeader greeting={greeting} firstName={firstName} />
             {visibleMembershipBanner && (
-              <MembershipAlert banner={visibleMembershipBanner} onDismiss={() => setIsMembershipBannerDismissed(true)} />
+              <MembershipAlert banner={visibleMembershipBanner} onDismiss={() => dispatch({ type: "dismissMembershipBanner" })} />
             )}
-            {pendingProjectInvites.length > 0 && (
-              <PendingInvitesSection invites={pendingProjectInvites} actionId={inviteActionId} onInviteResponse={handleProjectInvite} />
+            {state.pendingProjectInvites.length > 0 && (
+              <PendingInvitesSection invites={state.pendingProjectInvites} actionId={state.inviteActionId} onInviteResponse={handleProjectInvite} />
             )}
-            <RecentProjectsSection projects={recentProjects} onCreate={() => setActiveModal("create")} onDeleteClick={setDeleteProjectState} />
+            <RecentProjectsSection projects={state.recentProjects} onCreate={() => dispatch({ type: "setActiveModal", modal: "create" })} onDeleteClick={(p) => dispatch({ type: "setProjectDeletion", project: p, isBusy: false })} />
             <PublicProjectsSection projects={overview.publicProjects} />
           </>
         )}
       </main>
 
-      {activeModal === "create" && <CreateProjectModal onClose={() => setActiveModal(null)} />}
-      {activeModal === "allProjects" && <AllProjectsModal onClose={() => setActiveModal(null)} />}
-      {activeModal === "preferences" && (
+      {state.activeModal === "create" && <CreateProjectModal onClose={() => dispatch({ type: "setActiveModal", modal: null })} />}
+      {state.activeModal === "allProjects" && <AllProjectsModal onClose={() => dispatch({ type: "setActiveModal", modal: null })} />}
+      {state.activeModal === "preferences" && (
         <Suspense>
           <PreferencesModal 
-            onClose={() => setActiveModal(null)} 
+            onClose={() => dispatch({ type: "setActiveModal", modal: null })} 
             user={{
               id: user.id,
               name: user.name,
@@ -276,10 +364,10 @@ export function DashboardView({ user, overview }: DashboardViewProps) {
         </Suspense>
       )}
       <ProjectDeleteDialog
-        open={deleteProjectState !== null}
-        onOpenChange={(open) => { if (!open) setDeleteProjectState(null); }}
-        projectName={deleteProjectState?.name ?? ""}
-        busy={isDeleting}
+        open={state.projectDeletion.project !== null}
+        onOpenChange={(open) => { if (!open) dispatch({ type: "setProjectDeletion", project: null, isBusy: false }); }}
+        projectName={state.projectDeletion.project?.name ?? ""}
+        busy={state.projectDeletion.isBusy}
         onConfirm={handleDeleteProject}
       />
     </div>
@@ -378,7 +466,6 @@ function PendingInvitesSection({ invites, actionId, onInviteResponse }: { invite
 function RecentProjectsSection({ projects, onCreate, onDeleteClick }: { projects: ProjectListItem[]; onCreate: () => void; onDeleteClick: (state: { id: string; name: string }) => void }) {
   const t = useTranslations();
   const dt = useTranslations("dashboard");
-  const router = useRouter();
   return (
     <section className="mb-16">
       <div className="flex items-center justify-between mb-6">

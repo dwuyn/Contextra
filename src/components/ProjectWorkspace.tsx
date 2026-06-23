@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState, useReducer } from "react";
 import dynamic from "next/dynamic";
+import useSWR from "swr";
 import { useRouter } from "@/lib/i18n-client";
 import { useProjectStore } from "@/store/useProjectStore";
 import { useZenStore } from "@/store/useZenStore";
@@ -12,7 +13,7 @@ import { LoadingState } from "@/components/LoadingState";
 import type { AiCardsPaneTab } from "@/components/AiCardsPane";
 import { useSSE } from "@/lib/hooks/useSSE";
 import { cn } from "@/lib/utils";
-import { Menu, Bot, History, Users } from "lucide-react";
+import { Menu, Bot, History, Users, RefreshCw, AlertTriangle, CheckCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ProjectCommentThread, ProjectData, ProjectInvite, ProjectPresence } from "@/types/project";
 
@@ -68,41 +69,412 @@ const VersionHistoryPanel = dynamic(
   }
 );
 
+interface WorkspaceUiState {
+  isSidebarOpen: boolean;
+  isAiPaneOpen: boolean;
+  hasOpenedAiPane: boolean;
+  aiPaneTab: AiCardsPaneTab;
+  isHistoryOpen: boolean;
+  isCollabOpen: boolean;
+  showChrome: boolean;
+}
+
+type WorkspaceUiAction =
+  | { type: "TOGGLE_SIDEBAR" }
+  | { type: "SET_SIDEBAR"; open: boolean }
+  | { type: "TOGGLE_AI_PANE" }
+  | { type: "OPEN_AI_HISTORY" }
+  | { type: "CLOSE_AI_PANE" }
+  | { type: "SET_AI_PANE_TAB"; tab: AiCardsPaneTab }
+  | { type: "TOGGLE_HISTORY" }
+  | { type: "SET_HISTORY"; open: boolean }
+  | { type: "TOGGLE_COLLAB" }
+  | { type: "SET_COLLAB"; open: boolean }
+  | { type: "SET_SHOW_CHROME"; show: boolean };
+
+const initialWorkspaceUiState: WorkspaceUiState = {
+  isSidebarOpen: false,
+  isAiPaneOpen: false,
+  hasOpenedAiPane: false,
+  aiPaneTab: "history",
+  isHistoryOpen: false,
+  isCollabOpen: false,
+  showChrome: false,
+};
+
+function workspaceUiReducer(state: WorkspaceUiState, action: WorkspaceUiAction): WorkspaceUiState {
+  switch (action.type) {
+    case "TOGGLE_SIDEBAR":
+      return { ...state, isSidebarOpen: !state.isSidebarOpen };
+    case "SET_SIDEBAR":
+      return { ...state, isSidebarOpen: action.open };
+    case "TOGGLE_AI_PANE": {
+      const nextOpen = !state.isAiPaneOpen;
+      return {
+        ...state,
+        isAiPaneOpen: nextOpen,
+        hasOpenedAiPane: state.hasOpenedAiPane || nextOpen,
+      };
+    }
+    case "OPEN_AI_HISTORY":
+      return {
+        ...state,
+        isAiPaneOpen: true,
+        hasOpenedAiPane: true,
+        aiPaneTab: "history",
+      };
+    case "CLOSE_AI_PANE":
+      return { ...state, isAiPaneOpen: false };
+    case "SET_AI_PANE_TAB":
+      return { ...state, aiPaneTab: action.tab };
+    case "TOGGLE_HISTORY":
+      return { ...state, isHistoryOpen: !state.isHistoryOpen };
+    case "SET_HISTORY":
+      return { ...state, isHistoryOpen: action.open };
+    case "TOGGLE_COLLAB":
+      return { ...state, isCollabOpen: !state.isCollabOpen };
+    case "SET_COLLAB":
+      return { ...state, isCollabOpen: action.open };
+    case "SET_SHOW_CHROME":
+      return { ...state, showChrome: action.show };
+    default:
+      return state;
+  }
+}
+
+interface ContinuityJobs {
+  queued: number;
+  processing: number;
+  failed: number;
+  staleProcessing: number;
+}
+
+interface HealthResponse {
+  continuityJobs?: ContinuityJobs;
+}
+
+async function fetchWorkspaceHealth(url: string): Promise<HealthResponse> {
+  const response = await fetch(url, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error("Health poll failed");
+  }
+
+  return response.json() as Promise<HealthResponse>;
+}
+
+function WorkspaceToggleButton({
+  active,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold transition-colors",
+        active
+          ? "border-[var(--color-accent-muted)] bg-[var(--color-accent-muted)] text-[var(--color-accent)]"
+          : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]",
+      ].join(" ")}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function PresenceStack({ count }: { count: number }) {
+  const t = useTranslations("workspace");
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex -space-x-2">
+        <div className="h-7 w-7 rounded-full border-2 border-[var(--color-surface)] bg-[var(--color-text)]" />
+        {count > 1 && <div className="h-7 w-7 rounded-full border-2 border-[var(--color-surface)] bg-amber-400" />}
+        {count > 2 && <div className="h-7 w-7 rounded-full border-2 border-[var(--color-surface)] bg-sky-400" />}
+      </div>
+      <span className="text-xs font-bold uppercase tracking-wider">
+        {count === 0 ? t("quiet") : t("liveCount", { count })}
+      </span>
+    </div>
+  );
+}
+
+function WorkspaceHeader({
+  projectName,
+  isZenMode,
+  chromeVisible,
+  jobs,
+  uiState,
+  activePresenceCount,
+  onToggleCollab,
+  onToggleHistory,
+  onToggleAiPane,
+  onOpenSidebar,
+}: {
+  projectName: string;
+  isZenMode: boolean;
+  chromeVisible: boolean;
+  jobs: ContinuityJobs | null;
+  uiState: WorkspaceUiState;
+  activePresenceCount: number;
+  onToggleCollab: () => void;
+  onToggleHistory: () => void;
+  onToggleAiPane: () => void;
+  onOpenSidebar: () => void;
+}) {
+  const t = useTranslations("workspace");
+
+  return (
+    <>
+      {/* Desktop Top Bar */}
+      <div className={cn(
+        "hidden lg:flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface)]",
+        isZenMode && !chromeVisible && "opacity-0 pointer-events-none -translate-y-full",
+        isZenMode && chromeVisible && "opacity-100",
+        "transition-all duration-500",
+      )}>
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("projectLabel")}</p>
+          <h1 className="text-lg font-bold text-[var(--color-text)] truncate">{projectName}</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          {jobs && (
+            <div 
+              className={cn(
+                "flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-bold transition-all shadow-sm",
+                (jobs.queued > 0 || jobs.processing > 0)
+                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                  : (jobs.failed > 0 || jobs.staleProcessing > 0)
+                  ? "border-red-200 bg-red-50 text-red-800"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-800"
+              )}
+              title={`Queued: ${jobs.queued}, Processing: ${jobs.processing}, Failed: ${jobs.failed}, Stale: ${jobs.staleProcessing}`}
+            >
+              {(jobs.queued > 0 || jobs.processing > 0) ? (
+                <RefreshCw size={14} className="animate-spin text-amber-600" />
+              ) : (jobs.failed > 0 || jobs.staleProcessing > 0) ? (
+                <AlertTriangle size={14} className="text-red-600" />
+              ) : (
+                <CheckCircle size={14} className="text-emerald-600" />
+              )}
+              <span className="hidden sm:inline">
+                {(jobs.queued > 0 || jobs.processing > 0)
+                  ? "Syncing memory..."
+                  : (jobs.failed > 0 || jobs.staleProcessing > 0)
+                  ? "Sync failed"
+                  : "Memory synced"}
+              </span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={onToggleCollab}
+            className={[
+              "flex items-center gap-3 rounded-2xl border px-3 py-2 transition-colors",
+              uiState.isCollabOpen ? "border-[var(--color-text)] bg-[var(--color-text)] text-white" : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]",
+            ].join(" ")}
+          >
+            <PresenceStack count={activePresenceCount} />
+            <span className="text-sm font-bold">{t("collaborate")}</span>
+          </button>
+          <WorkspaceToggleButton
+            active={uiState.isHistoryOpen}
+            icon={<History size={18} />}
+            label={t("history")}
+            onClick={onToggleHistory}
+          />
+          <WorkspaceToggleButton
+            active={uiState.isAiPaneOpen}
+            icon={<Bot size={18} />}
+            label={t("aiAssistant")}
+            onClick={onToggleAiPane}
+          />
+        </div>
+      </div>
+
+      {/* Mobile Top Bar */}
+      <div className={cn(
+        "flex lg:hidden items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]",
+        isZenMode && !chromeVisible && "opacity-0 pointer-events-none -translate-y-full",
+        isZenMode && chromeVisible && "opacity-100",
+        "transition-all duration-500",
+      )}>
+        <button
+          type="button"
+          onClick={onOpenSidebar}
+          className="p-2 rounded-xl text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
+          aria-label={t("openSidebar")}
+        >
+          <Menu size={20} />
+        </button>
+        <span className="text-sm font-bold text-[var(--color-text)] truncate max-w-[160px]">
+          {projectName}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onToggleCollab}
+            className={[
+              "p-2 rounded-xl transition-colors",
+              uiState.isCollabOpen ? "bg-[var(--color-text)] text-white" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
+            ].join(" ")}
+            aria-label={t("toggleCollaboration")}
+          >
+            <Users size={20} />
+          </button>
+          <button
+            type="button"
+            onClick={onToggleHistory}
+            className={[
+              "p-2 rounded-xl transition-colors",
+              uiState.isHistoryOpen ? "bg-[var(--color-accent-muted)] text-[var(--color-accent)]" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
+            ].join(" ")}
+            aria-label={t("toggleHistory")}
+          >
+            <History size={20} />
+          </button>
+          <button
+            type="button"
+            onClick={onToggleAiPane}
+            className={[
+              "p-2 rounded-xl transition-colors",
+              uiState.isAiPaneOpen ? "bg-[var(--color-accent-muted)] text-[var(--color-accent)]" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
+            ].join(" ")}
+            aria-label={t("toggleAiAssistant")}
+          >
+            <Bot size={20} />
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function WorkspacePanels({
+  isZenMode,
+  uiState,
+  selectedChapterId,
+  onCloseHistory,
+  onCloseCollab,
+  onCloseAiPane,
+  onTabChange,
+}: {
+  isZenMode: boolean;
+  uiState: WorkspaceUiState;
+  selectedChapterId: string | null;
+  onCloseHistory: () => void;
+  onCloseCollab: () => void;
+  onCloseAiPane: () => void;
+  onTabChange: (tab: AiCardsPaneTab) => void;
+}) {
+  const shouldRenderAiPane = uiState.hasOpenedAiPane || uiState.isAiPaneOpen;
+  return (
+    <>
+      {/* Version History Panel */}
+      {!isZenMode && uiState.isHistoryOpen && selectedChapterId && (
+        <div className="hidden lg:flex">
+          <VersionHistoryPanel onClose={onCloseHistory} />
+        </div>
+      )}
+
+      {/* Mobile Version History Drawer */}
+      {!isZenMode && uiState.isHistoryOpen && selectedChapterId && (
+        <div className="fixed inset-y-0 right-0 z-40 lg:hidden shadow-2xl">
+          <VersionHistoryPanel onClose={onCloseHistory} />
+        </div>
+      )}
+
+      {!isZenMode && uiState.isCollabOpen && (
+        <div className="hidden lg:flex">
+          <CollaborationPanel onClose={onCloseCollab} />
+        </div>
+      )}
+
+      {!isZenMode && uiState.isCollabOpen && (
+        <div className="fixed inset-y-0 right-0 z-40 lg:hidden shadow-2xl">
+          <CollaborationPanel onClose={onCloseCollab} />
+        </div>
+      )}
+
+      {/* AI Pane — mounted on first open, then kept alive for quick reopen */}
+      {!isZenMode && shouldRenderAiPane && (
+        <div className={[
+          "fixed inset-y-0 right-0 z-40 transition-transform duration-300 lg:relative lg:inset-y-auto lg:right-auto lg:z-auto lg:transition-[width] lg:duration-300",
+          uiState.isAiPaneOpen ? "translate-x-0 lg:w-96" : "translate-x-full lg:translate-x-0 lg:w-0",
+        ].join(" ")}>
+          <div className="h-full overflow-hidden shadow-2xl lg:shadow-none">
+            <AiCardsPane
+              activeTab={uiState.aiPaneTab}
+              onTabChange={onTabChange}
+              onClose={onCloseAiPane}
+              showCloseButton={uiState.isAiPaneOpen}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Mobile AI Pane Overlay */}
+      {uiState.isAiPaneOpen && (
+        <button
+          type="button"
+          aria-label="Close AI assistant"
+          className="fixed inset-0 z-30 bg-[var(--color-canvas)]/50 lg:hidden block"
+          onClick={onCloseAiPane}
+        />
+      )}
+    </>
+  );
+}
+
 export function ProjectWorkspace({ project }: { project: ProjectData }) {
   const router = useRouter();
   const t = useTranslations("workspace");
   const zenT = useTranslations("zen");
-  const setProject = useProjectStore((state) => state.setProject);
   const syncProjectInvite = useProjectStore((state) => state.syncProjectInvite);
   const syncProjectPresence = useProjectStore((state) => state.syncProjectPresence);
   const removeCollaboratorLocally = useProjectStore((state) => state.removeCollaboratorLocally);
   const upsertCommentThread = useProjectStore((state) => state.upsertCommentThread);
-  const setSelectedProjectId = useProjectStore((state) => state.setSelectedProjectId);
-  const setSelectedChapterId = useProjectStore((state) => state.setSelectedChapterId);
-  const setActiveBranchId = useProjectStore((state) => state.setActiveBranchId);
-  const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
+  const hydrateProject = useProjectStore((state) => state.hydrateProject);
   const selectedChapterId = useProjectStore((state) => state.selectedChapterId);
-  const activeBranchId = useProjectStore((state) => state.activeBranchId);
   const isStoryBibleOpen = useProjectStore((state) => state.isStoryBibleOpen);
   const hydratedProject = useProjectStore((state) => state.project) ?? project;
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isAiPaneOpen, setIsAiPaneOpen] = useState(false);
-  const [hasOpenedAiPane, setHasOpenedAiPane] = useState(false);
-  const [aiPaneTab, setAiPaneTab] = useState<AiCardsPaneTab>("history");
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isCollabOpen, setIsCollabOpen] = useState(false);
+  const [state, dispatch] = useReducer(workspaceUiReducer, initialWorkspaceUiState);
   const [presenceNow, setPresenceNow] = useState(() => Date.now());
+  const { data: healthData } = useSWR("/api/health", fetchWorkspaceHealth, {
+    refreshInterval: 15_000,
+    onError: (error) => {
+      console.error("Health poll failed", error);
+    },
+  });
+  const jobs = healthData?.continuityJobs ?? null;
 
   const { isZenMode, exitZen } = useZenStore();
-  const [showChrome, setShowChrome] = useState(false);
   const chromeTimer = useRef<number | null>(null);
+
+  const clearChromeTimer = useEffectEvent(() => {
+    if (chromeTimer.current) {
+      window.clearTimeout(chromeTimer.current);
+      chromeTimer.current = null;
+    }
+  });
 
   const handleZenMouseMove = useEffectEvent(() => {
     if (!isZenMode) return;
-    setShowChrome(true);
-    if (chromeTimer.current) window.clearTimeout(chromeTimer.current);
-    chromeTimer.current = window.setTimeout(() => setShowChrome(false), 3000);
+    dispatch({ type: "SET_SHOW_CHROME", show: true });
+    clearChromeTimer();
+    chromeTimer.current = window.setTimeout(() => dispatch({ type: "SET_SHOW_CHROME", show: false }), 3000);
   });
 
   useEffect(() => {
@@ -110,7 +482,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
     let listener: (() => void) | null = null;
 
     if (isZenMode) {
-      resetTimer = window.setTimeout(() => setShowChrome(false), 0);
+      resetTimer = window.setTimeout(() => dispatch({ type: "SET_SHOW_CHROME", show: false }), 0);
       listener = () => handleZenMouseMove();
       window.addEventListener("mousemove", listener);
     }
@@ -120,9 +492,9 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
       if (listener) {
         window.removeEventListener("mousemove", listener);
       }
-      if (chromeTimer.current) window.clearTimeout(chromeTimer.current);
+      clearChromeTimer();
     };
-  }, [isZenMode, handleZenMouseMove]);
+  }, [isZenMode]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -146,39 +518,8 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
   }, [exitZen]);
 
   useEffect(() => {
-    if (!project) return;
-
-    setProject(project);
-
-    const isNewProject = selectedProjectId !== project.metadata.id;
-    if (isNewProject) {
-      setSelectedProjectId(project.metadata.id);
-    }
-
-    const currentBranch = project.branches.find((branch) => branch.id === activeBranchId);
-    const fallbackBranch = currentBranch || project.branches.find((branch) => branch.name === "Main") || project.branches[0];
-    if (fallbackBranch && (isNewProject || fallbackBranch.id !== activeBranchId)) {
-      setActiveBranchId(fallbackBranch.id);
-    }
-
-    const hasSelectedChapter = selectedChapterId ? project.chapters.some((chapter) => chapter.id === selectedChapterId) : false;
-    if (!hasSelectedChapter) {
-      const fallbackChapter = fallbackBranch
-        ? project.chapters.find((chapter) => chapter.branchId === fallbackBranch.id) || project.chapters[0]
-        : project.chapters[0];
-
-      setSelectedChapterId(fallbackChapter?.id ?? null);
-    }
-  }, [
-    project,
-    selectedProjectId,
-    activeBranchId,
-    selectedChapterId,
-    setProject,
-    setSelectedProjectId,
-    setSelectedChapterId,
-    setActiveBranchId,
-  ]);
+    hydrateProject(project);
+  }, [hydrateProject, project]);
 
   useSSE((event, data) => {
     if (typeof data.projectId !== "string" || data.projectId !== hydratedProject.metadata.id) {
@@ -227,36 +568,29 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
     return () => window.clearInterval(intervalId);
   }, []);
 
-  const shouldRenderAiPane = hasOpenedAiPane || isAiPaneOpen;
   const activePresence = hydratedProject.presence.filter((presence) => {
     return presenceNow - new Date(presence.lastActiveAt).getTime() < 60_000;
   });
-  const chromeVisible = !isZenMode || showChrome;
+  const chromeVisible = !isZenMode || state.showChrome;
 
   const handleAiPaneToggle = () => {
-    if (!isAiPaneOpen) {
-      setHasOpenedAiPane(true);
-    }
-
-    setIsAiPaneOpen((value) => !value);
+    dispatch({ type: "TOGGLE_AI_PANE" });
   };
 
   const handleOpenAiHistory = () => {
-    setHasOpenedAiPane(true);
-    setIsAiPaneOpen(true);
-    setAiPaneTab("history");
+    dispatch({ type: "OPEN_AI_HISTORY" });
   };
 
   return (
     <>
     <div className="flex h-screen w-full overflow-hidden bg-[var(--color-canvas)] relative">
       {/* Mobile Sidebar Overlay */}
-      {isSidebarOpen && (
+      {state.isSidebarOpen && (
         <button
           type="button"
           aria-label="Close sidebar"
           className="fixed inset-0 z-30 bg-[var(--color-canvas)]/50 lg:hidden block"
-          onClick={() => setIsSidebarOpen(false)}
+          onClick={() => dispatch({ type: "SET_SIDEBAR", open: false })}
         />
       )}
 
@@ -264,7 +598,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
       {!isZenMode && (
       <nav aria-label={t("projectNavigation")} className={[
         "fixed lg:static inset-y-0 left-0 z-40 lg:z-auto transition-transform duration-300",
-        isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+        state.isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
       ].join(" ")}>
         <SidebarNavigator />
       </nav>
@@ -272,98 +606,18 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
 
       {/* Main Content */}
       <main className="flex-1 overflow-hidden flex flex-col">
-        {/* Desktop Top Bar */}
-        <div className={cn(
-          "hidden lg:flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface)]",
-          isZenMode && !chromeVisible && "opacity-0 pointer-events-none -translate-y-full",
-          isZenMode && chromeVisible && "opacity-100",
-          "transition-all duration-500",
-        )}>
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("projectLabel")}</p>
-            <h1 className="text-lg font-bold text-[var(--color-text)] truncate">{project.metadata.name}</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsCollabOpen((value) => !value)}
-              className={[
-                "flex items-center gap-3 rounded-2xl border px-3 py-2 transition-colors",
-                isCollabOpen ? "border-[var(--color-text)] bg-[var(--color-text)] text-white" : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]",
-              ].join(" ")}
-            >
-              <PresenceStack count={activePresence.length} />
-              <span className="text-sm font-bold">{t("collaborate")}</span>
-            </button>
-            <WorkspaceToggleButton
-              active={isHistoryOpen}
-              icon={<History size={18} />}
-              label={t("history")}
-              onClick={() => setIsHistoryOpen((value) => !value)}
-            />
-            <WorkspaceToggleButton
-              active={isAiPaneOpen}
-              icon={<Bot size={18} />}
-              label={t("aiAssistant")}
-              onClick={handleAiPaneToggle}
-            />
-          </div>
-        </div>
-
-        {/* Mobile Top Bar */}
-        <div className={cn(
-          "flex lg:hidden items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]",
-          isZenMode && !chromeVisible && "opacity-0 pointer-events-none -translate-y-full",
-          isZenMode && chromeVisible && "opacity-100",
-          "transition-all duration-500",
-        )}>
-          <button
-            type="button"
-            onClick={() => setIsSidebarOpen(true)}
-            className="p-2 rounded-xl text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
-            aria-label={t("openSidebar")}
-          >
-            <Menu size={20} />
-          </button>
-          <span className="text-sm font-bold text-[var(--color-text)] truncate max-w-[160px]">
-            {project.metadata.name}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setIsCollabOpen((value) => !value)}
-              className={[
-                "p-2 rounded-xl transition-colors",
-                isCollabOpen ? "bg-[var(--color-text)] text-white" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
-              ].join(" ")}
-              aria-label={t("toggleCollaboration")}
-            >
-              <Users size={20} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsHistoryOpen((value) => !value)}
-              className={[
-                "p-2 rounded-xl transition-colors",
-                isHistoryOpen ? "bg-[var(--color-accent-muted)] text-[var(--color-accent)]" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
-              ].join(" ")}
-              aria-label={t("toggleHistory")}
-            >
-              <History size={20} />
-            </button>
-            <button
-              type="button"
-              onClick={handleAiPaneToggle}
-              className={[
-                "p-2 rounded-xl transition-colors",
-                isAiPaneOpen ? "bg-[var(--color-accent-muted)] text-[var(--color-accent)]" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]"
-              ].join(" ")}
-              aria-label={t("toggleAiAssistant")}
-            >
-              <Bot size={20} />
-            </button>
-          </div>
-        </div>
+        <WorkspaceHeader
+          projectName={hydratedProject.metadata.name}
+          isZenMode={isZenMode}
+          chromeVisible={chromeVisible}
+          jobs={jobs}
+          uiState={state}
+          activePresenceCount={activePresence.length}
+          onToggleCollab={() => dispatch({ type: "TOGGLE_COLLAB" })}
+          onToggleHistory={() => dispatch({ type: "TOGGLE_HISTORY" })}
+          onToggleAiPane={handleAiPaneToggle}
+          onOpenSidebar={() => dispatch({ type: "SET_SIDEBAR", open: true })}
+        />
 
         {/* Editor Area */}
         <div className={cn(
@@ -374,65 +628,22 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
             <StoryBibleView />
           ) : (
             <MainEditor
-              onToggleHistory={() => setIsHistoryOpen((v) => !v)}
+              onToggleHistory={() => dispatch({ type: "TOGGLE_HISTORY" })}
               onOpenAiHistory={handleOpenAiHistory}
             />
           )}
         </div>
       </main>
 
-      {/* Version History Panel */}
-      {!isZenMode && isHistoryOpen && selectedChapterId && (
-        <div className="hidden lg:flex">
-          <VersionHistoryPanel onClose={() => setIsHistoryOpen(false)} />
-        </div>
-      )}
-
-      {/* Mobile Version History Drawer */}
-      {!isZenMode && isHistoryOpen && selectedChapterId && (
-        <div className="fixed inset-y-0 right-0 z-40 lg:hidden shadow-2xl">
-          <VersionHistoryPanel onClose={() => setIsHistoryOpen(false)} />
-        </div>
-      )}
-
-      {!isZenMode && isCollabOpen && (
-        <div className="hidden lg:flex">
-          <CollaborationPanel onClose={() => setIsCollabOpen(false)} />
-        </div>
-      )}
-
-      {!isZenMode && isCollabOpen && (
-        <div className="fixed inset-y-0 right-0 z-40 lg:hidden shadow-2xl">
-          <CollaborationPanel onClose={() => setIsCollabOpen(false)} />
-        </div>
-      )}
-
-      {/* AI Pane — mounted on first open, then kept alive for quick reopen */}
-      {!isZenMode && shouldRenderAiPane && (
-        <div className={[
-          "fixed inset-y-0 right-0 z-40 transition-transform duration-300 lg:relative lg:inset-y-auto lg:right-auto lg:z-auto lg:transition-[width] lg:duration-300",
-          isAiPaneOpen ? "translate-x-0 lg:w-96" : "translate-x-full lg:translate-x-0 lg:w-0",
-        ].join(" ")}>
-          <div className="h-full overflow-hidden shadow-2xl lg:shadow-none">
-            <AiCardsPane
-              activeTab={aiPaneTab}
-              onTabChange={setAiPaneTab}
-              onClose={() => setIsAiPaneOpen(false)}
-              showCloseButton={isAiPaneOpen}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Mobile AI Pane Overlay */}
-      {isAiPaneOpen && (
-        <button
-          type="button"
-          aria-label="Close AI assistant"
-          className="fixed inset-0 z-30 bg-[var(--color-canvas)]/50 lg:hidden block"
-          onClick={() => setIsAiPaneOpen(false)}
-        />
-      )}
+      <WorkspacePanels
+        isZenMode={isZenMode}
+        uiState={state}
+        selectedChapterId={selectedChapterId}
+        onCloseHistory={() => dispatch({ type: "SET_HISTORY", open: false })}
+        onCloseCollab={() => dispatch({ type: "SET_COLLAB", open: false })}
+        onCloseAiPane={() => dispatch({ type: "CLOSE_AI_PANE" })}
+        onTabChange={(tab) => dispatch({ type: "SET_AI_PANE_TAB", tab })}
+      />
 
       {isZenMode && chromeVisible && (
         <button
@@ -448,52 +659,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
       )}
     </div>
 
-    <CommandPalette chapters={project.chapters.map(ch => ({ id: ch.id, title: ch.title }))} />
+    <CommandPalette chapters={hydratedProject.chapters.map(ch => ({ id: ch.id, title: ch.title }))} />
     </>
-  );
-}
-
-function WorkspaceToggleButton({
-  active,
-  icon,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold transition-colors",
-        active
-          ? "border-[var(--color-accent-muted)] bg-[var(--color-accent-muted)] text-[var(--color-accent)]"
-          : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]",
-      ].join(" ")}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
-  );
-}
-
-function PresenceStack({ count }: { count: number }) {
-  const t = useTranslations("workspace");
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex -space-x-2">
-        <div className="h-7 w-7 rounded-full border-2 border-[var(--color-surface)] bg-[var(--color-text)]" />
-        {count > 1 && <div className="h-7 w-7 rounded-full border-2 border-[var(--color-surface)] bg-amber-400" />}
-        {count > 2 && <div className="h-7 w-7 rounded-full border-2 border-[var(--color-surface)] bg-sky-400" />}
-      </div>
-      <span className="text-xs font-bold uppercase tracking-wider">
-        {count === 0 ? t("quiet") : t("liveCount", { count })}
-      </span>
-    </div>
   );
 }

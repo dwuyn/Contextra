@@ -295,39 +295,44 @@ async function generateLongOutlineAction(projectId: string, input: unknown = {})
   const legacyOutline = attachLongOutlineIds(result.outline);
 
   await prisma.$transaction(async (tx) => {
-    await tx.outlineBeat.deleteMany({ where: { projectId } });
-    await tx.storyArc.deleteMany({ where: { projectId } });
+    await Promise.all([
+      tx.outlineBeat.deleteMany({ where: { projectId } }),
+      tx.storyArc.deleteMany({ where: { projectId } }),
+    ]);
 
-    for (const [index, arc] of result.outline.arcs.entries()) {
-      const createdArc = await tx.storyArc.create({
-        data: {
-          projectId,
-          title: arc.title,
-          summary: arc.summary,
-          startChapterIndex: arc.startChapterIndex,
-          endChapterIndex: arc.endChapterIndex,
-          sortOrder: index + 1,
-        },
-      });
+    await Promise.all([
+      Promise.all(
+        result.outline.arcs.map(async (arc, index) => {
+          const createdArc = await tx.storyArc.create({
+            data: {
+              projectId,
+              title: arc.title,
+              summary: arc.summary,
+              startChapterIndex: arc.startChapterIndex,
+              endChapterIndex: arc.endChapterIndex,
+              sortOrder: index + 1,
+            },
+          });
 
-      if (arc.beats.length > 0) {
-        await tx.outlineBeat.createMany({
-          data: arc.beats.map((beat) => ({
-            projectId,
-            arcId: createdArc.id,
-            chapterIndex: beat.chapterIndex,
-            title: beat.title,
-            summary: beat.summary,
-            focusEntities: beat.focusEntities as Prisma.InputJsonValue,
-          })),
-        });
-      }
-    }
-
-    await tx.project.update({
-      where: { id: projectId },
-      data: { outline: legacyOutline as unknown as Prisma.InputJsonValue },
-    });
+          if (arc.beats.length > 0) {
+            await tx.outlineBeat.createMany({
+              data: arc.beats.map((beat) => ({
+                projectId,
+                arcId: createdArc.id,
+                chapterIndex: beat.chapterIndex,
+                title: beat.title,
+                summary: beat.summary,
+                focusEntities: beat.focusEntities as Prisma.InputJsonValue,
+              })),
+            });
+          }
+        })
+      ),
+      tx.project.update({
+        where: { id: projectId },
+        data: { outline: legacyOutline as unknown as Prisma.InputJsonValue },
+      }),
+    ]);
   });
 
   await prisma.usage.create({

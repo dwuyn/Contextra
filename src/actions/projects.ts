@@ -494,7 +494,15 @@ export async function saveCollaborativeChapter(projectId: string, chapterId: str
   if (!session) throw new Error("Unauthorized");
 
   const parsed = z.UpdateChapterSchema.parse(input);
-  const { html } = await exportCollaborativeChapter(chapterId);
+  const { viewerAccess } = await projectService.getChapterCollaborationAccess(projectId, session.userId, chapterId);
+  if (!viewerAccess.canEdit) {
+    throw new Error("Unauthorized");
+  }
+
+  const html = parsed.content !== undefined
+    ? parsed.content
+    : (await exportCollaborativeChapter({ projectId, chapterId })).html;
+
   const result = await projectService.updateChapter(projectId, session.userId, chapterId, {
     title: parsed.title,
     summary: parsed.summary,
@@ -516,7 +524,7 @@ export async function restoreVersion(projectId: string, chapterId: string, versi
   await projectService.requireProjectPermission(projectId, session.userId, "edit");
   const [version, current] = await Promise.all([
     projectService.getChapterVersionForRestore(projectId, session.userId, chapterId, versionId),
-    exportCollaborativeChapter(chapterId),
+    exportCollaborativeChapter({ projectId, chapterId }),
   ]);
 
   if (current.html && current.html !== version.content) {

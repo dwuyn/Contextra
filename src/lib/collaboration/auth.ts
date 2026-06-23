@@ -13,13 +13,17 @@ export interface CollaborationTokenPayload {
 function getCollaborationKey() {
   const secret = process.env.COLLAB_JWT_SECRET || process.env.JWT_SECRET;
 
-  if (!secret && process.env.NODE_ENV === "production") {
-    throw new Error("COLLAB_JWT_SECRET or JWT_SECRET must be set in production");
+  if (
+    (!secret || secret === "development-collab-secret-change-me" || secret === "development-secret-change-me") &&
+    process.env.NODE_ENV !== "development" &&
+    process.env.NODE_ENV !== "test"
+  ) {
+    throw new Error("COLLAB_JWT_SECRET or JWT_SECRET must be set to a secure, non-placeholder value in non-development environments");
   }
 
   const key = new TextEncoder().encode(secret || "development-collab-secret-change-me");
   
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
     console.log("[auth] getCollaborationKey - source:", process.env.COLLAB_JWT_SECRET ? "COLLAB_JWT_SECRET" : process.env.JWT_SECRET ? "JWT_SECRET" : "fallback", "| secret length:", key.length);
   }
   

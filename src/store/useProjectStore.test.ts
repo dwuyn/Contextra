@@ -70,4 +70,24 @@ describe("useProjectStore chapter content replacements", () => {
     store.clearChapterDraft("chapter-1");
     expect(useProjectStore.getState().chapterDraftCache["chapter-1"]).toBeUndefined();
   });
+
+  it("supports storing and loading draft metadata (origin and savedAt)", () => {
+    const store = useProjectStore.getState();
+
+    store.setChapterDraft("chapter-2", {
+      title: "Unsaved with Metadata",
+      content: "<p>draft content</p>",
+      origin: "live-recovery",
+      savedAt: 1624443210000,
+    });
+
+    expect(useProjectStore.getState().chapterDraftCache["chapter-2"]).toEqual({
+      title: "Unsaved with Metadata",
+      content: "<p>draft content</p>",
+      origin: "live-recovery",
+      savedAt: 1624443210000,
+    });
+
+    store.clearChapterDraft("chapter-2");
+  });
 });

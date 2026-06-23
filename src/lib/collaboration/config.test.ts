@@ -14,7 +14,7 @@ describe("collaboration config", () => {
 
   it("requires an explicit internal secret in production", () => {
     expect(() => getCollaborationInternalSecret({ NODE_ENV: "production" } as NodeJS.ProcessEnv))
-      .toThrow("COLLAB_INTERNAL_SECRET must be set in production");
+      .toThrow("COLLAB_INTERNAL_SECRET must be set in non-development environments");
   });
 
   it("detects fresh presence entries inside the activity window", () => {

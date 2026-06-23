@@ -80,10 +80,13 @@
       "unsaved": "Unsaved changes",
       "saveFailed": "Save failed",
       "memoryStale": "Memory is being rebuilt",
-      "unsavedChanges": "Unsaved changes"
+      "unsavedChanges": "Unsaved changes",
+      "autosavedCheckpointPending": "Autosaved"
     },
     "save": "Save",
+    "saveCheckpoint": "Save checkpoint",
     "cancel": "Cancel",
+    "recoveredUnsavedChanges": "Recovered unsaved changes from a previous session.",
     "chapterTitle": "Chapter title",
     "charCount": "{count} characters",
     "wordCount": "{count} words",

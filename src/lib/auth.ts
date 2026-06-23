@@ -26,8 +26,12 @@ export type SessionUpdateResult =
 function getJwtKey() {
   const secretKey = process.env.JWT_SECRET;
 
-  if (!secretKey && process.env.NODE_ENV === "production") {
-    throw new Error("JWT_SECRET must be set in production");
+  if (
+    (!secretKey || secretKey === "development-secret-change-me") &&
+    process.env.NODE_ENV !== "development" &&
+    process.env.NODE_ENV !== "test"
+  ) {
+    throw new Error("JWT_SECRET must be set to a secure, non-placeholder value in non-development environments");
   }
 
   return new TextEncoder().encode(secretKey || "development-secret-change-me");

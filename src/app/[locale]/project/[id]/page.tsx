@@ -20,14 +20,19 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
+export default async function ProjectPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ branch?: string }>;
+}) {
+  const [session, { id }, { branch }] = await Promise.all([getSession(), params, searchParams]);
   if (!session) {
     redirect("/login");
   }
 
-  const { id } = await params;
-  const project = await projectService.getProject(id, session.userId);
+  const project = await projectService.getProject(id, session.userId, branch);
   if (!project) {
     redirect("/");
   }

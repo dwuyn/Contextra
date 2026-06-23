@@ -1,9 +1,96 @@
 import { stripHtml } from "@/lib/utils";
+import type { HocuspocusProvider } from "@hocuspocus/provider";
 
 export type DraftMode = "local" | "live";
 export type DraftPersistenceReason = "manual" | "autosave" | "blur" | "switch" | "unmount";
 
 const LOCAL_LOADING_MARKER = "text-[var(--color-text-muted)] italic";
+
+async function waitForUnsyncedChangesToClear(
+  provider: HocuspocusProvider,
+  timeoutMs: number,
+  isProviderActive?: () => boolean,
+  startTime = Date.now(),
+): Promise<boolean> {
+  if (isProviderActive && !isProviderActive()) {
+    return false;
+  }
+
+  if (!provider.hasUnsyncedChanges) {
+    return true;
+  }
+
+  if (Date.now() - startTime > timeoutMs) {
+    return false;
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  return waitForUnsyncedChangesToClear(provider, timeoutMs, isProviderActive, startTime);
+}
+
+export const executeLiveSnapshot = async (
+  provider: HocuspocusProvider,
+  timeoutMs: number,
+  isProviderActive?: () => boolean
+): Promise<{ ok: boolean; html?: string; error?: string }> => {
+  if (isProviderActive && !isProviderActive()) {
+    return { ok: false, error: "Stale provider" };
+  }
+  provider.forceSync();
+  if (isProviderActive && !isProviderActive()) {
+    return { ok: false, error: "Stale provider" };
+  }
+
+  const synced = await waitForUnsyncedChangesToClear(provider, timeoutMs, isProviderActive);
+  if (!synced) {
+    if (isProviderActive && !isProviderActive()) {
+      return { ok: false, error: "Stale provider" };
+    }
+    return { ok: false, error: "Unsynced changes timeout" };
+  }
+
+  if (isProviderActive && !isProviderActive()) {
+    return { ok: false, error: "Stale provider" };
+  }
+
+  const requestId = crypto.randomUUID();
+  return new Promise((resolve) => {
+    let resolved = false;
+
+    const cleanup = () => {
+      provider.off("stateless", handleStateless);
+      clearTimeout(timeout);
+    };
+
+    const handleStateless = ({ payload }: { payload: string }) => {
+      try {
+        const data = JSON.parse(payload);
+        if (data.event === "chapter_snapshot_response" && data.requestId === requestId) {
+          resolved = true;
+          cleanup();
+          resolve(data);
+        }
+      } catch {
+        // ignore JSON parse errors from other messages
+      }
+    };
+
+    provider.on("stateless", handleStateless);
+
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        cleanup();
+        resolve({ ok: false, error: "Snapshot request timeout" });
+      }
+    }, Math.max(0, timeoutMs - (Date.now() - startTime)));
+
+    provider.sendStateless(JSON.stringify({
+      event: "chapter_snapshot_request",
+      requestId,
+    }));
+  });
+};
 
 export function resolveLiveCollaborationChapterId(params: {
   selectedChapterId: string | null;
@@ -136,4 +223,13 @@ export function shouldFlushLiveCollaborativeContent(params: {
     reason === "switch" ||
     reason === "unmount"
   );
+}
+
+export function shouldScheduleReconnect(params: {
+  isDestroying: boolean;
+  isActive: boolean;
+  selectedChapterId: string | null;
+  activeChapterId: string | null;
+}) {
+  return params.isActive && !params.isDestroying && params.selectedChapterId === params.activeChapterId;
 }

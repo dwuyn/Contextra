@@ -21,6 +21,20 @@ import { useTranslations } from "next-intl";
 
 export type AiCardsPaneTab = "history" | "chat";
 
+async function readStreamToCompletion(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  decoder: TextDecoder,
+  onChunk: (chunk: string) => void,
+): Promise<void> {
+  const { done, value } = await reader.read();
+  if (done) {
+    return;
+  }
+
+  onChunk(decoder.decode(value, { stream: true }));
+  await readStreamToCompletion(reader, decoder, onChunk);
+}
+
 export function AiCardsPane({
   activeTab,
   onTabChange,
@@ -36,8 +50,10 @@ export function AiCardsPane({
   const aiCards = useProjectStore((state) => state.aiCards);
   const removeAiCard = useProjectStore((state) => state.removeAiCard);
   const projectId = useProjectStore((state) => state.project?.metadata.id ?? null);
-  const messages = useProjectStore((state) => state.project?.aiMessages ?? []);
   const activeBranchId = useProjectStore((state) => state.activeBranchId);
+  const messages = useProjectStore((state) =>
+    state.project?.aiMessages.filter((msg) => msg.branchId === state.activeBranchId) ?? []
+  );
   const appendProjectAiMessage = useProjectStore((state) => state.appendProjectAiMessage);
   const updateProjectAiMessage = useProjectStore((state) => state.updateProjectAiMessage);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -88,17 +104,19 @@ export function AiCardsPane({
       });
       if (!res.ok) throw new Error(await res.text());
 
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("Missing AI response stream.");
+      if (!res.body) throw new Error("Missing AI response stream.");
 
       const decoder = new TextDecoder();
       let accumulated = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        accumulated += decoder.decode(value, { stream: true });
-        updateProjectAiMessage(assistantMessageId, { content: accumulated });
+      const reader = res.body.getReader();
+      try {
+        await readStreamToCompletion(reader, decoder, (chunk) => {
+          accumulated += chunk;
+          updateProjectAiMessage(assistantMessageId, { content: accumulated });
+        });
+      } finally {
+        reader.releaseLock();
       }
 
       startTransition(() => {
@@ -137,196 +155,331 @@ export function AiCardsPane({
   }, [aiCards]);
 
   return (
-    <aside className="h-full w-96 border-l border-[var(--color-border)] bg-[var(--background)] flex flex-col">
-      {/* Tabs Header */}
-      <div className="flex items-center px-4 pt-4 border-b border-[var(--color-border)] bg-[var(--background)]">
-        {showCloseButton && onClose && (
-          <button type="button" onClick={onClose} className="mr-2 p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-all" aria-label={t("close")}>
-            <X size={16} />
-          </button>
-        )}
-        <button 
-          type="button"
-          onClick={() => handleTabChange("history")}
-          className={cn(
-            "flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
-            activeTab === "history" ? "border-[var(--color-accent)] text-[var(--color-text)]" : "border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-          )}
-        >
-          <History size={14} />
-          {t("history")}
-        </button>
-        <button 
-          type="button"
-          onClick={() => handleTabChange("chat")}
-          className={cn(
-            "flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
-            activeTab === "chat" ? "border-[var(--color-accent)] text-[var(--color-text)]" : "border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-          )}
-        >
-          <MessageSquare size={14} />
-          {t("chat")}
-        </button>
-      </div>
-
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth">
+    <aside className="flex h-full w-96 flex-col border-l border-[var(--color-border)] bg-[var(--background)]">
+      <AiCardsPaneHeader
+        activeTab={activeTab}
+        onClose={onClose}
+        onTabChange={handleTabChange}
+        t={t}
+        showCloseButton={showCloseButton}
+      />
+      <div ref={scrollRef} className="scroll-smooth flex-1 overflow-y-auto p-4">
         {activeTab === "history" ? (
-          <>
-            {aiCards.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center px-8">
-                <div className="w-16 h-16 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-                  <Plus size={24} className="text-[var(--color-text-muted)]" />
-                </div>
-                <p className="text-sm font-bold text-[var(--color-text)] mb-2">{t("emptyHistoryTitle")}</p>
-                <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">{t("emptyHistoryDescription")}</p>
-              </div>
-            ) : (
-              aiCards.map((card) => (
-                <div key={card.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[24px] shadow-sm overflow-hidden group hover:shadow-md transition-all">
-                  <div className="px-5 py-3 bg-[var(--color-surface-alt)] border-b border-[var(--color-border)] flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={cn(
-                        "w-5 h-5 rounded-full flex items-center justify-center",
-                        card.status === "loading" && "bg-amber-100",
-                        card.status === "ready" && "bg-[var(--color-accent-muted)]",
-                        card.status === "error" && "bg-[var(--color-destructive)]/10",
-                      )}>
-                        {card.status === "loading" ? (
-                          <Loader2 size={10} className="animate-spin text-amber-600" />
-                        ) : card.status === "error" ? (
-                          <AlertCircle size={10} className="text-[var(--color-destructive)]" />
-                        ) : (
-                          <Sparkles size={10} className="text-[var(--color-accent)]" />
-                        )}
-                      </div>
-                      <span className="text-[10px] font-black uppercase tracking-tighter text-[var(--color-text-muted)]">{card.type}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeAiCard(card.id)}
-                      className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
-                      aria-label={t("removeHistoryCard")}
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                  <div className="p-5" aria-busy={card.status === "loading"}>
-                    <HistoryCardBody card={card} />
-
-                    <div className="mt-6 flex items-center justify-between">
-                      {card.status === "ready" ? (
-                        <div className="flex items-center gap-1">
-                            <button 
-                              type="button"
-                              onClick={() => useProjectStore.getState().insertContent(card.content)}
-                              className="flex items-center gap-2 px-4 py-2 bg-[var(--color-text)] text-[var(--color-surface)] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:opacity-90 transition-colors"
-                            >
-                              <Plus size={12} />
-                              {t("insert")}
-                            </button>
-                            <button 
-                              type="button"
-                              onClick={() => navigator.clipboard.writeText(card.content)}
-                              className="flex items-center gap-2 px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-[var(--color-surface-alt)] transition-colors"
-                          >
-                            <Copy size={12} />
-                            {t("copy")}
-                          </button>
-                        </div>
-                      ) : (
-                        <div className={cn(
-                          "inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest",
-                          card.status === "loading" ? "bg-amber-50 text-amber-700" : "bg-[var(--color-destructive)]/10 text-[var(--color-destructive)]",
-                        )}>
-                          {card.status === "loading" ? (
-                            <>
-                              <Loader2 size={10} className="animate-spin" />
-                              {t("working")}
-                            </>
-                          ) : (
-                            <>
-                              <AlertCircle size={10} />
-                              {t("failed")}
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </>
+          <AiCardsHistoryTab
+            aiCards={aiCards}
+            onRemoveCard={removeAiCard}
+            t={t}
+            onInsert={(content) => useProjectStore.getState().insertContent(content)}
+          />
         ) : (
-          <div className="space-y-4 pb-4">
-            {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center px-8">
-                <div className="w-16 h-16 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-                  <MessageSquare size={24} className="text-[var(--color-text-muted)]" />
-                </div>
-                <p className="text-sm font-bold text-[var(--color-text)] mb-2">{t("emptyChatTitle")}</p>
-                <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">{t("emptyChatDescription")}</p>
-              </div>
-            ) : (
-              messages.map((msg) => (
-                <div key={msg.id} className={cn("flex flex-col", msg.role === "user" ? "items-end" : "items-start")}>
-                  <div className={cn(
-                    "max-w-[85%] rounded-[20px] px-4 py-3 text-sm leading-relaxed",
-                    msg.role === "user" 
-                      ? "bg-[var(--color-accent)] text-white rounded-tr-none" 
-                      : "bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)] rounded-tl-none shadow-sm"
-                  )}>
-                    <div className="prose-sm max-w-none text-inherit leading-relaxed [&>p]:mb-2 last:[&>p]:mb-0 [&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4">
-                      <ReactMarkdown>{msg.content || (isLoading && msg.role === "assistant" ? t("thinking") : "")}</ReactMarkdown>
-                    </div>
-                  </div>
-                  <div className="mt-1 flex items-center gap-1 px-1">
-                    {msg.role === "assistant" ? (
-                      <div className="w-3 h-3 rounded-full bg-[var(--color-accent-muted)] flex items-center justify-center">
-                        <Sparkles size={6} className="text-[var(--color-accent)]" />
-                      </div>
-                    ) : (
-                      <User size={8} className="text-[var(--color-text-muted)]" />
-                    )}
-                    <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                      {msg.role === "assistant" ? t("assistantName") : t("you")}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+          <AiCardsChatTab messages={messages} isLoading={isLoading} t={t} />
         )}
       </div>
-      
-      {/* Input / Footer Area */}
-      <div className="p-4 border-t border-[var(--color-border)] bg-[var(--color-surface)]">
-        {activeTab === "chat" && (
-          <form onSubmit={handleSubmit} className="relative">
-            <label htmlFor="ai-chat-input" className="sr-only">
-              {t("inputLabel")}
-            </label>
-            <input 
-              id="ai-chat-input"
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              disabled={isLoading}
-              placeholder={t("inputPlaceholder")}
-              className="w-full bg-[var(--color-surface-alt)] border-none rounded-2xl pl-4 pr-12 py-3 text-sm focus:ring-1 focus:ring-[var(--color-accent)] outline-none transition-all placeholder:text-[var(--color-text-muted)]"
-            />
-            <button 
-              type="submit"
-              aria-label={t("sendMessage")}
-              disabled={!input.trim() || isLoading}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-[var(--color-text)] text-[var(--color-surface)] flex items-center justify-center hover:opacity-90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <Send aria-hidden="true" size={14} />
-            </button>
-          </form>
-        )}
-      </div>
+      <AiCardsPaneFooter
+        activeTab={activeTab}
+        input={input}
+        isLoading={isLoading}
+        onInputChange={setInput}
+        onSubmit={handleSubmit}
+        t={t}
+      />
     </aside>
+  );
+}
+
+function AiCardsPaneHeader({
+  activeTab,
+  onTabChange,
+  onClose,
+  showCloseButton,
+  t,
+}: {
+  activeTab: AiCardsPaneTab;
+  onTabChange: (tab: AiCardsPaneTab) => void;
+  onClose?: () => void;
+  showCloseButton?: boolean;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <div className="flex items-center border-b border-[var(--color-border)] bg-[var(--background)] px-4 pt-4">
+      {showCloseButton && onClose && (
+        <button type="button" onClick={onClose} className="mr-2 rounded-lg p-1.5 text-[var(--color-text-muted)] transition-all hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text)]" aria-label={t("close")}>
+          <X size={16} />
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => onTabChange("history")}
+        className={cn(
+          "flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all",
+          activeTab === "history" ? "border-[var(--color-accent)] text-[var(--color-text)]" : "border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+        )}
+      >
+        <History size={14} />
+        {t("history")}
+      </button>
+      <button
+        type="button"
+        onClick={() => onTabChange("chat")}
+        className={cn(
+          "flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all",
+          activeTab === "chat" ? "border-[var(--color-accent)] text-[var(--color-text)]" : "border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+        )}
+      >
+        <MessageSquare size={14} />
+        {t("chat")}
+      </button>
+    </div>
+  );
+}
+
+function AiCardsHistoryTab({
+  aiCards,
+  onRemoveCard,
+  onInsert,
+  t,
+}: {
+  aiCards: AiHistoryCard[];
+  onRemoveCard: (id: string) => void;
+  onInsert: (content: string) => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  if (aiCards.length === 0) {
+    return <EmptyHistoryState t={t} />;
+  }
+
+  return (
+    <div className="space-y-6">
+      {aiCards.map((card) => (
+        <AiHistoryCardItem key={card.id} card={card} onRemoveCard={onRemoveCard} onInsert={onInsert} t={t} />
+      ))}
+    </div>
+  );
+}
+
+function AiHistoryCardItem({
+  card,
+  onRemoveCard,
+  onInsert,
+  t,
+}: {
+  card: AiHistoryCard;
+  onRemoveCard: (id: string) => void;
+  onInsert: (content: string) => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <div className="group overflow-hidden rounded-[24px] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm transition-all hover:shadow-md">
+      <div className="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface-alt)] px-5 py-3">
+        <div className="flex items-center gap-2">
+          <CardStatusIcon status={card.status} />
+          <span className="text-[10px] font-black uppercase tracking-tighter text-[var(--color-text-muted)]">{card.type}</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => onRemoveCard(card.id)}
+          className="text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text-secondary)]"
+          aria-label={t("removeHistoryCard")}
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <div className="p-5" aria-busy={card.status === "loading"}>
+        <HistoryCardBody card={card} />
+        <div className="mt-6 flex items-center justify-between">
+          {card.status === "ready" ? (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onInsert(card.content)}
+                className="flex items-center gap-2 rounded-xl bg-[var(--color-text)] px-4 py-2 text-[10px] font-black uppercase tracking-tighter text-[var(--color-surface)] transition-colors hover:opacity-90"
+              >
+                <Plus size={12} />
+                {t("insert")}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(card.content)}
+                className="flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-[10px] font-black uppercase tracking-tighter text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-alt)]"
+              >
+                <Copy size={12} />
+                {t("copy")}
+              </button>
+            </div>
+          ) : (
+            <div
+              className={cn(
+                "inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest",
+                card.status === "loading" ? "bg-amber-50 text-amber-700" : "bg-[var(--color-destructive)]/10 text-[var(--color-destructive)]",
+              )}
+            >
+              {card.status === "loading" ? (
+                <>
+                  <Loader2 size={10} className="animate-spin" />
+                  {t("working")}
+                </>
+              ) : (
+                <>
+                  <AlertCircle size={10} />
+                  {t("failed")}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyHistoryState({ t }: { t: ReturnType<typeof useTranslations> }) {
+  return (
+    <div className="flex flex-col items-center justify-center px-8 py-20 text-center">
+      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm">
+        <Plus size={24} className="text-[var(--color-text-muted)]" />
+      </div>
+      <p className="mb-2 text-sm font-bold text-[var(--color-text)]">{t("emptyHistoryTitle")}</p>
+      <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">{t("emptyHistoryDescription")}</p>
+    </div>
+  );
+}
+
+function AiCardsChatTab({
+  messages,
+  isLoading,
+  t,
+}: {
+  messages: Array<{ id: string; role: "user" | "assistant"; content: string }>;
+  isLoading: boolean;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  if (messages.length === 0) {
+    return <EmptyChatState t={t} />;
+  }
+
+  return (
+    <div className="space-y-4 pb-4">
+      {messages.map((msg) => (
+        <AiChatMessage key={msg.id} message={msg} isLoading={isLoading} t={t} />
+      ))}
+    </div>
+  );
+}
+
+function AiChatMessage({
+  message,
+  isLoading,
+  t,
+}: {
+  message: { id: string; role: "user" | "assistant"; content: string };
+  isLoading: boolean;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <div className={cn("flex flex-col", message.role === "user" ? "items-end" : "items-start")}>
+      <div
+        className={cn(
+          "max-w-[85%] rounded-[20px] px-4 py-3 text-sm leading-relaxed",
+          message.role === "user"
+            ? "rounded-tr-none bg-[var(--color-accent)] text-white"
+            : "rounded-tl-none border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm",
+        )}
+      >
+        <div className="prose-sm max-w-none leading-relaxed text-inherit [&>ol]:pl-4 [&>ul]:list-disc [&>ul]:pl-4 [&>p]:mb-2 last:[&>p]:mb-0 [&>ol]:list-decimal [&>ol]:pl-4">
+          <ReactMarkdown>{message.content || (isLoading && message.role === "assistant" ? t("thinking") : "")}</ReactMarkdown>
+        </div>
+      </div>
+      <div className="mt-1 flex items-center gap-1 px-1">
+        {message.role === "assistant" ? (
+          <div className="flex h-3 w-3 items-center justify-center rounded-full bg-[var(--color-accent-muted)]">
+            <Sparkles size={6} className="text-[var(--color-accent)]" />
+          </div>
+        ) : (
+          <User size={8} className="text-[var(--color-text-muted)]" />
+        )}
+        <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+          {message.role === "assistant" ? t("assistantName") : t("you")}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function EmptyChatState({ t }: { t: ReturnType<typeof useTranslations> }) {
+  return (
+    <div className="flex flex-col items-center justify-center px-8 py-20 text-center">
+      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm">
+        <MessageSquare size={24} className="text-[var(--color-text-muted)]" />
+      </div>
+      <p className="mb-2 text-sm font-bold text-[var(--color-text)]">{t("emptyChatTitle")}</p>
+      <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">{t("emptyChatDescription")}</p>
+    </div>
+  );
+}
+
+function AiCardsPaneFooter({
+  activeTab,
+  input,
+  isLoading,
+  onInputChange,
+  onSubmit,
+  t,
+}: {
+  activeTab: AiCardsPaneTab;
+  input: string;
+  isLoading: boolean;
+  onInputChange: (value: string) => void;
+  onSubmit: (event: React.FormEvent) => Promise<void>;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+      {activeTab === "chat" && (
+        <form onSubmit={onSubmit} className="relative">
+          <label htmlFor="ai-chat-input" className="sr-only">
+            {t("inputLabel")}
+          </label>
+          <input
+            id="ai-chat-input"
+            type="text"
+            value={input}
+            onChange={(e) => onInputChange(e.target.value)}
+            disabled={isLoading}
+            placeholder={t("inputPlaceholder")}
+            className="w-full rounded-2xl border-none bg-[var(--color-surface-alt)] pl-4 pr-12 py-3 text-sm outline-none transition-all placeholder:text-[var(--color-text-muted)] focus:ring-1 focus:ring-[var(--color-accent)]"
+          />
+          <button
+            type="submit"
+            aria-label={t("sendMessage")}
+            disabled={!input.trim() || isLoading}
+            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl bg-[var(--color-text)] text-[var(--color-surface)] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <Send aria-hidden="true" size={14} />
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function CardStatusIcon({ status }: { status: AiHistoryCard["status"] }) {
+  return (
+    <div
+      className={cn(
+        "flex h-5 w-5 items-center justify-center rounded-full",
+        status === "loading" && "bg-amber-100",
+        status === "ready" && "bg-[var(--color-accent-muted)]",
+        status === "error" && "bg-[var(--color-destructive)]/10",
+      )}
+    >
+      {status === "loading" ? (
+        <Loader2 size={10} className="animate-spin text-amber-600" />
+      ) : status === "error" ? (
+        <AlertCircle size={10} className="text-[var(--color-destructive)]" />
+      ) : (
+        <Sparkles size={10} className="text-[var(--color-accent)]" />
+      )}
+    </div>
   );
 }
 

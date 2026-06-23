@@ -80,10 +80,13 @@
       "unsaved": "Chưa lưu thay đổi",
       "saveFailed": "Lưu thất bại",
       "memoryStale": "Đang xây dựng lại bộ nhớ",
-      "unsavedChanges": "Chưa lưu thay đổi"
+      "unsavedChanges": "Chưa lưu thay đổi",
+      "autosavedCheckpointPending": "Đã tự động lưu"
     },
     "save": "Lưu",
+    "saveCheckpoint": "Lưu checkpoint",
     "cancel": "Hủy",
+    "recoveredUnsavedChanges": "Đã khôi phục các thay đổi chưa lưu từ phiên làm việc trước.",
     "chapterTitle": "Tiêu đề chương",
     "charCount": "{count} ký tự",
     "wordCount": "{count} từ",

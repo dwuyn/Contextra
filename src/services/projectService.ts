@@ -680,8 +680,162 @@ export async function getHomeOverview(userId: string): Promise<HomeOverviewData>
   };
 }
 
-export async function getProject(projectId: string, userId: string) {
+export async function getProject(projectId: string, userId: string, branchId?: string) {
+  const accessSnapshot = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      ownerId: true,
+      isPublic: true,
+      collaborators: {
+        select: {
+          userId: true,
+          role: true,
+          permissionLevel: true,
+        },
+      },
+      branches: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  if (!accessSnapshot) return null;
+
+  const viewerAccess = getViewerAccess(accessSnapshot, userId);
+  if (!viewerAccess.canView) return null;
+
+  const defaultBranch = accessSnapshot.branches.find((b) => b.name === "Main") || accessSnapshot.branches[0];
+  const targetBranchId = branchId || defaultBranch?.id;
+
   const presenceCutoff = getPresenceCutoff();
+
+  if (viewerAccess.isPublicViewer) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true,
+        ownerId: true,
+        name: true,
+        mode: true,
+        genre: true,
+        summary: true,
+        isPublic: true,
+        coverImageUrl: true,
+        createdAt: true,
+        updatedAt: true,
+        tone: true,
+        audience: true,
+        sharedNotes: true,
+        worldRules: true,
+        outline: true,
+        collaborators: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                profileImageUrl: true,
+              },
+            },
+          },
+          orderBy: [{ permissionLevel: "desc" }, { createdAt: "asc" }],
+        },
+        chapters: {
+          select: {
+            id: true,
+            projectId: true,
+            branchId: true,
+            title: true,
+            summary: true,
+            index: true,
+            source: true,
+            illustrationPrompt: true,
+            illustrationModel: true,
+            illustrationGeneratedAt: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: { index: "asc" },
+        },
+        branches: true,
+      },
+    });
+
+    if (!project) return null;
+
+    const [currentUser] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          name: true,
+          profileImageUrl: true,
+        },
+      }),
+    ]);
+
+    if (!currentUser) throw new Error("User not found");
+
+    const mappedCurrentUser = {
+      ...currentUser,
+      email: undefined as string | undefined,
+    };
+
+    return {
+      currentUser: mappedCurrentUser,
+      metadata: {
+        id: project.id,
+        ownerId: project.ownerId,
+        name: project.name,
+        mode: project.mode,
+        genre: project.genre,
+        summary: project.summary,
+        isPublic: project.isPublic,
+        coverImageUrl: project.coverImageUrl,
+        createdAt: project.createdAt.toISOString(),
+        updatedAt: project.updatedAt.toISOString(),
+      },
+      collaborators: project.collaborators.map((collaborator) => ({
+        ...collaborator,
+        createdAt: collaborator.createdAt.toISOString(),
+        user: {
+          id: collaborator.user.id,
+          name: collaborator.user.name,
+          profileImageUrl: collaborator.user.profileImageUrl,
+          email: undefined as string | undefined,
+        },
+      })),
+      pendingInvites: [],
+      presence: [],
+      chapterCommentCounts: [],
+      characters: [],
+      canonProposals: [],
+      storyArcs: [],
+      outlineBeats: [],
+      chapters: project.chapters.map((chapter) => ({
+        ...chapter,
+        illustration: toChapterIllustrationMeta(chapter),
+      })),
+      branches: project.branches,
+      contextMemory: {
+        tone: project.tone,
+        audience: project.audience,
+        sharedNotes: project.sharedNotes,
+        worldRules: project.worldRules,
+        updatedAt: project.updatedAt.toISOString(),
+      },
+      outline: normalizeOutline(project.outline),
+      usage: [],
+      versions: [],
+      viewerAccess,
+      aiMessages: [],
+      chatMessages: [],
+    };
+  }
+
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: {
@@ -752,6 +906,7 @@ export async function getProject(projectId: string, userId: string) {
         },
       },
       aiMessages: {
+        where: targetBranchId ? { branchId: targetBranchId } : undefined,
         take: PROJECT_AI_MESSAGES_LIMIT,
         orderBy: getProjectAiMessagesOrderBy("desc"),
       },
@@ -759,9 +914,6 @@ export async function getProject(projectId: string, userId: string) {
   });
 
   if (!project) return null;
-
-  const viewerAccess = getViewerAccess(project, userId);
-  if (!viewerAccess.canView) return null;
 
   const [currentUser, commentCounts] = await Promise.all([
     prisma.user.findUnique({
@@ -787,7 +939,7 @@ export async function getProject(projectId: string, userId: string) {
     chapterCommentCountMap.set(row.chapterId, current);
   }
 
-  return {
+  const baseResult = {
     currentUser,
     metadata: {
       id: project.id,
@@ -805,7 +957,6 @@ export async function getProject(projectId: string, userId: string) {
       ...collaborator,
       createdAt: collaborator.createdAt.toISOString(),
     })),
-    pendingInvites: project.invites.map(toProjectInvite),
     presence: project.presence.map(toProjectPresence),
     chapterCommentCounts: project.chapters.map((chapter) => {
       const counts = chapterCommentCountMap.get(chapter.id) ?? { openCount: 0, totalCount: 0 };
@@ -845,7 +996,6 @@ export async function getProject(projectId: string, userId: string) {
       updatedAt: project.updatedAt.toISOString(),
     },
     outline: normalizeOutline(project.outline),
-    usage: project.usage,
     versions: project.versions.map((v) => ({ id: v.id, label: v.label, createdAt: v.createdAt.toISOString() })),
     viewerAccess,
     aiMessages: orderProjectAiMessagesAscending(project.aiMessages).map(toProjectAiMessage),
@@ -853,6 +1003,20 @@ export async function getProject(projectId: string, userId: string) {
       ...message,
       createdAt: message.createdAt.toISOString(),
     })),
+  };
+
+  if (!viewerAccess.canManage) {
+    return {
+      ...baseResult,
+      pendingInvites: [],
+      usage: [],
+    };
+  }
+
+  return {
+    ...baseResult,
+    pendingInvites: project.invites.map(toProjectInvite),
+    usage: project.usage,
   };
 }
 
@@ -929,17 +1093,29 @@ export async function createChapter(projectId: string, userId: string, input: Cr
   await requireBranchInProject(projectId, input.branchId);
 
   const chapter = await prisma.$transaction(async (tx) => {
-    const chapterCount = await tx.chapter.count({ where: { projectId, branchId: input.branchId } });
-    return tx.chapter.create({
+    // Lock chapters of this branch in this project for update to prevent concurrent index allocation races
+    const lastChapter = await tx.$queryRaw<Array<{ max_index: number | null }>>`
+      SELECT max(index) as max_index FROM "Chapter" 
+      WHERE "projectId" = ${projectId} AND "branchId" = ${input.branchId} 
+      FOR UPDATE
+    `;
+    const nextIndex = (lastChapter[0]?.max_index ?? 0) + 1;
+
+    const createdChapter = await tx.chapter.create({
       data: {
         projectId,
         branchId: input.branchId,
         title: input.title,
         summary: input.summary ?? "",
         content: input.content ?? "",
-        index: chapterCount + 1,
+        index: nextIndex,
       },
     });
+    await tx.project.update({
+      where: { id: projectId },
+      data: { updatedAt: new Date() },
+    });
+    return createdChapter;
   });
 
   const continuity = hasMeaningfulChapterContent(chapter.content)
@@ -1052,14 +1228,20 @@ export async function createBranch(projectId: string, userId: string, input: Cre
     if (!anchor) throw new Error("Base chapter not found");
   }
 
-  await prisma.branch.create({
-    data: {
-      projectId,
-      name: input.name,
-      description: input.description ?? "",
-      basedOnChapterId: input.basedOnChapterId,
-    },
-  });
+  await prisma.$transaction([
+    prisma.branch.create({
+      data: {
+        projectId,
+        name: input.name,
+        description: input.description ?? "",
+        basedOnChapterId: input.basedOnChapterId,
+      },
+    }),
+    prisma.project.update({
+      where: { id: projectId },
+      data: { updatedAt: new Date() },
+    }),
+  ]);
 
   return getProject(projectId, userId);
 }
@@ -1067,13 +1249,20 @@ export async function createBranch(projectId: string, userId: string, input: Cre
 export async function mergeBranch(projectId: string, userId: string, branchId: string) {
   await requireProjectPermission(projectId, userId, "manage");
 
-  const result = await prisma.branch.updateMany({
-    where: { id: branchId, projectId },
-    data: {
-      status: "merged",
-      mergedInto: "main",
-    },
-  });
+  const [result] = await prisma.$transaction([
+    prisma.branch.updateMany({
+      where: { id: branchId, projectId },
+      data: {
+        status: "merged",
+        mergedInto: "main",
+      },
+    }),
+    prisma.project.update({
+      where: { id: projectId },
+      data: { updatedAt: new Date() },
+    }),
+  ]);
+
   if (result.count === 0) throw new Error("Branch not found");
 
   return getProject(projectId, userId);
@@ -1108,6 +1297,11 @@ export async function upsertCharacter(projectId: string, userId: string, input: 
 
   await writeCharacterVector(savedId!, input.name, input.role, input.memory);
 
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { updatedAt: new Date() },
+  });
+
   return getProject(projectId, userId);
 }
 
@@ -1118,6 +1312,11 @@ export async function deleteCharacter(projectId: string, userId: string, charact
     where: { id: characterId, projectId },
   });
   if (result.count === 0) throw new Error("Character not found");
+
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { updatedAt: new Date() },
+  });
 
   return getProject(projectId, userId);
 }
@@ -1187,59 +1386,75 @@ export async function createProjectInvite(projectId: string, userId: string, inp
     requireFriendship(userId, input.receiverUserId),
   ]);
 
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: {
-      ownerId: true,
-      collaborators: {
-        where: {
-          userId: input.receiverUserId,
+  const invite = await prisma.$transaction(async (tx) => {
+    // Lock any existing pending invite for this project and receiver to prevent concurrent invitation races
+    await tx.$queryRaw`
+      SELECT id FROM "ProjectInvite" 
+      WHERE "projectId" = ${projectId} AND "receiverUserId" = ${input.receiverUserId} AND "status" = 'pending' 
+      FOR UPDATE
+    `;
+
+    const project = await tx.project.findUnique({
+      where: { id: projectId },
+      select: {
+        ownerId: true,
+        collaborators: {
+          where: {
+            userId: input.receiverUserId,
+          },
+          select: { id: true },
+          take: 1,
         },
-        select: { id: true },
-        take: 1,
-      },
-      invites: {
-        where: {
-          receiverUserId: input.receiverUserId,
-          status: "pending",
+        invites: {
+          where: {
+            receiverUserId: input.receiverUserId,
+            status: "pending",
+          },
+          select: { id: true },
+          take: 1,
         },
-        select: { id: true },
-        take: 1,
       },
-    },
+    });
+
+    if (!project) throw new Error("Project not found");
+    if (project.ownerId === input.receiverUserId || project.collaborators.length > 0) {
+      throw new Error("That user is already a collaborator");
+    }
+    if (project.invites.length > 0) {
+      throw new Error("An invite is already pending for that collaborator");
+    }
+
+    const newInvite = await tx.projectInvite.create({
+      data: {
+        projectId,
+        senderUserId: userId,
+        receiverUserId: input.receiverUserId,
+        permissionLevel: input.permissionLevel,
+      },
+      include: {
+        sender: {
+          select: PROJECT_USER_SELECT,
+        },
+        receiver: {
+          select: PROJECT_USER_SELECT,
+        },
+      },
+    });
+
+    await tx.project.update({
+      where: { id: projectId },
+      data: { updatedAt: new Date() },
+    });
+
+    return newInvite;
   });
 
-  if (!project) throw new Error("Project not found");
-  if (project.ownerId === input.receiverUserId || project.collaborators.length > 0) {
-    throw new Error("That user is already a collaborator");
-  }
-  if (project.invites.length > 0) {
-    throw new Error("An invite is already pending for that collaborator");
-  }
-
-  const invite = await prisma.projectInvite.create({
-    data: {
-      projectId,
-      senderUserId: userId,
-      receiverUserId: input.receiverUserId,
-      permissionLevel: input.permissionLevel,
-    },
-    include: {
-      sender: {
-        select: PROJECT_USER_SELECT,
-      },
-      receiver: {
-        select: PROJECT_USER_SELECT,
-      },
-    },
-  });
-
-  const hydratedProject = await getProject(projectId, userId);
+  const hydratedProject = await getProject(invite.projectId, userId);
   if (!hydratedProject) throw new Error("Project not found");
 
   return {
-    project: hydratedProject,
     invite: toProjectInvite(invite),
+    project: hydratedProject,
   };
 }
 
@@ -1265,20 +1480,29 @@ export async function cancelProjectInvite(projectId: string, userId: string, inv
 
   if (!invite) throw new Error("Invite not found");
 
-  const updatedInvite = await prisma.projectInvite.update({
-    where: { id: invite.id },
-    data: { status: "canceled" },
-    include: {
-      sender: {
-        select: PROJECT_USER_SELECT,
+  const updatedInvite = await prisma.$transaction(async (tx) => {
+    const nextInvite = await tx.projectInvite.update({
+      where: { id: invite.id },
+      data: { status: "canceled" },
+      include: {
+        sender: {
+          select: PROJECT_USER_SELECT,
+        },
+        receiver: {
+          select: PROJECT_USER_SELECT,
+        },
       },
-      receiver: {
-        select: PROJECT_USER_SELECT,
-      },
-    },
+    });
+
+    await tx.project.update({
+      where: { id: projectId },
+      data: { updatedAt: new Date() },
+    });
+
+    return nextInvite;
   });
 
-  const hydratedProject = await getProject(projectId, userId);
+  const hydratedProject = await getProject(updatedInvite.projectId, userId);
   if (!hydratedProject) throw new Error("Project not found");
 
   return {
@@ -1357,6 +1581,10 @@ export async function removeProjectMember(
         },
       },
     }),
+    prisma.project.update({
+      where: { id: projectId },
+      data: { updatedAt: new Date() },
+    }),
   ]);
 
   return {
@@ -1423,6 +1651,11 @@ export async function respondToProjectInvite(userId: string, inviteId: string, i
         });
       }
     }
+
+    await tx.project.update({
+      where: { id: invite.projectId },
+      data: { updatedAt: new Date() },
+    });
 
     return nextInvite;
   });
@@ -1746,7 +1979,7 @@ export async function sendProjectChat(projectId: string, userId: string, input: 
   ]);
 
   const messages = await prisma.chatMessage.findMany({
-    where: { projectId },
+    where: { projectId: createdMessage.projectId },
     orderBy: { createdAt: "desc" },
     take: 60,
   });
@@ -1771,9 +2004,9 @@ export async function createProjectAiMessage(input: {
   });
 }
 
-export async function listProjectAiMessages(projectId: string, take = PROJECT_AI_MESSAGES_LIMIT) {
+export async function listProjectAiMessages(projectId: string, branchId: string, take = PROJECT_AI_MESSAGES_LIMIT) {
   const messages = await prisma.projectAiMessage.findMany({
-    where: { projectId },
+    where: { projectId, branchId },
     take,
     orderBy: getProjectAiMessagesOrderBy("desc"),
   });
@@ -1981,11 +2214,17 @@ export async function reorderChapters(projectId: string, userId: string, ordered
     throw new Error("Cannot reorder chapters across branches");
   }
 
-  await prisma.$executeRaw`
-    UPDATE "Chapter" AS c SET "index" = v.index
-    FROM (VALUES ${Prisma.join(orderedIds.map((id, index) => Prisma.sql`(${id}, ${index + 1})`))}) AS v(id, index)
-    WHERE c.id = v.id
-  `;
+  await prisma.$transaction([
+    prisma.$executeRaw`
+      UPDATE "Chapter" AS c SET "index" = v.index
+      FROM (VALUES ${Prisma.join(orderedIds.map((id, index) => Prisma.sql`(${id}, ${index + 1})`))}) AS v(id, index)
+      WHERE c.id = v.id
+    `,
+    prisma.project.update({
+      where: { id: projectId },
+      data: { updatedAt: new Date() },
+    }),
+  ]);
 
   return getProject(projectId, userId);
 }
@@ -2001,7 +2240,7 @@ export async function deleteChapter(projectId: string, userId: string, chapterId
   if (!chapter) throw new Error("Chapter not found");
 
   await prisma.$transaction(async (tx) => {
-    await Promise.all([
+    const [, , deletedChapter] = await Promise.all([
       tx.chapterVersion.deleteMany({
         where: { projectId, chapterId },
       }),
@@ -2009,14 +2248,14 @@ export async function deleteChapter(projectId: string, userId: string, chapterId
         where: { projectId, basedOnChapterId: chapterId },
         data: { basedOnChapterId: "root" },
       }),
+      tx.chapter.delete({
+        where: { id: chapterId },
+        select: { branchId: true },
+      }),
     ]);
 
-    await tx.chapter.delete({
-      where: { id: chapterId },
-    });
-
     const remainingBranchChapters = await tx.chapter.findMany({
-      where: { projectId, branchId: chapter.branchId },
+      where: { projectId, branchId: deletedChapter.branchId },
       orderBy: [{ index: "asc" }, { createdAt: "asc" }],
       select: { id: true },
     });

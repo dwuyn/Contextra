@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useState, useEffect, useRef } from "react";
+import { useCallback, useState, useEffect, useRef, useReducer } from "react";
 import { MessageSquare, Search, Send } from "lucide-react";
 import { getFriends } from "@/actions/friends";
 import { getDirectMessages, sendDirectMessage } from "@/actions/chat";
@@ -27,6 +27,43 @@ type DirectMessageSummary = {
   createdAt: string | Date;
 };
 
+type FriendsState = {
+  friends: FriendSummary[];
+  selectedFriend: FriendSummary | null;
+  unreadMap: Record<string, boolean>;
+  latestMessage: DirectMessageSummary | null;
+};
+
+type FriendsAction =
+  | { type: "SET_FRIENDS"; friends: FriendSummary[] }
+  | { type: "SELECT_FRIEND"; friend: FriendSummary | null }
+  | { type: "NEW_MESSAGE"; message: DirectMessageSummary; isSelected: boolean };
+
+function friendsReducer(state: FriendsState, action: FriendsAction): FriendsState {
+  switch (action.type) {
+    case "SET_FRIENDS":
+      return { ...state, friends: action.friends };
+    case "SELECT_FRIEND":
+      return {
+        ...state,
+        selectedFriend: action.friend,
+        unreadMap: action.friend
+          ? { ...state.unreadMap, [action.friend.id]: false }
+          : state.unreadMap,
+      };
+    case "NEW_MESSAGE":
+      return {
+        ...state,
+        latestMessage: action.message,
+        unreadMap: !action.isSelected
+          ? { ...state.unreadMap, [action.message.senderId]: true }
+          : state.unreadMap,
+      };
+    default:
+      return state;
+  }
+}
+
 function asString(value: unknown) {
   return typeof value === "string" ? value : undefined;
 }
@@ -51,17 +88,22 @@ function toDirectMessage(data: Record<string, unknown>): DirectMessageSummary | 
 
 export function FriendsView() {
   const t = useTranslations("friendsView");
-  const [friends, setFriends] = useState<FriendSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFriend, setSelectedFriend] = useState<FriendSummary | null>(null);
-  const [unreadMap, setUnreadMap] = useState<Record<string, boolean>>({});
-  const [latestMessage, setLatestMessage] = useState<DirectMessageSummary | null>(null);
+
+  const [state, dispatch] = useReducer(friendsReducer, {
+    friends: [],
+    selectedFriend: null,
+    unreadMap: {},
+    latestMessage: null,
+  });
+
+  const { friends, selectedFriend, unreadMap, latestMessage } = state;
   const appendMessageRef = useRef<((msg: DirectMessageSummary) => void) | null>(null);
 
   async function fetchFriends() {
     try {
       const data = await getFriends();
-      setFriends(data);
+      dispatch({ type: "SET_FRIENDS", friends: data });
     } catch (err) {
       console.error("Failed to fetch friends", err);
     }
@@ -75,18 +117,17 @@ export function FriendsView() {
     if (event === "new_message") {
       const message = toDirectMessage(data);
       if (!message) return;
-      setLatestMessage(message);
-      if (selectedFriend?.id !== message.senderId) {
-        setUnreadMap(prev => ({ ...prev, [message.senderId]: true }));
-      } else {
+
+      const isSelected = selectedFriend?.id === message.senderId;
+      dispatch({ type: "NEW_MESSAGE", message, isSelected });
+      if (isSelected) {
         appendMessageRef.current?.(message);
       }
     }
   });
 
-  const handleSelectFriend = (friend: FriendSummary) => {
-    setSelectedFriend(friend);
-    setUnreadMap(prev => ({ ...prev, [friend.id]: false }));
+  const handleSelectFriend = (friend: FriendSummary | null) => {
+    dispatch({ type: "SELECT_FRIEND", friend });
   };
 
   const filteredFriends = friends.filter(f => 
@@ -104,7 +145,7 @@ export function FriendsView() {
         {selectedFriend ? (
           <button 
             type="button"
-            onClick={() => setSelectedFriend(null)}
+            onClick={() => handleSelectFriend(null)}
             className="flex h-10 items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm font-bold text-[var(--color-text)] hover:bg-[var(--color-canvas)] transition-colors shadow-sm"
           >
             {t("close")}

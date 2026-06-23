@@ -25,9 +25,11 @@ type ChapterContentReplacement = {
   nonce: number;
 };
 
-type ChapterDraftCache = {
+export type ChapterDraftCache = {
   title: string;
   content: string;
+  origin?: "local" | "live-recovery";
+  savedAt?: number;
 };
 
 interface ProjectState {
@@ -47,6 +49,7 @@ interface ProjectState {
   selectedCommentThreadId: string | null;
 
   setProject: (project: ProjectData | null) => void;
+  hydrateProject: (project: ProjectData) => void;
   setSelectedProjectId: (id: string | null) => void;
   setSelectedChapterId: (id: string | null) => void;
   setActiveBranchId: (id: string) => void;
@@ -102,6 +105,25 @@ function updateChapterCommentCounts(
   };
 }
 
+function getInitialDraftCache(): Record<string, ChapterDraftCache> {
+  if (typeof window === "undefined") return {};
+  try {
+    const val = window.localStorage.getItem("contextra_draft_cache");
+    if (!val) return {};
+    const parsed = JSON.parse(val);
+    const result: Record<string, ChapterDraftCache> = {};
+    for (const key of Object.keys(parsed)) {
+      result[key] = {
+        ...parsed[key],
+        origin: parsed[key].origin ?? "local",
+      };
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 let chapterContentReplacementNonce = 0;
 
 export const useProjectStore = create<ProjectState>((set) => ({
@@ -115,7 +137,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   aiCards: [],
   pendingInsertion: null,
   chapterContentCache: {},
-  chapterDraftCache: {},
+  chapterDraftCache: getInitialDraftCache(),
   pendingChapterContentReplacements: {},
   commentThreadsByChapter: {},
   selectedCommentThreadId: null,
@@ -124,6 +146,30 @@ export const useProjectStore = create<ProjectState>((set) => ({
     const isSameProject = state.project?.metadata.id === project?.metadata.id;
     return {
       project,
+      commentThreadsByChapter: isSameProject ? state.commentThreadsByChapter : {},
+      selectedCommentThreadId: isSameProject ? state.selectedCommentThreadId : null,
+    };
+  }),
+  hydrateProject: (project) => set((state) => {
+    const isSameProject = state.project?.metadata.id === project.metadata.id;
+    const nextSelectedProjectId = project.metadata.id;
+    const currentBranch = project.branches.find((branch) => branch.id === state.activeBranchId);
+    const fallbackBranch = currentBranch || project.branches.find((branch) => branch.name === "Main") || project.branches[0];
+    const nextActiveBranchId = fallbackBranch?.id ?? "";
+    const hasSelectedChapter = state.selectedChapterId
+      ? project.chapters.some((chapter) => chapter.id === state.selectedChapterId)
+      : false;
+    const fallbackChapter = hasSelectedChapter
+      ? project.chapters.find((chapter) => chapter.id === state.selectedChapterId)
+      : fallbackBranch
+        ? project.chapters.find((chapter) => chapter.branchId === fallbackBranch.id) || project.chapters[0]
+        : project.chapters[0];
+
+    return {
+      project,
+      selectedProjectId: nextSelectedProjectId,
+      activeBranchId: nextActiveBranchId,
+      selectedChapterId: fallbackChapter?.id ?? null,
       commentThreadsByChapter: isSameProject ? state.commentThreadsByChapter : {},
       selectedCommentThreadId: isSameProject ? state.selectedCommentThreadId : null,
     };
@@ -172,12 +218,20 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
     };
   }),
-  setChapterDraft: (chapterId, draft) => set((state) => ({
-    chapterDraftCache: {
+  setChapterDraft: (chapterId, draft) => set((state) => {
+    const nextDraftCache = {
       ...state.chapterDraftCache,
       [chapterId]: draft,
-    },
-  })),
+    };
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("contextra_draft_cache", JSON.stringify(nextDraftCache));
+      }
+    } catch {}
+    return {
+      chapterDraftCache: nextDraftCache,
+    };
+  }),
   clearChapterDraft: (chapterId) => set((state) => {
     if (!(chapterId in state.chapterDraftCache)) {
       return state;
@@ -185,6 +239,12 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
     const nextDraftCache = { ...state.chapterDraftCache };
     delete nextDraftCache[chapterId];
+
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("contextra_draft_cache", JSON.stringify(nextDraftCache));
+      }
+    } catch {}
 
     return {
       chapterDraftCache: nextDraftCache,

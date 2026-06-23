@@ -124,7 +124,8 @@ export async function generateLongOutlineFromStoryBible(context: StoryBibleGener
   const arcs: GeneratedLongOutlineArc[] = [];
   let totalTokens = 0;
 
-  for (let start = 1; start <= targetChapterCount; start += LONG_OUTLINE_SEGMENT_SIZE) {
+  async function generateSegment(start: number): Promise<void> {
+    if (start > targetChapterCount) return;
     const end = Math.min(start + LONG_OUTLINE_SEGMENT_SIZE - 1, targetChapterCount);
     const previousArcDigest = arcs
       .slice(-5)
@@ -134,7 +135,11 @@ export async function generateLongOutlineFromStoryBible(context: StoryBibleGener
     const segment = await generateLongOutlineSegment(context, targetChapterCount, start, end, previousArcDigest);
     arcs.push(...segment.arcs);
     totalTokens += segment.tokens;
+
+    await generateSegment(start + LONG_OUTLINE_SEGMENT_SIZE);
   }
+
+  await generateSegment(1);
 
   return {
     outline: { arcs },

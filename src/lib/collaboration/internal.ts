@@ -35,11 +35,14 @@ async function postCollaborationInternal<T>(path: string, body: Record<string, u
   return response.json() as Promise<T>;
 }
 
-export async function exportCollaborativeChapter(chapterId: string) {
+export async function exportCollaborativeChapter(params: {
+  projectId: string;
+  chapterId: string;
+}) {
   return postCollaborationInternal<{
     html: string;
     continuity: ContinuityRefreshStatus;
-  }>("/internal/documents/export", { chapterId });
+  }>("/internal/documents/export", params);
 }
 
 export async function replaceCollaborativeChapter(params: {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canFinalizeLiveCollaborationSync,
+  executeLiveSnapshot,
   getPreservedEditorContent,
   getPreferredDraftContent,
   getEditorTransportKey,
@@ -10,6 +11,7 @@ import {
   shouldFlushLiveCollaborativeContent,
   shouldPreservePreviousEditorContent,
   shouldPublishSavedTitle,
+  shouldScheduleReconnect,
 } from "@/components/mainEditorCollaboration";
 
 describe("mainEditorCollaboration", () => {
@@ -182,5 +184,87 @@ describe("mainEditorCollaboration", () => {
       createVersion: true,
       reason: "manual",
     })).toBe(true);
+  });
+
+  it("determines whether to schedule reconnect based on provider lifecycle and active chapter ID", () => {
+    expect(shouldScheduleReconnect({
+      isDestroying: false,
+      isActive: true,
+      selectedChapterId: "chapter-1",
+      activeChapterId: "chapter-1",
+    })).toBe(true);
+
+    expect(shouldScheduleReconnect({
+      isDestroying: true,
+      isActive: true,
+      selectedChapterId: "chapter-1",
+      activeChapterId: "chapter-1",
+    })).toBe(false);
+
+    expect(shouldScheduleReconnect({
+      isDestroying: false,
+      isActive: false,
+      selectedChapterId: "chapter-1",
+      activeChapterId: "chapter-1",
+    })).toBe(false);
+
+    expect(shouldScheduleReconnect({
+      isDestroying: false,
+      isActive: true,
+      selectedChapterId: "chapter-1",
+      activeChapterId: "chapter-2",
+    })).toBe(false);
+  });
+
+  describe("executeLiveSnapshot", () => {
+    it("returns stale provider error if provider becomes stale before forceSync", async () => {
+      const mockProvider: any = {
+        forceSync: vi.fn(),
+        hasUnsyncedChanges: false,
+        on: vi.fn(),
+        off: vi.fn(),
+        sendStateless: vi.fn(),
+      };
+
+      const res = await executeLiveSnapshot(mockProvider, 1000, () => false);
+      expect(res).toEqual({ ok: false, error: "Stale provider" });
+      expect(mockProvider.forceSync).not.toHaveBeenCalled();
+    });
+
+    it("returns stale provider error if provider becomes stale during sync check loop", async () => {
+      const mockProvider: any = {
+        forceSync: vi.fn(),
+        hasUnsyncedChanges: true,
+        on: vi.fn(),
+        off: vi.fn(),
+        sendStateless: vi.fn(),
+      };
+
+      let active = true;
+      const checkActive = () => active;
+
+      const promise = executeLiveSnapshot(mockProvider, 1000, checkActive);
+
+      setTimeout(() => {
+        active = false;
+      }, 20);
+
+      const res = await promise;
+      expect(res).toEqual({ ok: false, error: "Stale provider" });
+    });
+
+    it("returns timeout error if hasUnsyncedChanges is true past timeoutMs", async () => {
+      const mockProvider: any = {
+        forceSync: vi.fn(),
+        hasUnsyncedChanges: true,
+        on: vi.fn(),
+        off: vi.fn(),
+        sendStateless: vi.fn(),
+      };
+
+      const res = await executeLiveSnapshot(mockProvider, 50, () => true);
+      expect(res.ok).toBe(false);
+      expect(res.error).toContain("timeout");
+    });
   });
 });
