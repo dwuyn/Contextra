@@ -531,7 +531,7 @@ export async function restoreVersion(projectId: string, chapterId: string, versi
   const result = await projectService.restoreVersion(projectId, session.userId, chapterId, versionId);
 
   const chapter = await prisma.chapter.findFirst({
-    where: { id: chapterId, projectId },
+    where: { id: result ? chapterId : chapterId, projectId },
     select: { title: true, updatedAt: true },
   });
 

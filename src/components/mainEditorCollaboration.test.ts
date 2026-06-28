@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { HocuspocusProvider } from "@hocuspocus/provider";
 import {
   canMergeBackgroundSaveRequests,
   canFinalizeLiveCollaborationSync,
@@ -262,7 +263,7 @@ describe("mainEditorCollaboration", () => {
         sendStateless: vi.fn(),
       };
 
-      const res = await executeLiveSnapshot(mockProvider, 1000, () => false);
+      const res = await executeLiveSnapshot(mockProvider as unknown as HocuspocusProvider, 1000, () => false);
       expect(res).toEqual({ ok: false, error: "Stale provider" });
       expect(mockProvider.forceSync).not.toHaveBeenCalled();
     });
@@ -279,7 +280,7 @@ describe("mainEditorCollaboration", () => {
       let active = true;
       const checkActive = () => active;
 
-      const promise = executeLiveSnapshot(mockProvider, 1000, checkActive);
+      const promise = executeLiveSnapshot(mockProvider as unknown as HocuspocusProvider, 1000, checkActive);
 
       setTimeout(() => {
         active = false;
@@ -298,7 +299,7 @@ describe("mainEditorCollaboration", () => {
         sendStateless: vi.fn(),
       };
 
-      const res = await executeLiveSnapshot(mockProvider, 50, () => true);
+      const res = await executeLiveSnapshot(mockProvider as unknown as HocuspocusProvider, 50, () => true);
       expect(res.ok).toBe(false);
       expect(res.error).toContain("timeout");
     });

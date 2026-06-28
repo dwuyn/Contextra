@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 const STALE_CONTINUITY_JOB_MS = 15 * 60 * 1000;
+const COLLAB_HEALTH = { status: "disabled" as const, lastError: null };
 
 export async function GET() {
   try {
@@ -44,7 +45,6 @@ export async function GET() {
       },
     });
 
-    const collabHealth = { status: "disabled" as const, lastError: null };
     const continuityStatus =
       jobs.failed > 0 || staleProcessingCount > 0 || staleQueuedCount > 0
         ? "degraded"
@@ -61,8 +61,8 @@ export async function GET() {
             : "ok",
       database: "healthy",
       collaborationPersistence: {
-        status: collabHealth.status,
-        lastError: collabHealth.lastError,
+        status: COLLAB_HEALTH.status,
+        lastError: COLLAB_HEALTH.lastError,
       },
       continuityJobs: {
         ...jobs,

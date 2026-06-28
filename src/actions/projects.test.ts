@@ -147,8 +147,20 @@ describe("projects.saveCollaborativeChapter", () => {
       name: "Editor One",
     });
     vi.mocked(projectService.getChapterCollaborationAccess).mockResolvedValue({
-      viewerAccess: { canEdit: true },
-      user: { id: "user-1", name: "Editor One" },
+      viewerAccess: {
+        canView: true,
+        canEdit: true,
+        canManage: false,
+        isPublicViewer: false,
+        permissionLevel: 1,
+        role: "editor",
+      },
+      user: {
+        id: "user-1",
+        name: "Editor One",
+        email: "user@example.com",
+        profileImageUrl: null,
+      },
     });
     vi.mocked(projectService.updateChapter).mockResolvedValue({
       status: "saved",

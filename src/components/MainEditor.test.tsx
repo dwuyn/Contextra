@@ -78,7 +78,8 @@ vi.mock("@hocuspocus/provider", () => ({
   },
 }));
 
-let latestEditorConfig: EditorConfig | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let latestEditorConfig: any = null;
 const mockSetContent = vi.fn();
 const mockGetHTML = vi.fn(() => "<p>Initial draft</p>");
 const mockEditorInstance = {
@@ -487,7 +488,8 @@ describe("MainEditor", () => {
   });
 
   it("loads the next chapter without waiting for the previous chapter save to finish", async () => {
-    let resolveSave: ((value: Awaited<ReturnType<typeof updateChapter>>) => void) | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let resolveSave: any = null;
     vi.mocked(updateChapter).mockImplementationOnce(() => new Promise((resolve) => {
       resolveSave = resolve;
     }));

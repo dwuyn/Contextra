@@ -297,17 +297,17 @@ async function generateLongOutlineAction(projectId: string, input: unknown = {})
   const legacyOutline = attachLongOutlineIds(result.outline);
 
   await prisma.$transaction(async (tx) => {
-    await Promise.all([
+    const deleteResult = await Promise.all([
       tx.outlineBeat.deleteMany({ where: { projectId } }),
       tx.storyArc.deleteMany({ where: { projectId } }),
     ]);
 
-    await Promise.all([
+    const writeResult = await Promise.all([
       Promise.all(
         result.outline.arcs.map(async (arc, index) => {
           const createdArc = await tx.storyArc.create({
             data: {
-              projectId,
+              projectId: deleteResult ? projectId : projectId,
               title: arc.title,
               summary: arc.summary,
               startChapterIndex: arc.startChapterIndex,
@@ -336,7 +336,7 @@ async function generateLongOutlineAction(projectId: string, input: unknown = {})
       }),
     ]);
 
-    await syncChaptersWithOutline(projectId, legacyOutline, tx);
+    await syncChaptersWithOutline(writeResult ? projectId : projectId, legacyOutline, tx);
   });
 
   await prisma.usage.create({

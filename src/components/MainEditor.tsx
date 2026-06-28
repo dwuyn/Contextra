@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent as useEvent, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import type { Editor as TiptapEditor } from "@tiptap/core";
@@ -319,37 +319,23 @@ function useMainEditorState({
   const { toggleZen } = useZenStore();
   const t = useTranslations();
   const tRef = useRef(t);
-  useEffect(() => {
-    tRef.current = t;
-  }, [t]);
+  tRef.current = t;
 
   const [title, setTitle] = useState(currentChapter?.title || "");
-  const [collaborationDisabledChapterId, setCollaborationDisabledChapterId] = useState<string | null>(null);
-  const [liveCollaborationChapterId, setLiveCollaborationChapterId] = useState<string | null>(null);
   const [collab, setCollab] = useState<{
     session: ProjectCollaborationSession | null;
     provider: HocuspocusProvider | null;
     state: CollaborationState;
     error: string | null;
-  }>({ session: null, provider: null, state: "idle", error: null });
+    localFallbackInfo: LocalFallbackInfo | null;
+  }>({ session: null, provider: null, state: "idle", error: null, localFallbackInfo: null });
   const [collabPersistenceWarning, setCollabPersistenceWarning] = useState<string | null>(null);
-  const [localFallbackInfo, setLocalFallbackInfo] = useState<LocalFallbackInfo | null>(null);
-  const collabRef = useRef(collab);
-  useEffect(() => {
-    collabRef.current = collab;
-  }, [collab]);
   const pendingRetryRequestsRef = useRef<Record<string, SaveRequest>>({});
   const saveTokensRef = useRef<Record<string, number>>({});
   const selectedChapterIdRef = useRef<string | null>(selectedChapterId);
+  selectedChapterIdRef.current = selectedChapterId;
   const currentSessionDocumentNameRef = useRef<string | null>(collab.session?.documentName ?? null);
-
-  useEffect(() => {
-    selectedChapterIdRef.current = selectedChapterId;
-  }, [selectedChapterId]);
-
-  useEffect(() => {
-    currentSessionDocumentNameRef.current = collab.session?.documentName ?? null;
-  }, [collab.session?.documentName]);
+  currentSessionDocumentNameRef.current = collab.session?.documentName ?? null;
   const [isSaving, setIsSaving] = useState(false);
   const [hasPendingPersistence, setHasPendingPersistence] = useState(false);
   const [hasPendingCheckpoint, setHasPendingCheckpoint] = useState(false);
@@ -375,7 +361,10 @@ function useMainEditorState({
   const currentChapterTitleRef = useRef(currentChapter?.title ?? "");
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<TiptapEditor | null>(null);
-  const latestDraftRef = useRef<DraftSnapshot>(createEmptyDraftSnapshot());
+  const latestDraftRef = useRef<DraftSnapshot>(null as unknown as DraftSnapshot);
+  if (latestDraftRef.current === null) {
+    latestDraftRef.current = createEmptyDraftSnapshot();
+  }
   const draftsByChapterIdRef = useRef<Record<string, DraftSnapshot>>({});
   const persistedSnapshotsRef = useRef<Record<string, ChapterSnapshot>>({});
   const checkpointSnapshotsRef = useRef<Record<string, ChapterSnapshot>>({});
@@ -390,22 +379,59 @@ function useMainEditorState({
   const collaborationReadyFrameRef = useRef<number | null>(null);
   const collaborationProviderSyncedRef = useRef(false);
   const collaborationEditorRenderedRef = useRef(false);
-  const requestSaveRef = useRef<(request: SaveRequest) => void>(() => undefined);
-  const canEditRef = useRef(canEdit);
-  const canCollaborateRef = useRef(canCollaborate);
   const draftModesByChapterRef = useRef<Record<string, DraftMode>>({});
   const isLiveCollaborationRequested = false;
+  const liveCollaborationChapterId = (
+    canCollaborate &&
+    canEdit &&
+    selectedChapterId &&
+    isLiveCollaborationRequested &&
+    collab.localFallbackInfo?.chapterId !== selectedChapterId
+  ) ? selectedChapterId : null;
   const usesCollaborativeBody = selectedChapterId != null && liveCollaborationChapterId === selectedChapterId;
-  const isLoadingContentRef = useRef(isLoadingContent);
   const isMountedRef = useRef(true);
   const suppressAutosaveRef = useRef(false);
   const presenceStateRef = useRef<"viewing" | "editing">("viewing");
   const presenceIntervalRef = useRef<number | null>(null);
-  const collaborationProjectIdRef = useRef<string | null>(project?.metadata.id ?? null);
   const collaborationHasSyncedRef = useRef(false);
   const collaborationModeRef = useRef<DraftMode>("local");
   const collaborationExpectedContentRef = useRef("");
   const pendingUnmountSaveRef = useRef<Promise<void> | null>(null);
+
+  // Synchronize refs during rendering
+  currentCachedContentRef.current = currentCachedContent;
+  currentChapterTitleRef.current = currentChapter?.title ?? "";
+
+  // Keep track of previous props to adjust state during rendering
+  const [prevProps, setPrevProps] = useState({
+    canCollaborate,
+    canEdit,
+    selectedChapterId,
+    currentChapterId: currentChapter?.id,
+    currentChapterTitle: currentChapter?.title,
+  });
+
+  if (
+    prevProps.canCollaborate !== canCollaborate ||
+    prevProps.canEdit !== canEdit ||
+    prevProps.selectedChapterId !== selectedChapterId ||
+    prevProps.currentChapterId !== currentChapter?.id ||
+    prevProps.currentChapterTitle !== currentChapter?.title
+  ) {
+    setPrevProps({
+      canCollaborate,
+      canEdit,
+      selectedChapterId,
+      currentChapterId: currentChapter?.id,
+      currentChapterTitle: currentChapter?.title,
+    });
+
+    // 1. Sync title if chapter title changed from props and user is not editing it
+    if (currentChapter && currentChapter.title !== title && document.activeElement !== titleInputRef.current) {
+      setTitle(currentChapter.title);
+    }
+
+  }
 
   const createDraftSnapshot = (): DraftSnapshot => ({
     ...latestDraftRef.current,
@@ -453,11 +479,11 @@ function useMainEditorState({
     );
   }, []);
 
-  const clearAutosaveTimer = () => {
+  const clearAutosaveTimer = useCallback(() => {
     if (autosaveTimeoutRef.current === null) return;
     window.clearTimeout(autosaveTimeoutRef.current);
     autosaveTimeoutRef.current = null;
-  };
+  }, []);
 
   const clearCollaborativeFlushTimer = useCallback(() => {
     if (collaborativeFlushTimeoutRef.current === null) return;
@@ -605,14 +631,14 @@ function useMainEditorState({
     clearCollaborationReadyFrame();
     collaborationProviderSyncedRef.current = false;
     collaborationEditorRenderedRef.current = false;
-    setCollab({ session: null, provider: null, state: "idle", error: null });
+    setCollab({ session: null, provider: null, state: "idle", error: null, localFallbackInfo: null });
     setCollabPersistenceWarning(null);
     pendingRetryRequestsRef.current = {};
     collaborationHasSyncedRef.current = false;
     collaborationRetryCountRef.current = 0;
   }, [clearCollaborativeFlushTimer, clearCollaborationReadyFrame, clearCollaborationRetryTimer, clearCollaborationSyncTimeout]);
 
-  const reportLocalFallback = useCallback((params: {
+  const reportLocalFallback = useEvent((params: {
     chapterId: string | null;
     errorMessage: string;
     trigger: string;
@@ -625,9 +651,9 @@ function useMainEditorState({
 
     const debugContext = {
       trigger,
-      collabState: collabRef.current.state,
-      websocketUrl: collabRef.current.session?.websocketUrl ?? null,
-      documentName: collabRef.current.session?.documentName ?? null,
+      collabState: collab.state,
+      websocketUrl: collab.session?.websocketUrl ?? null,
+      documentName: collab.session?.documentName ?? null,
       ...context,
     };
 
@@ -637,68 +663,18 @@ function useMainEditorState({
       ...debugContext,
     });
 
-    setLocalFallbackInfo({
-      chapterId,
-      detail: buildFallbackDetail(debugContext),
-    });
-  }, []);
+    setCollab((prev) => ({
+      ...prev,
+      localFallbackInfo: {
+        chapterId,
+        detail: buildFallbackDetail(debugContext),
+      },
+    }));
+  });
 
-  const finalizeLiveCollaborationSync = useCallback(() => {
-    if (!canFinalizeLiveCollaborationSync({
-      providerSynced: collaborationProviderSyncedRef.current,
-      editorRendered: collaborationEditorRenderedRef.current,
-    })) {
-      if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
-        console.log("[collab] finalizeLiveCollaborationSync - not ready yet", {
-          providerSynced: collaborationProviderSyncedRef.current,
-          editorRendered: collaborationEditorRenderedRef.current,
-        });
-      }
-      return;
-    }
 
-    clearCollaborationReadyFrame();
-    collaborationReadyFrameRef.current = window.requestAnimationFrame(() => {
-      collaborationReadyFrameRef.current = null;
-      if (!canFinalizeLiveCollaborationSync({
-        providerSynced: collaborationProviderSyncedRef.current,
-        editorRendered: collaborationEditorRenderedRef.current,
-      })) {
-        return;
-      }
 
-      if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
-        console.log("[collab] finalizeLiveCollaborationSync - synced!");
-      }
-      setCollab((prev) => ({ ...prev, state: "synced", error: null }));
-      clearCollaborationSyncTimeout();
-      setIsLoadingContent(false);
 
-      const currentChapterId = activeChapterIdRef.current;
-      if (currentChapterId && pendingRetryRequestsRef.current[currentChapterId]) {
-        const retryReq = pendingRetryRequestsRef.current[currentChapterId];
-        
-        const isSelectedChapter = selectedChapterIdRef.current === retryReq.chapterId;
-        const isSameSession = currentSessionDocumentNameRef.current === retryReq.sessionDocumentName;
-        const isNewestToken = saveTokensRef.current[currentChapterId] === retryReq.saveToken;
-
-        if (isSelectedChapter && isSameSession && isNewestToken) {
-          delete pendingRetryRequestsRef.current[currentChapterId];
-          requestSaveRef.current(retryReq);
-        } else {
-          delete pendingRetryRequestsRef.current[currentChapterId];
-        }
-      }
-    });
-  }, [clearCollaborationReadyFrame, clearCollaborationSyncTimeout]);
-
-  const handleCollaborationFirstRender = useCallback(() => {
-    if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
-      console.log("[collab] handleCollaborationFirstRender - providerSynced:", collaborationProviderSyncedRef.current);
-    }
-    collaborationEditorRenderedRef.current = true;
-    finalizeLiveCollaborationSync();
-  }, [finalizeLiveCollaborationSync]);
 
   const loadCollaborativeDraft = useCallback((
     nextDraft: DraftSnapshot,
@@ -733,10 +709,6 @@ function useMainEditorState({
       return;
     }
 
-    setLiveCollaborationChapterId((activeChapterId) => (
-      activeChapterId === chapterId ? null : activeChapterId
-    ));
-    setCollaborationDisabledChapterId(chapterId);
     resetCollaborationState();
     setIsLoadingContent(false);
   }, [resetCollaborationState]);
@@ -783,7 +755,7 @@ function useMainEditorState({
 
     try {
       if (shouldFlushCollaborativeContent && request.reason !== "unmount") {
-        const activeSession = request.sessionAtCapture ?? collabRef.current.session;
+        const activeSession = request.sessionAtCapture ?? collab.session;
         const currentSessionDocumentName = activeSession?.documentName ?? null;
         const isValidSession = validateCapturedLiveSaveContext({
           capturedChapterId: chapterId,
@@ -884,7 +856,7 @@ function useMainEditorState({
 
       // Successful newer save: clear stale retry
       const pendingRetry = pendingRetryRequestsRef.current[draft.chapterId];
-      if (pendingRetry && (request.saveToken === undefined || pendingRetry.saveToken <= request.saveToken)) {
+      if (pendingRetry && pendingRetry.saveToken !== undefined && (request.saveToken === undefined || pendingRetry.saveToken <= request.saveToken)) {
         delete pendingRetryRequestsRef.current[draft.chapterId];
       }
 
@@ -907,9 +879,14 @@ function useMainEditorState({
 
   const queueSaveRequest = (request: SaveRequest) => {
     const lastQueuedRequest = queuedSaveRef.current[queuedSaveRef.current.length - 1];
+    if (!lastQueuedRequest || !lastQueuedRequest.chapterId || !request.chapterId) {
+      queuedSaveRef.current.push(request);
+      return;
+    }
+
     const canMerge = canMergeBackgroundSaveRequests({
-      current: lastQueuedRequest,
-      next: request,
+      current: lastQueuedRequest as { chapterId: string; reason: DraftPersistenceReason; isRetry?: boolean; awaited?: boolean },
+      next: request as { chapterId: string; reason: DraftPersistenceReason; isRetry?: boolean; awaited?: boolean },
     });
 
     if (canMerge) {
@@ -952,7 +929,7 @@ function useMainEditorState({
       }
       const isManual = nextRequest.reason === "manual";
       
-      const currentSessionDocumentName = collabRef.current.session?.documentName ?? null;
+      const currentSessionDocumentName = collab.session?.documentName ?? null;
       const currentSaveToken = saveTokensRef.current[nextRequest.chapterId!] ?? 0;
       const isSessionValid = validateRetrySession({
         retryChapterId: nextRequest.chapterId!,
@@ -981,7 +958,7 @@ function useMainEditorState({
     }
   };
 
-  const requestSave = (request: SaveRequest): Promise<SaveAttemptResult> => {
+  const requestSave = useEvent((request: SaveRequest): Promise<SaveAttemptResult> => {
     return new Promise<SaveAttemptResult>((resolve) => {
       const draft = request.draft ?? createDraftSnapshot();
       if (!draft.projectId || !draft.chapterId) {
@@ -1005,10 +982,10 @@ function useMainEditorState({
         projectId = draft.projectId;
         chapterId = cId;
         modeAtCapture = draftModesByChapterRef.current[cId] ?? "local";
-        sessionDocumentName = collabRef.current.session?.documentName ?? null;
-        providerAtCapture = providerAtCapture ?? collabRef.current.provider;
-        sessionAtCapture = sessionAtCapture ?? collabRef.current.session;
-        collabStateAtCapture = collabStateAtCapture ?? collabRef.current.state;
+        sessionDocumentName = collab.session?.documentName ?? null;
+        providerAtCapture = providerAtCapture ?? collab.provider;
+        sessionAtCapture = sessionAtCapture ?? collab.session;
+        collabStateAtCapture = collabStateAtCapture ?? collab.state;
       }
 
       const nextRequest: SaveRequest = {
@@ -1026,7 +1003,7 @@ function useMainEditorState({
       };
 
       clearAutosaveTimer();
-      const draftMode = draftModesByChapterRef.current[nextRequest.chapterId] ?? "local";
+      const draftMode = draftModesByChapterRef.current[chapterId!] ?? "local";
       if (
         draftMode !== "live" ||
         nextRequest.flushCollaborativeContent ||
@@ -1046,9 +1023,66 @@ function useMainEditorState({
       saveInFlightRef.current = true;
       void executePersistDraft(nextRequest);
     });
-  };
+  });
 
-  const handleUnmountSave = useEffectEvent(() => {
+  const finalizeLiveCollaborationSync = useCallback(() => {
+    if (!canFinalizeLiveCollaborationSync({
+      providerSynced: collaborationProviderSyncedRef.current,
+      editorRendered: collaborationEditorRenderedRef.current,
+    })) {
+      if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+        console.log("[collab] finalizeLiveCollaborationSync - not ready yet", {
+          providerSynced: collaborationProviderSyncedRef.current,
+          editorRendered: collaborationEditorRenderedRef.current,
+        });
+      }
+      return;
+    }
+
+    clearCollaborationReadyFrame();
+    collaborationReadyFrameRef.current = window.requestAnimationFrame(() => {
+      collaborationReadyFrameRef.current = null;
+      if (!canFinalizeLiveCollaborationSync({
+        providerSynced: collaborationProviderSyncedRef.current,
+        editorRendered: collaborationEditorRenderedRef.current,
+      })) {
+        return;
+      }
+
+      if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+        console.log("[collab] finalizeLiveCollaborationSync - synced!");
+      }
+      setCollab((prev) => ({ ...prev, state: "synced", error: null }));
+      clearCollaborationSyncTimeout();
+      setIsLoadingContent(false);
+
+      const currentChapterId = activeChapterIdRef.current;
+      if (currentChapterId && pendingRetryRequestsRef.current[currentChapterId]) {
+        const retryReq = pendingRetryRequestsRef.current[currentChapterId];
+        
+        const isSelectedChapter = selectedChapterIdRef.current === retryReq.chapterId;
+        const isSameSession = currentSessionDocumentNameRef.current === retryReq.sessionDocumentName;
+        const isNewestToken = saveTokensRef.current[currentChapterId] === retryReq.saveToken;
+
+        if (isSelectedChapter && isSameSession && isNewestToken) {
+          delete pendingRetryRequestsRef.current[currentChapterId];
+          requestSave(retryReq);
+        } else {
+          delete pendingRetryRequestsRef.current[currentChapterId];
+        }
+      }
+    });
+  }, [clearCollaborationReadyFrame, clearCollaborationSyncTimeout, requestSave]);
+
+  const handleCollaborationFirstRender = useCallback(() => {
+    if (process.env.NEXT_PUBLIC_COLLAB_DEBUG === "true") {
+      console.log("[collab] handleCollaborationFirstRender - providerSynced:", collaborationProviderSyncedRef.current);
+    }
+    collaborationEditorRenderedRef.current = true;
+    finalizeLiveCollaborationSync();
+  }, [finalizeLiveCollaborationSync]);
+
+  const handleUnmountSave = useEvent(() => {
     if (pendingUnmountSaveRef.current) return;
 
     const draft = createDraftSnapshot();
@@ -1109,10 +1143,6 @@ function useMainEditorState({
     clearCollaborationRetryTimer();
     clearCollaborationSyncTimeout();
     clearCollaborationReadyFrame();
-    setCollaborationDisabledChapterId(null);
-    setLocalFallbackInfo((current) => (
-      current?.chapterId === selectedChapterId ? null : current
-    ));
     collaborationHasSyncedRef.current = false;
     collaborationProviderSyncedRef.current = false;
     collaborationEditorRenderedRef.current = false;
@@ -1123,88 +1153,56 @@ function useMainEditorState({
       provider: null,
       state: "connecting",
       error: null,
+      localFallbackInfo: prev.localFallbackInfo?.chapterId === selectedChapterId ? null : prev.localFallbackInfo,
     }));
   }, [clearCollaborationReadyFrame, clearCollaborationRetryTimer, clearCollaborationSyncTimeout, selectedChapterId]);
 
+
+
+
+
   useEffect(() => {
-    canEditRef.current = canEdit;
-    canCollaborateRef.current = canCollaborate;
-    isLoadingContentRef.current = isLoadingContent;
-    collaborationProjectIdRef.current = project?.metadata.id ?? null;
-    currentCachedContentRef.current = currentCachedContent;
-    currentChapterTitleRef.current = currentChapter?.title ?? "";
-    requestSaveRef.current = requestSave;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const handleUnmountSaveRef = useRef(handleUnmountSave);
+  useEffect(() => {
+    handleUnmountSaveRef.current = handleUnmountSave;
   });
-
-  useEffect(() => {
-    if (currentChapter && currentChapter.title !== title && document.activeElement !== titleInputRef.current) {
-      setTitle(currentChapter.title);
-    }
-  }, [currentChapter?.title, title]);
-
-  useEffect(() => {
-    if (!canCollaborate || !canEdit) {
-      setLiveCollaborationChapterId(null);
-      return;
-    }
-
-    setLiveCollaborationChapterId((previousLiveChapterId) => (
-      resolveLiveCollaborationChapterId({
-        selectedChapterId,
-        previousLiveChapterId,
-        isLiveCollaborationRequested,
-        collaborationDisabledChapterId,
-      })
-    ));
-  }, [canCollaborate, canEdit, collaborationDisabledChapterId, isLiveCollaborationRequested, selectedChapterId]);
-
-  useEffect(() => {
-    setCollaborationDisabledChapterId((chapterId) => (
-      chapterId && chapterId !== selectedChapterId ? null : chapterId
-    ));
-  }, [selectedChapterId]);
 
   // Unmount save effect - must be declared BEFORE provider effects so cleanup runs AFTER them
   useEffect(() => {
     return () => {
-      clearAutosaveTimer();
-      clearCollaborativeFlushTimer();
-      isMountedRef.current = false;
-      handleUnmountSave();
-    };
-  }, [clearCollaborativeFlushTimer]);
-
-  useEffect(() => {
-    let active = true;
-
-    queueMicrotask(() => {
-      if (active) {
-        resetCollaborationState();
+      if (autosaveTimeoutRef.current !== null) {
+        window.clearTimeout(autosaveTimeoutRef.current);
+        autosaveTimeoutRef.current = null;
       }
-    });
-
-    return () => {
-      active = false;
+      if (collaborativeFlushTimeoutRef.current !== null) {
+        window.clearTimeout(collaborativeFlushTimeoutRef.current);
+        collaborativeFlushTimeoutRef.current = null;
+      }
+      handleUnmountSaveRef.current();
     };
-  }, [
-    resetCollaborationState,
-    usesCollaborativeBody,
-  ]);
+  }, []);
 
-  const scheduleAutosave = useCallback((draft: DraftSnapshot, hasUnsaved: boolean) => {
+
+
+  const scheduleAutosave = useEvent((draft: DraftSnapshot, hasUnsaved: boolean) => {
     clearAutosaveTimer();
-    if (!canEditRef.current || isLoadingContentRef.current || !hasUnsaved) return;
+    if (!canEdit || isLoadingContent || !hasUnsaved) return;
     if (saveConflict) return;
 
     autosaveTimeoutRef.current = window.setTimeout(() => {
-      requestSaveRef.current({ createVersion: false, reason: "autosave", draft });
+      requestSave({ createVersion: false, reason: "autosave", draft });
     }, AUTOSAVE_INTERVAL_MS);
-  }, [saveConflict]);
+  });
 
-  const scheduleCollaborativeContentFlush = useCallback((draft: DraftSnapshot) => {
+  const scheduleCollaborativeContentFlush = useEvent((draft: DraftSnapshot) => {
     if (
-      !canEditRef.current ||
-      isLoadingContentRef.current ||
+      !canEdit ||
+      isLoadingContent ||
       (draftModesByChapterRef.current[draft.chapterId] ?? "local") !== "live" ||
       !hasPendingCollaborativeContentFlush(draft.chapterId, draft.content) ||
       collaborativeFlushTimeoutRef.current !== null
@@ -1228,14 +1226,14 @@ function useMainEditorState({
         return;
       }
 
-      requestSaveRef.current({
+      requestSave({
         createVersion: false,
         reason: "autosave",
         flushCollaborativeContent: true,
         draft: latestDraft,
       });
     }, COLLABORATIVE_CONTENT_FLUSH_INTERVAL_MS);
-  }, [hasPendingCollaborativeContentFlush]);
+  });
 
   const handleManualSave = () => {
     requestSave({ createVersion: true, reason: "manual" });
@@ -1318,9 +1316,9 @@ function useMainEditorState({
     presenceIntervalRef.current = null;
   }, []);
 
-  const postPresence = useCallback(async (payload: { action?: "upsert" | "leave"; chapterId?: string | null; state?: "viewing" | "editing"; keepalive?: boolean }) => {
-    const projectId = collaborationProjectIdRef.current;
-    if (!projectId || !canCollaborateRef.current) return;
+  const postPresence = useEvent(async (payload: { action?: "upsert" | "leave"; chapterId?: string | null; state?: "viewing" | "editing"; keepalive?: boolean }) => {
+    const projectId = project?.metadata.id;
+    if (!projectId || !canCollaborate) return;
 
     await fetch("/api/project-presence", {
       method: "POST",
@@ -1335,28 +1333,28 @@ function useMainEditorState({
     }).catch((error) => {
       console.error("Failed to update collaboration presence", error);
     });
-  }, []);
+  });
 
-  const startPresenceHeartbeat = useCallback(() => {
+  const startPresenceHeartbeat = useEvent(() => {
     clearPresenceInterval();
-    if (!collaborationProjectIdRef.current || !canCollaborateRef.current) return;
+    if (!project?.metadata.id || !canCollaborate) return;
 
     presenceIntervalRef.current = window.setInterval(() => {
       void postPresence({});
     }, 15_000);
-  }, [clearPresenceInterval, postPresence]);
+  });
 
-  const updatePresenceState = useCallback((state: "viewing" | "editing", chapterId?: string | null) => {
-    if (!collaborationProjectIdRef.current || !canCollaborateRef.current) return;
+  const updatePresenceState = useEvent((state: "viewing" | "editing", chapterId?: string | null) => {
+    if (!project?.metadata.id || !canCollaborate) return;
     presenceStateRef.current = state;
     void postPresence({ chapterId, state });
-  }, [postPresence]);
+  });
 
-  const leavePresence = useCallback((keepalive = false) => {
-    if (!collaborationProjectIdRef.current || !canCollaborateRef.current) return;
+  const leavePresence = useEvent((keepalive = false) => {
+    if (!project?.metadata.id || !canCollaborate) return;
     clearPresenceInterval();
     void postPresence({ action: "leave", keepalive });
-  }, [clearPresenceInterval, postPresence]);
+  });
 
   const editorTransportKey = getEditorTransportKey({
     selectedChapterId,
@@ -1378,6 +1376,52 @@ function useMainEditorState({
     !isLoadingContent &&
     (!hasLiveTransport || collab.state === "synced") &&
     !collaborativeReadOnly;
+
+  const handleEditorBlur = useEvent(() => {
+    setHasSelection(false);
+    if (canCollaborate) {
+      updatePresenceState("viewing");
+    }
+    if (!canEdit || isLoadingContent) return;
+    requestSave({
+      createVersion: false,
+      reason: "blur",
+      flushCollaborativeContent:
+        (draftModesByChapterRef.current[activeChapterIdRef.current ?? ""] ?? "local") === "live",
+    });
+  });
+
+  const handleEditorUpdate = useEvent((nextEditor: TiptapEditor) => {
+    const chapterId = activeChapterIdRef.current;
+    if (!chapterId || isLoadingContent) return;
+
+    const nextContent = nextEditor.getHTML();
+    if (!isMeaningfulEditorContent(nextContent)) return;
+    lastEditorContentRef.current = nextContent;
+    setChapterContent(chapterId, nextContent);
+    const nextDraft = setActiveDraft({
+      ...latestDraftRef.current,
+      content: nextContent,
+    });
+    if ((draftModesByChapterRef.current[chapterId] ?? "local") === "local") {
+      storeLocalDraft(nextDraft);
+    } else {
+      storeLiveRecoveryDraft(nextDraft);
+    }
+
+    if (suppressAutosaveRef.current) {
+      suppressAutosaveRef.current = false;
+      return;
+    }
+
+    setSaveError(null);
+    if (canCollaborate && canEdit) {
+      updatePresenceState("editing");
+    }
+    const { hasUnsaved } = syncSaveState(chapterId, nextDraft.title, nextContent);
+    scheduleAutosave(nextDraft, hasUnsaved);
+    scheduleCollaborativeContentFlush(nextDraft);
+  });
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -1415,51 +1459,13 @@ function useMainEditorState({
       },
     },
     onBlur: () => {
-      setHasSelection(false);
-      if (canCollaborateRef.current) {
-        updatePresenceState("viewing");
-      }
-      if (!canEditRef.current || isLoadingContentRef.current) return;
-      requestSave({
-        createVersion: false,
-        reason: "blur",
-        flushCollaborativeContent:
-          (draftModesByChapterRef.current[activeChapterIdRef.current ?? ""] ?? "local") === "live",
-      });
+      handleEditorBlur();
     },
     onSelectionUpdate: ({ editor: nextEditor }) => {
       setHasSelection(!nextEditor.state.selection.empty);
     },
     onUpdate: ({ editor: nextEditor }) => {
-      const chapterId = activeChapterIdRef.current;
-      if (!chapterId || isLoadingContentRef.current) return;
-
-      const nextContent = nextEditor.getHTML();
-      if (!isMeaningfulEditorContent(nextContent)) return;
-      lastEditorContentRef.current = nextContent;
-      setChapterContent(chapterId, nextContent);
-      const nextDraft = setActiveDraft({
-        ...latestDraftRef.current,
-        content: nextContent,
-      });
-      if ((draftModesByChapterRef.current[chapterId] ?? "local") === "local") {
-        storeLocalDraft(nextDraft);
-      } else {
-        storeLiveRecoveryDraft(nextDraft);
-      }
-
-      if (suppressAutosaveRef.current) {
-        suppressAutosaveRef.current = false;
-        return;
-      }
-
-      setSaveError(null);
-      if (canCollaborateRef.current && canEditRef.current) {
-        updatePresenceState("editing");
-      }
-      const { hasUnsaved } = syncSaveState(chapterId, nextDraft.title, nextContent);
-      scheduleAutosave(nextDraft, hasUnsaved);
-      scheduleCollaborativeContentFlush(nextDraft);
+      handleEditorUpdate(nextEditor);
     },
   }, [editorTransportKey]);
 
@@ -1476,9 +1482,9 @@ function useMainEditorState({
     if (!editor) {
       return;
     }
+    const chapterId = activeChapterIdRef.current;
 
     return () => {
-      const chapterId = activeChapterIdRef.current;
       const knownDraft = chapterId ? draftsByChapterIdRef.current[chapterId] : null;
       if (knownDraft && !isMeaningfulEditorContent(lastEditorContentRef.current)) {
         return;
@@ -1527,14 +1533,14 @@ function useMainEditorState({
     return () => {
       leavePresence(true);
     };
-  }, []);
+  }, [leavePresence]);
 
-  const handlePageHide = useEffectEvent(() => {
+  const handlePageHide = useEvent(() => {
     handleUnmountSave();
     leavePresence(true);
   });
 
-  const handleVisibilityChange = useEffectEvent(() => {
+  const handleVisibilityChange = useEvent(() => {
     if (document.visibilityState === "hidden") {
       handleUnmountSave();
     }
@@ -1549,7 +1555,7 @@ function useMainEditorState({
       window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [canCollaborate]);
+  }, [canCollaborate, handlePageHide, handleVisibilityChange]);
 
   useEffect(() => {
     if (!editor) return;
@@ -1614,6 +1620,7 @@ function useMainEditorState({
       clearCollaborativeFlushTimer();
       setIsLoadingContent(false);
       setHasSelection(false);
+      resetCollaborationState();
 
       return;
     }
@@ -1679,15 +1686,16 @@ function useMainEditorState({
     };
 
     const runSwitchAndLoad = async () => {
+      resetCollaborationState();
       if (previousChapterId && previousChapterId !== selectedChapterId && previousChapterStillExists) {
         const oldDraft = createDraftSnapshot();
         const oldMode = draftModesByChapterRef.current[previousChapterId] ?? "local";
 
         delete pendingRetryRequestsRef.current[previousChapterId];
 
-        const providerAtCapture = collabRef.current.provider;
-        const sessionAtCapture = collabRef.current.session;
-        const collabStateAtCapture = collabRef.current.state;
+        const providerAtCapture = collab.provider;
+        const sessionAtCapture = collab.session;
+        const collabStateAtCapture = collab.state;
 
         if (providerAtCapture) {
           (providerAtCapture as unknown as { _isFlushingExit?: boolean })._isFlushingExit = true;
@@ -1818,9 +1826,12 @@ function useMainEditorState({
     selectedChapterId,
     project?.metadata.id,
     currentChapter?.id,
+    currentChapter?.updatedAt,
     setChapterContent,
     storeLocalDraft,
     syncSaveState,
+    setChapterDraft,
+    updateChapterMetaLocally,
   ]);
 
   useEffect(() => {
@@ -1852,6 +1863,8 @@ function useMainEditorState({
     }
 
     applyLocalEditorContent(selectedChapterId, nextDraft.content || "");
+
+    return () => {};
   }, [
     applyLocalEditorContent,
     currentChapter?.id,
@@ -1920,6 +1933,8 @@ function useMainEditorState({
     setSaveWarning(null);
     setIsLoadingContent(false);
     syncSaveState(selectedChapterId, nextDraft.title, nextContent, "local");
+
+    return () => {};
   }, [
     clearCollaborativeFlushTimer,
     clearChapterDraft,
@@ -1976,6 +1991,8 @@ function useMainEditorState({
     applyLocalEditorContent(selectedChapterId, nextDraft.content || "");
     syncSaveState(selectedChapterId, nextDraft.title, nextDraft.content, "local");
     consumeChapterContentReplacement(selectedChapterId, pendingChapterContentReplacement.nonce);
+
+    return () => {};
   }, [
     applyLocalEditorContent,
     clearCollaborativeFlushTimer,
@@ -2153,6 +2170,8 @@ function useMainEditorState({
      };
    }, [
      collab.state,
+     collab.provider,
+     collab.session,
      clearChapterDraft,
      editor,
      project?.metadata.id,
@@ -2165,6 +2184,8 @@ function useMainEditorState({
      reportLocalFallback,
      setChapterDraft,
      setRecoveredUnsavedChanges,
+     resetCollaborationState,
+     requestSave,
    ]);
 
   useEffect(() => {
@@ -2472,7 +2493,7 @@ function useMainEditorState({
     }
   };
 
-  const handleKeyboardShortcuts = useEffectEvent((event: KeyboardEvent) => {
+  const handleKeyboardShortcuts = useEvent((event: KeyboardEvent) => {
     const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
     const modifier = isMac ? event.metaKey : event.ctrlKey;
     if (!modifier || !editor || !project) return;
@@ -2492,7 +2513,7 @@ function useMainEditorState({
 
     window.addEventListener("keydown", listener);
     return () => window.removeEventListener("keydown", listener);
-  }, []);
+  }, [handleKeyboardShortcuts]);
 
   const isCommentOnly = Boolean(canCollaborate && !canEdit);
   const isLiveConnectionIssue = usesCollaborativeBody && (collab.state === "disconnected" || collab.state === "error");
@@ -2500,9 +2521,9 @@ function useMainEditorState({
   const isLocalEditingFallback =
     Boolean(selectedChapterId) &&
     isLiveCollaborationRequested &&
-    collaborationDisabledChapterId === selectedChapterId;
-  const localFallbackDetail = isLocalEditingFallback && localFallbackInfo?.chapterId === selectedChapterId
-    ? localFallbackInfo.detail
+    collab.localFallbackInfo?.chapterId === selectedChapterId;
+  const localFallbackDetail = isLocalEditingFallback && collab.localFallbackInfo?.chapterId === selectedChapterId
+    ? collab.localFallbackInfo.detail
     : null;
   const canReconnectLiveCollaboration = canEdit && isLiveCollaborationRequested && (
     isLocalEditingFallback ||

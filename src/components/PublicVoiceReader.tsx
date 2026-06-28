@@ -134,14 +134,15 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
   const prefetchedSegmentRef = useRef<PrefetchedSegment | null>(null);
   const prefetchedChapterIdRef = useRef<string | null>(null);
 
-  // Initialize reader language from locale on first use only
+  const initializedRef = useRef(false);
   useEffect(() => {
-    if (readerLanguage === "en-US" && isVietnamese) {
-      setReaderLanguage("vi-VN");
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      if (readerLanguage === "en-US" && isVietnamese) {
+        setReaderLanguage("vi-VN");
+      }
     }
-    // Run once on mount only
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  });
 
   // Derive chapter index and compute max readable chapters
   const currentChapterIndexInBranch = useMemo(() => {
@@ -358,6 +359,8 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
     [activeVoice, clearPrefetchedSegment, playlistEntries, requestSegmentAudio, revokeObjectUrl],
   );
 
+  const playSegmentRef = useRef<((sessionId: number, chapterIdx: number, segmentIdx: number) => Promise<void>) | null>(null);
+
   const playSegment = useCallback(
     async (sessionId: number, chapterIdx: number, segmentIdx: number) => {
       const audio = audioRef.current;
@@ -393,7 +396,7 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
             currentSegmentIndexRef.current = 0;
             setCurrentChapterOffset(nextPlayable);
             setCurrentSegmentNumber(0);
-            void playSegment(sessionId, nextPlayable, 0);
+            void playSegmentRef.current?.(sessionId, nextPlayable, 0);
             return;
           }
         }
@@ -465,8 +468,12 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
       playbackErrorFallback,
       stopPlayback,
       updatePlaybackState,
+      clearPrefetchedSegment,
     ],
   );
+  useEffect(() => {
+    playSegmentRef.current = playSegment;
+  }, [playSegment]);
 
   useEffect(() => {
     const audio = new Audio();
@@ -512,11 +519,12 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
     };
   }, [readerLanguage, readerRate, readerVoiceEn, readerVoiceVi, stopPlayback]);
 
+  const stringifiedChapters = JSON.stringify(orderedBranchChapters);
   useEffect(() => {
     return () => {
       stopPlayback();
     };
-  }, [JSON.stringify(orderedBranchChapters), stopPlayback]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stringifiedChapters, stopPlayback]);
 
   useEffect(() => {
     const handlePageHide = () => {

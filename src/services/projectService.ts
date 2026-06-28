@@ -1214,9 +1214,9 @@ export async function updateChapter(
     return { status: "saved", continuity: { fresh: true }, contentChanged: false, updatedAt: existing.updatedAt.toISOString() };
   }
 
-  let updatedChapter = existing;
+  let updatedTime = existing.updatedAt;
   if (hasTitleChange || hasSummaryChange || hasContentChange) {
-    [updatedChapter] = await Promise.all([
+    const [res] = await Promise.all([
       prisma.chapter.update({
         where: { id: existing.id },
         data: {
@@ -1231,6 +1231,7 @@ export async function updateChapter(
         data: { updatedAt: new Date() },
       }),
     ]);
+    updatedTime = res.updatedAt;
   }
 
   if (shouldCreateVersion) {
@@ -1253,7 +1254,7 @@ export async function updateChapter(
     status: "saved",
     continuity,
     contentChanged: hasContentChange,
-    updatedAt: updatedChapter.updatedAt.toISOString(),
+    updatedAt: updatedTime.toISOString(),
   };
 }
 
@@ -1435,18 +1436,18 @@ export async function syncChaptersWithOutline(
 }
 
 export async function updateOutline(projectId: string, userId: string, input: UpdateOutlineInput) {
-  await requireProjectPermission(projectId, userId, "edit");
+  const viewerAccess = await requireProjectPermission(projectId, userId, "edit");
 
-  await prisma.project.update({
-    where: { id: projectId },
+  const updatedProject = await prisma.project.update({
+    where: { id: viewerAccess ? projectId : projectId },
     data: {
       outline: input as unknown as Prisma.InputJsonValue,
     },
   });
 
-  await syncChaptersWithOutline(projectId, input);
+  await syncChaptersWithOutline(updatedProject.id, input);
 
-  return getProject(projectId, userId);
+  return getProject(updatedProject.id, userId);
 }
 
 export async function updateSettings(projectId: string, userId: string, input: UpdateSettingsInput) {
