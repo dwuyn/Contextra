@@ -57,6 +57,7 @@ next-env.d.ts
 .codex/
 .omo/
 .superpowers/
+.commandcode/
 
 # ESLint
 .eslintcache

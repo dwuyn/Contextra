@@ -4,6 +4,10 @@ import {
   isAuthorizedDocument,
   parseChapterDocumentName,
   shouldUseStoredChapterState,
+  encodeChapterState,
+  isEncodedChapterStateBlank,
+  getChapterHtmlFromEncodedState,
+  createChapterYDocFromHtml,
 } from "@/lib/collaboration/document";
 
 describe("collaboration document naming", () => {
@@ -48,5 +52,26 @@ describe("collaboration document naming", () => {
       chapterUpdatedAt,
       stateUpdatedAt: null,
     })).toBe(false);
+  });
+});
+
+describe("encoded state blank detection", () => {
+  it("detects blank encoded state as blank", () => {
+    const doc = createChapterYDocFromHtml("<p></p>");
+    const encoded = encodeChapterState(doc);
+    expect(isEncodedChapterStateBlank(encoded)).toBe(true);
+  });
+
+  it("detects meaningful encoded state as not blank", () => {
+    const doc = createChapterYDocFromHtml("<p>Hello world</p>");
+    const encoded = encodeChapterState(doc);
+    expect(isEncodedChapterStateBlank(encoded)).toBe(false);
+  });
+
+  it("round-trips HTML through encode and decode correctly", () => {
+    const doc = createChapterYDocFromHtml("<p>Test content</p>");
+    const encoded = encodeChapterState(doc);
+    const decodedHtml = getChapterHtmlFromEncodedState(encoded);
+    expect(decodedHtml).toBe("<p>Test content</p>");
   });
 });

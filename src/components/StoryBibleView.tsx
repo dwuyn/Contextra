@@ -72,7 +72,6 @@ type ChapterDialogState =
 
 type ConfirmDialogState =
   | { kind: "replaceSynopsis" }
-  | { kind: "replaceOutline" }
   | { kind: "deleteCharacter"; character: ProjectCharacter }
   | { kind: "deleteWorldRule"; index: number; label: string }
   | { kind: "deleteAct"; actId: string; title: string }
@@ -524,6 +523,8 @@ function OutlineSection({
   setConfirmDialog,
   setErrorMessage,
   handleGenerateOutline,
+  isGenerateOutlineOpen,
+  setIsGenerateOutlineOpen,
 }: {
   outline: ProjectOutline;
   canEdit: boolean;
@@ -531,7 +532,9 @@ function OutlineSection({
   busyAction: BusyAction;
   setConfirmDialog: (state: ConfirmDialogState) => void;
   setErrorMessage: (msg: string | null) => void;
-  handleGenerateOutline: () => Promise<void>;
+  handleGenerateOutline: (chapterCount: number) => Promise<void>;
+  isGenerateOutlineOpen: boolean;
+  setIsGenerateOutlineOpen: (open: boolean) => void;
 }) {
   const t = useTranslations("storyBible");
   const [actDialog, setActDialog] = useState<ActDialogState>(null);
@@ -639,23 +642,24 @@ function OutlineSection({
       summary,
     };
 
-    const actsWithoutCurrentChapter = outline.acts.map((act) => ({
-      ...act,
-      chapters:
-        chapterDialog.mode === "edit"
-          ? act.chapters.filter((chapter) => chapter.id !== chapterDialog.chapter.id)
-          : act.chapters,
-    }));
-
     const nextOutline: ProjectOutline = {
-      acts: actsWithoutCurrentChapter.map((act) =>
-        act.id === chapterDraft.actId
-          ? {
-              ...act,
-              chapters: [...act.chapters, nextChapter],
-            }
-          : act
-      ),
+      acts: outline.acts.map((act) => {
+        if (act.id !== chapterDraft.actId) return act;
+
+        if (chapterDialog.mode === "edit") {
+          return {
+            ...act,
+            chapters: act.chapters.map((chapter) =>
+              chapter.id === chapterDialog.chapter.id ? nextChapter : chapter
+            ),
+          };
+        }
+
+        return {
+          ...act,
+          chapters: [...act.chapters, nextChapter],
+        };
+      }),
     };
 
     const updated = await persistOutline(nextOutline);
@@ -694,7 +698,7 @@ function OutlineSection({
           <div className="flex flex-col items-center justify-center py-10 bg-[var(--color-surface-alt)] rounded-2xl border border-dashed border-[var(--color-border)]">
             <button
               type="button"
-              onClick={() => void handleGenerateOutline()}
+              onClick={() => setIsGenerateOutlineOpen(true)}
               disabled={!canEdit || busyAction === "generateOutline"}
               className="flex items-center gap-2 px-5 py-2.5 bg-[var(--color-accent)] text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-indigo-200 transition-all disabled:opacity-50"
             >
@@ -718,7 +722,7 @@ function OutlineSection({
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => void handleGenerateOutline()}
+                    onClick={() => setIsGenerateOutlineOpen(true)}
                     disabled={busyAction === "generateOutline"}
                     className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent-muted)] text-[var(--color-accent)] rounded-xl text-xs font-bold hover:bg-[var(--color-accent-muted)] transition-colors disabled:opacity-50"
                   >
@@ -804,7 +808,119 @@ function OutlineSection({
           placeholder={t("placeholders.chapterSummary")}
         />
       </EntityDialog>
+
+      <GenerateOutlineDialog
+        open={isGenerateOutlineOpen}
+        onOpenChange={setIsGenerateOutlineOpen}
+        hasExistingOutline={hasOutlineContent(outline)}
+        busy={busyAction === "generateOutline"}
+        onConfirm={(chapterCount) => void handleGenerateOutline(chapterCount)}
+      />
     </>
+  );
+}
+
+function GenerateOutlineDialog({
+  open,
+  onOpenChange,
+  hasExistingOutline,
+  busy,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  hasExistingOutline: boolean;
+  busy: boolean;
+  onConfirm: (chapterCount: number) => void;
+}) {
+  const t = useTranslations("storyBible");
+  const commonT = useTranslations("common");
+  const [chapterCount, setChapterCount] = useState(12);
+
+  function handleSubmit() {
+    const count = Math.max(1, Math.min(100, Math.round(chapterCount)));
+    onConfirm(count);
+  }
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--color-text)]/15 backdrop-blur-sm" />
+        <Dialog.Content className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-[28px] bg-[var(--color-surface)] p-8 shadow-2xl">
+            <div className="flex items-start gap-4">
+              <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--color-accent-muted)] text-[var(--color-accent)]">
+                <Sparkles size={18} />
+              </div>
+              <div className="flex-1">
+                <Dialog.Title className="text-xl font-bold text-[var(--color-text)]">
+                  {t("dialogs.generateOutlineTitle")}
+                </Dialog.Title>
+                <Dialog.Description className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+                  {t("dialogs.generateOutlineDescription")}
+                </Dialog.Description>
+                {hasExistingOutline && (
+                  <p className="mt-2 text-sm text-[var(--color-destructive)]">
+                    {t("confirm.replaceOutlineDescription")}
+                  </p>
+                )}
+              </div>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  aria-label={t("dialogs.closeDialog")}
+                  className="p-2 hover:bg-[var(--color-surface-alt)] rounded-full transition-colors"
+                >
+                  <X size={20} className="text-[var(--color-text-muted)]" />
+                </button>
+              </Dialog.Close>
+            </div>
+
+            <div className="mt-6">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-[var(--color-text)]">
+                  {t("labels.chapterCount")}
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={chapterCount}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setChapterCount(val === "" ? 1 : Number(val));
+                  }}
+                  className="w-full rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm outline-none focus:border-[var(--color-text)] transition-colors"
+                />
+              </label>
+              <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                {t("labels.chapterCountHint")}
+              </p>
+            </div>
+
+            <div className="mt-8 flex items-center justify-end gap-3">
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="rounded-2xl border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
+                >
+                  {commonT("cancel")}
+                </button>
+              </Dialog.Close>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={busy}
+                className="inline-flex items-center gap-2 rounded-2xl bg-[var(--color-accent)] px-5 py-3 text-sm font-bold text-white hover:opacity-90 transition-colors disabled:opacity-50"
+              >
+                {busy && <Loader2 size={16} className="animate-spin" />}
+                {t("dialogs.generateOutlineConfirm")}
+              </button>
+            </div>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -926,6 +1042,7 @@ function useStoryBibleState({
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>(null);
+  const [isGenerateOutlineOpen, setIsGenerateOutlineOpen] = useState(false);
 
   const currentProject = project;
   const outline = currentProject?.outline ?? EMPTY_OUTLINE;
@@ -1014,14 +1131,16 @@ function useStoryBibleState({
     await syncProjectUpdate("generateSynopsis", () => generateSynopsisAction(currentProject.metadata.id));
   }
 
-  async function handleGenerateOutline(forceReplace: boolean = false) {
+  async function handleGenerateOutline(chapterCount: number) {
     if (!currentProject || !canEdit) return;
-    if (hasOutlineContent(outline) && !forceReplace) {
-      setConfirmDialog({ kind: "replaceOutline" });
-      return;
-    }
 
-    await syncProjectUpdate("generateOutline", () => generateOutlineAction(currentProject.metadata.id));
+    const updated = await syncProjectUpdate("generateOutline", () =>
+      generateOutlineAction(currentProject.metadata.id, { targetChapterCount: chapterCount })
+    );
+
+    if (updated) {
+      setIsGenerateOutlineOpen(false);
+    }
   }
 
   async function handleConfirmDialog() {
@@ -1031,10 +1150,6 @@ function useStoryBibleState({
       case "replaceSynopsis":
         setConfirmDialog(null);
         await handleGenerateSynopsis(true);
-        return;
-      case "replaceOutline":
-        setConfirmDialog(null);
-        await handleGenerateOutline(true);
         return;
       case "deleteCharacter": {
         const updated = await syncProjectUpdate("deleteCharacter", () =>
@@ -1078,8 +1193,6 @@ function useStoryBibleState({
     switch (confirmDialog.kind) {
       case "replaceSynopsis":
         return t("confirm.replaceSynopsisTitle");
-      case "replaceOutline":
-        return t("confirm.replaceOutlineTitle");
       case "deleteCharacter":
         return t("confirm.deleteCharacterTitle", { name: confirmDialog.character.name });
       case "deleteWorldRule":
@@ -1097,8 +1210,6 @@ function useStoryBibleState({
     switch (confirmDialog.kind) {
       case "replaceSynopsis":
         return t("confirm.replaceSynopsisDescription");
-      case "replaceOutline":
-        return t("confirm.replaceOutlineDescription");
       case "deleteCharacter":
         return t("confirm.deleteCharacterDescription");
       case "deleteWorldRule":
@@ -1112,12 +1223,12 @@ function useStoryBibleState({
 
   const confirmLabel = !confirmDialog
     ? t("confirm.confirm")
-    : confirmDialog.kind === "replaceSynopsis" || confirmDialog.kind === "replaceOutline"
+    : confirmDialog.kind === "replaceSynopsis"
       ? t("confirm.replace")
       : commonT("delete");
 
   const confirmTone =
-    !confirmDialog || confirmDialog.kind === "replaceSynopsis" || confirmDialog.kind === "replaceOutline"
+    !confirmDialog || confirmDialog.kind === "replaceSynopsis"
       ? ("primary" as const)
       : ("danger" as const);
 
@@ -1144,6 +1255,8 @@ function useStoryBibleState({
     confirmDescription,
     confirmLabel,
     confirmTone,
+    isGenerateOutlineOpen,
+    setIsGenerateOutlineOpen,
   };
 }
 
@@ -1166,6 +1279,7 @@ export function StoryBibleView() {
     canManage,
     worldRules,
     outline,
+    syncProjectUpdate,
     persistWorldRules,
     persistOutline,
     handleUpdateSummary,
@@ -1178,6 +1292,8 @@ export function StoryBibleView() {
     confirmDescription,
     confirmLabel,
     confirmTone,
+    isGenerateOutlineOpen,
+    setIsGenerateOutlineOpen,
   } = useStoryBibleState({
     project,
     setProject,
@@ -1253,6 +1369,8 @@ export function StoryBibleView() {
             setConfirmDialog={setConfirmDialog}
             setErrorMessage={setErrorMessage}
             handleGenerateOutline={handleGenerateOutline}
+            isGenerateOutlineOpen={isGenerateOutlineOpen}
+            setIsGenerateOutlineOpen={setIsGenerateOutlineOpen}
           />
         </div>
       </div>

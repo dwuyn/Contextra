@@ -276,7 +276,7 @@ export function AllProjectsModal({ onClose }: { onClose: () => void }) {
                     <Search size={32} />
                   </div>
                   <p className="text-sm font-bold text-[var(--color-text)]">
-                    {activeTab === "my" ? t("emptyMyProjects") : t("emptyPublicProjects")}
+                    {state.activeTab === "my" ? t("emptyMyProjects") : t("emptyPublicProjects")}
                   </p>
                   <p className="text-xs text-[var(--color-text-secondary)] mt-1">{t("emptyHelp")}</p>
                 </div>
@@ -307,10 +307,10 @@ export function AllProjectsModal({ onClose }: { onClose: () => void }) {
                   <button
                     type="button"
                     onClick={handleLoadMorePublicProjects}
-                    disabled={publicLoading}
+                    disabled={state.publicLoading}
                     className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-2.5 text-sm font-bold text-[var(--color-text)] shadow-sm transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {publicLoading ? t("loadingMore") : t("loadMore")}
+                    {state.publicLoading ? t("loadingMore") : t("loadMore")}
                   </button>
                 </div>
               )}

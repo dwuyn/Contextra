@@ -32,6 +32,12 @@ export type ChapterDraftCache = {
   savedAt?: number;
 };
 
+export type RemoteSaveNotice = {
+  chapterId: string;
+  updatedAt: string;
+  savedByName: string;
+};
+
 interface ProjectState {
   project: ProjectData | null;
   selectedProjectId: string | null;
@@ -47,6 +53,7 @@ interface ProjectState {
   pendingChapterContentReplacements: Record<string, ChapterContentReplacement>;
   commentThreadsByChapter: Record<string, ProjectCommentThread[]>;
   selectedCommentThreadId: string | null;
+  remoteSaveNotice: RemoteSaveNotice | null;
 
   setProject: (project: ProjectData | null) => void;
   hydrateProject: (project: ProjectData) => void;
@@ -70,6 +77,7 @@ interface ProjectState {
   updateChapterMetaLocally: (chapterId: string, data: {
     title?: string;
     summary?: string;
+    updatedAt?: string;
     illustration?: ChapterIllustrationMeta | null;
   }) => void;
   setChapterDraft: (chapterId: string, draft: ChapterDraftCache) => void;
@@ -85,6 +93,7 @@ interface ProjectState {
   setCommentThreads: (chapterId: string, threads: ProjectCommentThread[]) => void;
   upsertCommentThread: (thread: ProjectCommentThread) => void;
   setSelectedCommentThreadId: (threadId: string | null) => void;
+  setRemoteSaveNotice: (notice: RemoteSaveNotice | null) => void;
   removeCollaboratorLocally: (userId: string) => void;
   renameProjectLocally: (name: string) => void;
 }
@@ -141,6 +150,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   pendingChapterContentReplacements: {},
   commentThreadsByChapter: {},
   selectedCommentThreadId: null,
+  remoteSaveNotice: null,
 
   setProject: (project) => set((state) => {
     const isSameProject = state.project?.metadata.id === project?.metadata.id;
@@ -427,6 +437,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     };
   }),
   setSelectedCommentThreadId: (selectedCommentThreadId) => set({ selectedCommentThreadId }),
+  setRemoteSaveNotice: (remoteSaveNotice) => set({ remoteSaveNotice }),
   removeCollaboratorLocally: (userId) => set((state) => {
     if (!state.project) return state;
 

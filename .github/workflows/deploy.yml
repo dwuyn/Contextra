@@ -8,8 +8,8 @@ on:
 
 env:
   APP_IMAGE: ghcr.io/dwuyn/contextra-app
-  COLLAB_IMAGE: ghcr.io/dwuyn/contextra-collab
   MIGRATE_IMAGE: ghcr.io/dwuyn/contextra-migrate
+  WORKER_IMAGE: ghcr.io/dwuyn/contextra-worker
 
 concurrency:
   group: deploy-contextra-main
@@ -82,16 +82,16 @@ jobs:
             ${{ env.MIGRATE_IMAGE }}:latest
             ${{ env.MIGRATE_IMAGE }}:${{ github.sha }}
 
-      - name: Build and push collab image
+      - name: Build and push continuity worker image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          target: collab-runner
+          target: worker-runner
           push: true
           tags: |
-            ${{ env.COLLAB_IMAGE }}:latest
-            ${{ env.COLLAB_IMAGE }}:${{ github.sha }}
+            ${{ env.WORKER_IMAGE }}:latest
+            ${{ env.WORKER_IMAGE }}:${{ github.sha }}
 
       - name: Connect to Tailscale
         uses: tailscale/github-action@v4
@@ -116,20 +116,20 @@ jobs:
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u dwuyn --password-stdin
 
             export APP_IMAGE="${{ env.APP_IMAGE }}:${{ github.sha }}"
-            export COLLAB_IMAGE="${{ env.COLLAB_IMAGE }}:${{ github.sha }}"
             export MIGRATE_IMAGE="${{ env.MIGRATE_IMAGE }}:${{ github.sha }}"
+            export WORKER_IMAGE="${{ env.WORKER_IMAGE }}:${{ github.sha }}"
 
-            docker compose pull migrate next-app collab continuity-worker
+            docker compose pull migrate next-app continuity-worker
 
             docker compose up -d postgres
 
             docker compose run --rm migrate
 
-            docker compose up -d next-app collab continuity-worker proxy
+            docker compose up -d next-app continuity-worker proxy
 
             container_id="$(docker compose ps -q proxy)"
             if [ -z "$container_id" ]; then
-              docker compose logs next-app collab continuity-worker proxy
+              docker compose logs next-app continuity-worker proxy
               exit 1
             fi
 
@@ -143,7 +143,7 @@ jobs:
               fi
 
               if [ "$health_status" = "unhealthy" ] || [ "$health_status" = "exited" ]; then
-                docker compose logs next-app collab continuity-worker proxy
+                docker compose logs next-app continuity-worker proxy
                 exit 1
               fi
 
@@ -154,7 +154,7 @@ jobs:
             final_status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id")"
 
             if [ "$final_status" != "healthy" ] && [ "$final_status" != "running" ]; then
-              docker compose logs next-app collab continuity-worker proxy
+              docker compose logs next-app continuity-worker proxy
               exit 1
             fi
 

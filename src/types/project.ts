@@ -309,6 +309,35 @@ export interface UpdateChapterResult {
   collaborationWarning?: string | null;
 }
 
+export interface ChapterSaveSuccessPayload {
+  status: "saved";
+  continuity: ContinuityRefreshStatus;
+  contentChanged: boolean;
+  updatedAt: string;
+  collaborationWarning?: string | null;
+}
+
+export interface ChapterSaveConflictPayload {
+  status: "conflict";
+  latest: {
+    title: string;
+    summary: string;
+    content: string;
+    updatedAt: string;
+  };
+}
+
+export type ChapterSavePayload = ChapterSaveSuccessPayload | ChapterSaveConflictPayload;
+
+export interface ProjectChapterSavedEvent {
+  projectId: string;
+  chapterId: string;
+  title: string;
+  updatedAt: string;
+  savedByUserId: string;
+  savedByName: string;
+}
+
 export interface ProjectCollaborationSession {
   documentName: string;
   websocketUrl: string;

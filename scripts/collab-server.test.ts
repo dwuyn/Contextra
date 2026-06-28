@@ -1,11 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { server } from "./collab-server";
 import * as projectService from "@/services/projectService";
-import { getChapterHtmlFromYDoc, encodeChapterState } from "@/lib/collaboration/document";
+import {
+  getChapterHtmlFromYDoc,
+  encodeChapterState,
+  isEncodedChapterStateBlank,
+} from "@/lib/collaboration/document";
 
 vi.mock("@/services/projectService", () => ({
   saveChapterCollaborationState: vi.fn(),
   getChapterCollaborationBootstrap: vi.fn(),
+  getChapterCollaborationState: vi.fn(),
   syncCollaborativeChapterContent: vi.fn(),
 }));
 
@@ -15,6 +20,7 @@ vi.mock("@/lib/collaboration/document", async () => {
     ...original,
     getChapterHtmlFromYDoc: vi.fn(() => "<p>mocked content</p>"),
     encodeChapterState: vi.fn(() => new Uint8Array([1, 2, 3])),
+    isEncodedChapterStateBlank: vi.fn(() => false),
   };
 });
 
@@ -216,5 +222,87 @@ describe("collab-server durability health monitoring", () => {
         event: "chapter_persistence_recovered",
       })
     );
+  });
+});
+
+describe("collab-server Database.fetch self-healing", () => {
+  let fetchHook: any;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+
+    const dbExtension = server.configuration.extensions.find(
+      (ext: any) => ext.configuration && typeof ext.configuration.fetch === "function"
+    ) as any;
+    fetchHook = dbExtension.configuration.fetch;
+  });
+
+  it("rebuilds stored state from DB HTML when stored state renders blank and DB content is meaningful", async () => {
+    (projectService.getChapterCollaborationBootstrap as any).mockResolvedValue({
+      id: "chapter-123",
+      projectId: "project-456",
+      content: "<p>Meaningful DB prose</p>",
+      updatedAt: new Date("2026-01-01"),
+    });
+    (projectService.getChapterCollaborationState as any).mockResolvedValue({
+      state: new Uint8Array([9, 9, 9]),
+      updatedAt: new Date("2026-06-01"),
+    });
+    vi.mocked(isEncodedChapterStateBlank).mockReturnValue(true);
+
+    const result = await fetchHook({
+      documentName: "chapter:chapter-123:body",
+    });
+
+    expect(isEncodedChapterStateBlank).toHaveBeenCalledWith(new Uint8Array([9, 9, 9]));
+    expect(projectService.saveChapterCollaborationState).toHaveBeenCalledWith(
+      "project-456",
+      "chapter-123",
+      new Uint8Array([1, 2, 3])
+    );
+    expect(result).toEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  it("returns stored state as-is when stored state is not blank even if newer than DB", async () => {
+    (projectService.getChapterCollaborationBootstrap as any).mockResolvedValue({
+      id: "chapter-123",
+      projectId: "project-456",
+      content: "<p>DB content</p>",
+      updatedAt: new Date("2026-01-01"),
+    });
+    (projectService.getChapterCollaborationState as any).mockResolvedValue({
+      state: new Uint8Array([5, 5, 5]),
+      updatedAt: new Date("2026-06-01"),
+    });
+    vi.mocked(isEncodedChapterStateBlank).mockReturnValue(false);
+
+    const result = await fetchHook({
+      documentName: "chapter:chapter-123:body",
+    });
+
+    expect(isEncodedChapterStateBlank).toHaveBeenCalledWith(new Uint8Array([5, 5, 5]));
+    expect(projectService.saveChapterCollaborationState).not.toHaveBeenCalled();
+    expect(result).toEqual(new Uint8Array([5, 5, 5]));
+  });
+
+  it("does not rebuild stored state when DB content is also blank", async () => {
+    (projectService.getChapterCollaborationBootstrap as any).mockResolvedValue({
+      id: "chapter-123",
+      projectId: "project-456",
+      content: "<p></p>",
+      updatedAt: new Date("2026-01-01"),
+    });
+    (projectService.getChapterCollaborationState as any).mockResolvedValue({
+      state: new Uint8Array([7, 7, 7]),
+      updatedAt: new Date("2026-06-01"),
+    });
+    vi.mocked(isEncodedChapterStateBlank).mockReturnValue(true);
+
+    const result = await fetchHook({
+      documentName: "chapter:chapter-123:body",
+    });
+
+    expect(projectService.saveChapterCollaborationState).not.toHaveBeenCalled();
+    expect(result).toEqual(new Uint8Array([7, 7, 7]));
   });
 });

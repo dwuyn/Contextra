@@ -115,11 +115,18 @@
       "liveSyncing": "Live syncing",
       "liveOffline": "Live offline",
       "syncTimedOut": "Live collaboration took too long to initialize. Editing locally for now.",
+      "authFailed": "Live collaboration authorization failed. Editing locally for now.",
       "reconnecting": "Live collaboration disconnected. Reconnecting…",
       "reconnectExhausted": "Live collaboration is offline. Reconnect to resume shared editing.",
       "reconnect": "Reconnect",
       "localFallbackBadge": "Local editing fallback",
       "localFallback": "Live collaboration is unavailable for this chapter right now. The body is editing locally and save works normally."
+    },
+    "conflict": {
+      "title": "Save conflict",
+      "description": "This chapter was modified by another session. Your changes haven't been saved.",
+      "reloadLatest": "Reload latest",
+      "copyText": "Copy your text"
     },
     "illustration": {
       "label": "Chapter Illustration",
@@ -130,12 +137,12 @@
       "emptyDescription": "Generate a cover-style illustration from the live chapter draft and optional art direction.",
       "generateLabel": "Image Generation",
       "generateTitle": "Generate chapter cover",
-      "regenerateTitle": "Regenerate chapter cover",
-      "generateDescription": "The app writes an English Imagen prompt from this chapter, project context, and your optional instruction before generating one vertical illustration.",
+      "regenerateTitle": "Generate chapter cover",
+      "generateDescription": "",
       "customInstruction": "Optional custom instruction",
       "customInstructionPlaceholder": "Example: rain-soaked neo-noir painting, lantern glow, no visible faces",
       "generate": "Generate illustration",
-      "regenerate": "Regenerate illustration",
+      "regenerate": "Generate illustration",
       "generating": "Generating illustration...",
       "generateError": "Could not generate the illustration. Please try again.",
       "missingChapterContent": "Add chapter content before generating an illustration.",
@@ -194,6 +201,7 @@
     "closeDeleteDialog": "Close delete dialog",
     "selectChapterToDelete": "Select a chapter to delete",
     "deleteChapter": "Delete {title}",
+    "projectName": "Project name",
     "clickToRename": "Click to rename",
     "dragToReorder": "Drag to reorder chapter",
     "cancel": "Cancel"
@@ -333,7 +341,9 @@
       "chapterSummary": "Chapter Summary",
       "act": "Act {number}",
       "chapter": "Chapter {number}",
-      "selectAct": "Select an act"
+      "selectAct": "Select an act",
+      "chapterCount": "Number of chapters",
+      "chapterCountHint": "The AI will decide the number of acts and divide chapters accordingly."
     },
     "dialogs": {
       "addCharacterTitle": "Add Character",
@@ -356,7 +366,10 @@
       "chapterDescription": "Add a planning chapter inside a specific act. This does not create a real workspace chapter.",
       "createChapter": "Create Chapter",
       "saveChapter": "Save Chapter",
-      "closeDialog": "Close dialog"
+      "closeDialog": "Close dialog",
+      "generateOutlineTitle": "Generate Outline",
+      "generateOutlineDescription": "Specify how many chapters you want the AI to generate. The AI will determine the number of acts automatically.",
+      "generateOutlineConfirm": "Generate"
     },
     "confirm": {
       "replaceSynopsisTitle": "Replace existing synopsis?",
@@ -422,7 +435,11 @@
     "emptyDescription": "Checkpoints are created when you click Save or restore a version.",
     "latest": "Latest",
     "versionNumber": "v{number}",
-    "restore": "Restore this version"
+    "restore": "Restore this version",
+    "confirmRestore": "Confirm restore?",
+    "cancel": "Cancel",
+    "loadError": "Failed to load version history.",
+    "restoreError": "Failed to restore version."
   },
   "collaboration": {
     "title": "Collaboration",

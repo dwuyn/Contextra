@@ -96,10 +96,10 @@ export async function generateSynopsisFromStoryBible(context: StoryBibleGenerati
   };
 }
 
-export async function generateOutlineFromStoryBible(context: StoryBibleGenerationContext) {
+export async function generateOutlineFromStoryBible(context: StoryBibleGenerationContext, targetChapterCount?: number) {
   const { text, usage } = await generateText({
     model: chatModel(),
-    prompt: buildOutlinePrompt(context),
+    prompt: buildOutlinePrompt(context, targetChapterCount),
     temperature: 0.7,
   });
 
@@ -268,7 +268,7 @@ Return only the synopsis text. No markdown, no heading, no commentary.
 `.trim();
 }
 
-function buildOutlinePrompt(context: StoryBibleGenerationContext) {
+function buildOutlinePrompt(context: StoryBibleGenerationContext, targetChapterCount?: number) {
   const worldRules = context.worldRules.length ? context.worldRules.map((rule) => `- ${rule}`).join("\n") : "- No world rules yet.";
   const characters = context.characters.length
     ? context.characters.map((character) => `- ${character.name} (${character.role}): ${character.memory}`).join("\n")
@@ -305,6 +305,7 @@ Title: ${context.projectName}
 Genre: ${context.genre}
 Tone: ${context.tone}
 Audience: ${context.audience}
+${targetChapterCount ? `Target chapter count: ${targetChapterCount}` : ""}
 
 [BRAINDUMP]
 ${context.braindump || "No braindump yet."}
@@ -338,8 +339,8 @@ Return only valid JSON with this shape:
 }
 
 Requirements:
-- Create 3 to 5 acts when possible.
-- Each act should contain 2 to 5 chapters.
+- You are designing for a target of ${targetChapterCount ?? 12} total chapters across all acts. Determine the most appropriate number of acts for this story — do not arbitrarily default to 3. The total number of chapters across all acts must equal exactly ${targetChapterCount ?? 12}.
+- Each act should contain at least 2 chapters.
 - Keep the outline aligned with the supplied project details.
 - Keep chapter summaries concise and actionable.
 - Do not include any text outside the JSON.

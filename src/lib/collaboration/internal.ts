@@ -65,3 +65,30 @@ export async function syncCollaborativeChapterDocument(params: {
     html: string;
   }>("/internal/documents/sync", params);
 }
+
+export async function getCollaborationPersistenceHealth() {
+  try {
+    const baseUrl = getCollaborationInternalBaseUrl();
+    const response = await fetch(`${baseUrl}/health`, {
+      method: "GET",
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      return { status: "degraded", lastError: `HTTP status ${response.status}` };
+    }
+    const data = await response.json();
+    return {
+      status: data.status === "degraded" ? "degraded" : "healthy",
+      lastError: data.unhealthyDocuments && data.unhealthyDocuments.length > 0
+        ? `Degraded documents: ${data.unhealthyDocuments.join(", ")}`
+        : null,
+      unhealthyDocuments: data.unhealthyDocuments || [],
+    };
+  } catch (error) {
+    return {
+      status: "degraded",
+      lastError: error instanceof Error ? error.message : String(error),
+      unhealthyDocuments: [],
+    };
+  }
+}

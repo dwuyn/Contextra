@@ -55,6 +55,18 @@ export function encodeChapterState(document: Y.Doc) {
   return Buffer.from(Y.encodeStateAsUpdate(document));
 }
 
+export function getChapterHtmlFromEncodedState(encoded: Uint8Array) {
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, encoded);
+  return getChapterHtmlFromYDoc(doc);
+}
+
+export function isEncodedChapterStateBlank(encoded: Uint8Array) {
+  const html = getChapterHtmlFromEncodedState(encoded);
+  const stripped = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return stripped.length === 0;
+}
+
 export function replaceChapterDocumentContent(document: Y.Doc, html: string) {
   const replacement = createChapterYDocFromHtml(html);
   const targetFragment = document.getXmlFragment(CHAPTER_COLLABORATION_FIELD);

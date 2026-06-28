@@ -1,6 +1,6 @@
 # Contextra
 
-Contextra is a collaborative writing workspace for long-form fiction. It combines a chapter editor, story bible, branching/version history, AI-assisted drafting, continuity memory, and lightweight realtime collaboration in a single Next.js app.
+Contextra is a collaborative writing workspace for long-form fiction. It combines a chapter editor, story bible, branching/version history, AI-assisted drafting, continuity memory, and shared project workflows like presence, comments, invites, and saved-chapter notifications in a single Next.js app.
 
 ## Tech Stack
 
@@ -53,8 +53,11 @@ npx prisma migrate dev
 
 ### 4. Start the app
 
+For full functionality, start the Next.js dev server and the continuity memory worker in separate terminals:
+
 ```bash
-npm run dev
+npm run dev                  # Start Next.js dev server (port 3000)
+npm run worker:continuity    # Start continuity memory worker (required)
 ```
 
 Open `http://localhost:3000`.
@@ -140,6 +143,7 @@ docker compose down
 - Production builds use `output: "standalone"` in Next.js.
 - Avatar uploads are stored under `/app/data` in Docker and persisted with a named volume.
 - Redis is optional and only needed when realtime SSE events must fan out across multiple app instances.
+- Shared editing uses normal saves with stale-write protection plus SSE notifications, not live document transport.
 
 ## License
 

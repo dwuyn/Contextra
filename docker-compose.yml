@@ -44,7 +44,6 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-contextra}:${POSTGRES_PASSWORD:-contextra}@postgres:5432/${POSTGRES_DB:-contextra}?schema=public
       GOOGLE_APPLICATION_CREDENTIALS: /app/google-key.json
-      COLLAB_INTERNAL_URL: http://collab:1234
       HOSTNAME: 0.0.0.0
       NODE_ENV: production
       PORT: 3000
@@ -63,39 +62,12 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
-
-  collab:
-    image: ${COLLAB_IMAGE:-ghcr.io/dwuyn/contextra-collab:latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: collab-runner
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-contextra}:${POSTGRES_PASSWORD:-contextra}@postgres:5432/${POSTGRES_DB:-contextra}?schema=public
-      GOOGLE_APPLICATION_CREDENTIALS: /app/google-key.json
-      NODE_ENV: production
-      COLLAB_PORT: 1234
-    depends_on:
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    volumes:
-      - ./google-key.json:/app/google-key.json:ro
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:1234/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
   continuity-worker:
-    image: ${COLLAB_IMAGE:-ghcr.io/dwuyn/contextra-collab:latest}
+    image: ${WORKER_IMAGE:-ghcr.io/dwuyn/contextra-worker:latest}
     build:
       context: .
       dockerfile: Dockerfile
-      target: collab-runner
+      target: worker-runner
     env_file:
       - .env
     environment:
@@ -109,15 +81,12 @@ services:
         condition: service_completed_successfully
     volumes:
       - ./google-key.json:/app/google-key.json:ro
-    command: ["node", "--import", "tsx", "scripts/continuity-worker.ts"]
     restart: unless-stopped
 
   proxy:
     image: nginx:1.27-alpine
     depends_on:
       next-app:
-        condition: service_healthy
-      collab:
         condition: service_healthy
     ports:
       - "${APP_PORT:-3000}:3000"

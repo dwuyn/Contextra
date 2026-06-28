@@ -1,5 +1,4 @@
 export type ReaderLanguage = "en-US" | "vi-VN";
-export type ReaderLanguageMode = "auto" | ReaderLanguage;
 
 export interface VoiceOption {
   id: string;
@@ -7,8 +6,6 @@ export interface VoiceOption {
   language: ReaderLanguage;
 }
 
-const VIETNAMESE_CHARACTER_PATTERN =
-  /[ăâđêôơưĂÂĐÊÔƠƯáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/;
 const READABLE_BLOCK_CLOSE_TAG_PATTERN = /<\/(h[1-6]|p|li|blockquote|pre|div|section|article)>/gi;
 const BREAK_TAG_PATTERN = /<br\s*\/?>/gi;
 const HTML_TAG_PATTERN = /<[^>]+>/g;
@@ -25,26 +22,12 @@ export function isReaderLanguage(value: string): value is ReaderLanguage {
   return value === "en-US" || value === "vi-VN";
 }
 
-function isReaderLanguageMode(value: string): value is ReaderLanguageMode {
-  return value === "auto" || isReaderLanguage(value);
-}
-
 export function isSupportedSpeechRate(value: number) {
   return SPEECH_RATE_OPTIONS.includes(value as (typeof SPEECH_RATE_OPTIONS)[number]);
 }
 
-function getReaderLanguageLabel(language: ReaderLanguage) {
-  return language === "vi-VN" ? "Vietnamese" : "English";
-}
-
-export function detectChapterLanguage(text: string): ReaderLanguage {
-  const alphaChars = text.replace(/[^a-zA-ZÀ-ỹ]/g, "");
-  if (alphaChars.length === 0) return "en-US";
-
-  const vietnameseMatches = alphaChars.match(VIETNAMESE_CHARACTER_PATTERN);
-  const ratio = (vietnameseMatches?.length ?? 0) / alphaChars.length;
-
-  return ratio >= 0.05 ? "vi-VN" : "en-US";
+export function getLocaleDefaultReaderLanguage(locale: string): ReaderLanguage {
+  return locale.startsWith("vi") ? "vi-VN" : "en-US";
 }
 
 function splitByWhitespaceLimit(text: string) {

@@ -23,6 +23,7 @@ export function useSSE(onEvent: (event: string, data: SSEPayload) => void) {
       project_presence_updated: (e: MessageEvent) => callbackRef.current("project_presence_updated", JSON.parse(e.data)),
       project_comment_created: (e: MessageEvent) => callbackRef.current("project_comment_created", JSON.parse(e.data)),
       project_comment_updated: (e: MessageEvent) => callbackRef.current("project_comment_updated", JSON.parse(e.data)),
+      project_chapter_saved: (e: MessageEvent) => callbackRef.current("project_chapter_saved", JSON.parse(e.data)),
     };
 
     Object.entries(handlers).forEach(([name, handler]) => {

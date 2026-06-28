@@ -14,7 +14,7 @@ import {
   Loader2,
   AlertCircle,
 } from "lucide-react";
-import { useState, useRef, useEffect, startTransition } from "react";
+import { useState, useRef, useEffect, useMemo, startTransition } from "react";
 import { useRouter } from "@/lib/i18n-client";
 import ReactMarkdown from "react-markdown";
 import { useTranslations } from "next-intl";
@@ -50,10 +50,8 @@ export function AiCardsPane({
   const aiCards = useProjectStore((state) => state.aiCards);
   const removeAiCard = useProjectStore((state) => state.removeAiCard);
   const projectId = useProjectStore((state) => state.project?.metadata.id ?? null);
+  const aiMessages = useProjectStore((state) => state.project?.aiMessages ?? null);
   const activeBranchId = useProjectStore((state) => state.activeBranchId);
-  const messages = useProjectStore((state) =>
-    state.project?.aiMessages.filter((msg) => msg.branchId === state.activeBranchId) ?? []
-  );
   const appendProjectAiMessage = useProjectStore((state) => state.appendProjectAiMessage);
   const updateProjectAiMessage = useProjectStore((state) => state.updateProjectAiMessage);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -61,6 +59,10 @@ export function AiCardsPane({
 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const messages = useMemo(
+    () => aiMessages?.filter((msg) => msg.branchId === activeBranchId) ?? [],
+    [activeBranchId, aiMessages],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

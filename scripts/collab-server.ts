@@ -10,9 +10,11 @@ import {
   getChapterDocumentName,
   getChapterHtmlFromYDoc,
   isAuthorizedDocument,
+  isEncodedChapterStateBlank,
   replaceChapterDocumentContent,
   shouldUseStoredChapterState,
 } from "@/lib/collaboration/document";
+import { stripHtml } from "@/lib/utils";
 import * as projectService from "@/services/projectService";
 
 type CollaborationContext = {
@@ -90,6 +92,15 @@ const extensions: Array<Database | Redis> = [
         chapterUpdatedAt: bootstrap.updatedAt,
         stateUpdatedAt: stored.updatedAt,
       })) {
+        const storedStateIsBlank = isEncodedChapterStateBlank(stored.state);
+        const dbContentIsMeaningful = stripHtml(bootstrap.content).length > 0;
+
+        if (storedStateIsBlank && dbContentIsMeaningful) {
+          const rebuiltState = encodeChapterState(createChapterYDocFromHtml(bootstrap.content));
+          await projectService.saveChapterCollaborationState(bootstrap.projectId, bootstrap.id, rebuiltState);
+          return rebuiltState;
+        }
+
         return stored.state;
       }
 
@@ -221,7 +232,16 @@ const server = new Server({
       const url = new URL(request.url || "/", `http://${request.headers.host ?? "127.0.0.1"}`);
 
       if (request.method === "GET" && url.pathname === "/health") {
-        sendJson(response, 200, { ok: true });
+        const unhealthyDocuments = Array.from(documentHealthMap.entries())
+          .filter(([_, status]) => status === "unhealthy")
+          .map(([name]) => name);
+
+        const status = unhealthyDocuments.length > 0 ? "degraded" : "healthy";
+        sendJson(response, 200, {
+          ok: true,
+          status,
+          unhealthyDocuments,
+        });
         throw null;
       }
 

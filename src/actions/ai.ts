@@ -23,6 +23,7 @@ import {
   requireProjectPermission,
   updateContext,
   updateOutline,
+  syncChaptersWithOutline,
 } from "@/services/projectService";
 import type { Prisma } from "@prisma/client";
 import type { ProjectOutline } from "@/types/project";
@@ -251,7 +252,7 @@ export async function generateSynopsisAction(projectId: string) {
   return updatedProject;
 }
 
-export async function generateOutlineAction(projectId: string) {
+export async function generateOutlineAction(projectId: string, input?: unknown) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
 
@@ -260,9 +261,10 @@ export async function generateOutlineAction(projectId: string) {
   const rateCheck = await aiRateLimiter(req);
   if (!rateCheck.allowed) throw new Error("Too many requests");
 
+  const parsed = z.OutlineRequestSchema.parse(input ?? {});
   await requireProjectPermission(projectId, session.userId, "edit");
 
-  const result = await generateOutlineFromStoryBible(await buildStoryBibleContext(projectId));
+  const result = await generateOutlineFromStoryBible(await buildStoryBibleContext(projectId), parsed.targetChapterCount);
   const updatedProject = await updateOutline(projectId, session.userId, attachOutlineIds(result.outline));
 
   await prisma.usage.create({
@@ -333,6 +335,8 @@ async function generateLongOutlineAction(projectId: string, input: unknown = {})
         data: { outline: legacyOutline as unknown as Prisma.InputJsonValue },
       }),
     ]);
+
+    await syncChaptersWithOutline(projectId, legacyOutline, tx);
   });
 
   await prisma.usage.create({

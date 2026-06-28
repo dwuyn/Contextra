@@ -11,15 +11,11 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   exportCollaborativeChapter,
-  replaceCollaborativeChapter,
-  syncCollaborativeChapterDocument,
 } from "@/lib/collaboration/internal";
 import { revalidatePath } from "next/cache";
 import * as z from "@/lib/validations";
 import { sendEvent } from "@/lib/realtime";
-import type { CreateChapterResult, RemoveProjectMemberResult, RestoreVersionResult, UpdateChapterResult } from "@/types/project";
-
-const COLLABORATION_SYNC_WARNING = "Saved locally, but live collaboration may briefly lag until it resynchronizes.";
+import type { ChapterSavePayload, CreateChapterResult, RemoveProjectMemberResult, RestoreVersionResult } from "@/types/project";
 
 async function sendProjectNotice(senderId: string, receiverId: string, content: string) {
   try {
@@ -80,25 +76,18 @@ export async function createChapter(projectId: string, input: unknown): Promise<
   return result;
 }
 
-export async function updateChapter(projectId: string, chapterId: string, input: unknown): Promise<UpdateChapterResult> {
+export async function updateChapter(projectId: string, chapterId: string, input: unknown): Promise<ChapterSavePayload> {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
   const parsed = z.UpdateChapterSchema.parse(input);
-  const { revalidate = true, ...chapterInput } = parsed;
-  const result = await projectService.updateChapter(projectId, session.userId, chapterId, chapterInput);
-  let collaborationWarning: string | null = null;
+  const { revalidate = true, expectedUpdatedAt, ...chapterInput } = parsed;
+  const result = await projectService.updateChapter(projectId, session.userId, chapterId, {
+    ...chapterInput,
+    expectedUpdatedAt,
+  });
 
-  if (chapterInput.content !== undefined && result.contentChanged) {
-    try {
-      await syncCollaborativeChapterDocument({
-        projectId,
-        chapterId,
-        html: chapterInput.content,
-      });
-    } catch (error) {
-      console.error("Failed to sync collaboration document after local save", error);
-      collaborationWarning = COLLABORATION_SYNC_WARNING;
-    }
+  if (result.status === "conflict") {
+    return result;
   }
 
   if (revalidate) {
@@ -106,9 +95,26 @@ export async function updateChapter(projectId: string, chapterId: string, input:
     revalidatePath(`/project/${projectId}`);
   }
 
-  return collaborationWarning
-    ? { ...result, collaborationWarning }
-    : result;
+  const chapter = await prisma.chapter.findFirst({
+    where: { id: chapterId, projectId },
+    select: { title: true, updatedAt: true },
+  });
+
+  void fanOutProjectEvent(
+    projectId,
+    "project_chapter_saved",
+    {
+      projectId,
+      chapterId,
+      title: chapter?.title ?? "",
+      updatedAt: result.updatedAt,
+      savedByUserId: session.userId,
+      savedByName: session.name,
+    },
+    [session.userId],
+  );
+
+  return result;
 }
 
 export async function createBranch(projectId: string, input: unknown) {
@@ -489,7 +495,7 @@ export async function getChapterVersions(projectId: string, chapterId: string) {
   return projectService.getChapterVersions(projectId, session.userId, chapterId);
 }
 
-export async function saveCollaborativeChapter(projectId: string, chapterId: string, input: unknown): Promise<UpdateChapterResult> {
+export async function saveCollaborativeChapter(projectId: string, chapterId: string, input: unknown): Promise<ChapterSavePayload> {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
 
@@ -508,9 +514,10 @@ export async function saveCollaborativeChapter(projectId: string, chapterId: str
     summary: parsed.summary,
     content: html,
     createVersion: parsed.createVersion,
+    expectedUpdatedAt: parsed.expectedUpdatedAt,
   });
 
-  if (parsed.revalidate ?? parsed.createVersion) {
+  if ((parsed.revalidate ?? parsed.createVersion) && result.status === "saved") {
     revalidatePath("/");
     revalidatePath(`/project/${projectId}`);
   }
@@ -521,25 +528,27 @@ export async function saveCollaborativeChapter(projectId: string, chapterId: str
 export async function restoreVersion(projectId: string, chapterId: string, versionId: string): Promise<RestoreVersionResult> {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
-  await projectService.requireProjectPermission(projectId, session.userId, "edit");
-  const [version, current] = await Promise.all([
-    projectService.getChapterVersionForRestore(projectId, session.userId, chapterId, versionId),
-    exportCollaborativeChapter({ projectId, chapterId }),
-  ]);
+  const result = await projectService.restoreVersion(projectId, session.userId, chapterId, versionId);
 
-  if (current.html && current.html !== version.content) {
-    await projectService.createChapterVersionSnapshot(projectId, chapterId, session.userId, current.html);
-  }
-
-  const replaced = await replaceCollaborativeChapter({
-    projectId,
-    chapterId,
-    html: version.content,
+  const chapter = await prisma.chapter.findFirst({
+    where: { id: chapterId, projectId },
+    select: { title: true, updatedAt: true },
   });
 
+  void fanOutProjectEvent(
+    projectId,
+    "project_chapter_saved",
+    {
+      projectId,
+      chapterId,
+      title: chapter?.title ?? "",
+      updatedAt: chapter?.updatedAt.toISOString() ?? "",
+      savedByUserId: session.userId,
+      savedByName: session.name,
+    },
+    [session.userId],
+  );
+
   revalidatePath(`/project/${projectId}`);
-  return {
-    content: replaced.html,
-    continuity: replaced.continuity,
-  };
+  return result;
 }

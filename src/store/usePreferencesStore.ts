@@ -8,22 +8,22 @@ import {
   type FontType,
   type ThemeType,
 } from "@/lib/appearance";
-import type { ReaderLanguage, ReaderLanguageMode } from "@/lib/voiceReader";
+import type { ReaderLanguage } from "@/lib/voiceReader";
 
 export type { FontType, ThemeType };
-export type { ReaderLanguage, ReaderLanguageMode };
-const PREFERENCES_STORE_VERSION = 5;
+export type { ReaderLanguage };
+const PREFERENCES_STORE_VERSION = 6;
 
 interface PreferencesState {
   theme: ThemeType;
   font: FontType;
-  readerLanguageMode: ReaderLanguageMode;
+  readerLanguage: ReaderLanguage;
   readerRate: number;
   readerVoiceEn: string;
   readerVoiceVi: string;
   setTheme: (theme: ThemeType) => void;
   setFont: (font: FontType) => void;
-  setReaderLanguageMode: (mode: ReaderLanguageMode) => void;
+  setReaderLanguage: (language: ReaderLanguage) => void;
   setReaderRate: (rate: number) => void;
   setReaderVoice: (language: ReaderLanguage, voiceURI: string) => void;
 }
@@ -31,24 +31,28 @@ interface PreferencesState {
 type PersistedPreferencesState = {
   theme?: unknown;
   font?: unknown;
-  readerLanguageMode?: ReaderLanguageMode;
+  readerLanguage?: string;
   readerRate?: number;
   readerVoiceEn?: string;
   readerVoiceVi?: string;
 };
+
+function isReaderLanguage(value: string): value is ReaderLanguage {
+  return value === "en-US" || value === "vi-VN";
+}
 
 export const usePreferencesStore = create<PreferencesState>()(
   persist(
     (set) => ({
       theme: DEFAULT_THEME,
       font: DEFAULT_FONT,
-      readerLanguageMode: "auto",
+      readerLanguage: "en-US",
       readerRate: 1,
       readerVoiceEn: "",
       readerVoiceVi: "",
       setTheme: (theme) => set({ theme }),
       setFont: (font) => set({ font }),
-      setReaderLanguageMode: (readerLanguageMode) => set({ readerLanguageMode }),
+      setReaderLanguage: (readerLanguage) => set({ readerLanguage }),
       setReaderRate: (readerRate) => set({ readerRate }),
       setReaderVoice: (language, voiceURI) =>
         set(language === "vi-VN" ? { readerVoiceVi: voiceURI } : { readerVoiceEn: voiceURI }),
@@ -65,6 +69,14 @@ export const usePreferencesStore = create<PreferencesState>()(
         if (version < 3) {
           state.readerVoiceEn = "";
           state.readerVoiceVi = "";
+        }
+
+        if (version < 6) {
+          const raw = "readerLanguage" in state ? state.readerLanguage : (state as Record<string, unknown>).readerLanguageMode;
+          const value = typeof raw === "string" ? raw : "auto";
+          state.readerLanguage = isReaderLanguage(value) ? value : "en-US";
+          // biome-ignore lint/performance/noDelete: migration cleanup
+          delete (state as Record<string, unknown>).readerLanguageMode;
         }
 
         return {

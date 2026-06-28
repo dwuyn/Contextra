@@ -6,16 +6,26 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/services/projectService", () => ({
   updateChapter: vi.fn(),
+  restoreVersion: vi.fn(),
+  listProjectAudience: vi.fn(),
   getChapterCollaborationAccess: vi.fn(),
-  requireProjectPermission: vi.fn(),
-  getChapterVersionForRestore: vi.fn(),
-  createChapterVersionSnapshot: vi.fn(),
 }));
 
 vi.mock("@/lib/collaboration/internal", () => ({
   exportCollaborativeChapter: vi.fn(),
   replaceCollaborativeChapter: vi.fn(),
-  syncCollaborativeChapterDocument: vi.fn(),
+}));
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    chapter: {
+      findFirst: vi.fn(),
+    },
+  },
+}));
+
+vi.mock("@/lib/realtime", () => ({
+  sendEvent: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
@@ -24,168 +34,152 @@ vi.mock("next/cache", () => ({
 
 import { saveCollaborativeChapter, restoreVersion, updateChapter } from "@/actions/projects";
 import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { sendEvent } from "@/lib/realtime";
 import * as projectService from "@/services/projectService";
-import { exportCollaborativeChapter, replaceCollaborativeChapter, syncCollaborativeChapterDocument } from "@/lib/collaboration/internal";
+import { exportCollaborativeChapter } from "@/lib/collaboration/internal";
 import { revalidatePath } from "next/cache";
 
 describe("projects.updateChapter", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    (getSession as ReturnType<typeof vi.fn>).mockResolvedValue({
+    vi.mocked(getSession).mockResolvedValue({
       userId: "user-1",
       email: "user@example.com",
+      name: "Editor One",
     });
-    (projectService.updateChapter as ReturnType<typeof vi.fn>).mockResolvedValue({
+    vi.mocked(projectService.updateChapter).mockResolvedValue({
+      status: "saved",
       continuity: { fresh: true },
       contentChanged: true,
+      updatedAt: "2026-06-25T10:00:00.000Z",
     });
-    (syncCollaborativeChapterDocument as ReturnType<typeof vi.fn>).mockResolvedValue({
-      html: "<p>saved</p>",
-    });
+    vi.mocked(projectService.listProjectAudience).mockResolvedValue(["user-2"]);
+    vi.mocked(prisma.chapter.findFirst).mockResolvedValue({
+      title: "Chapter Title",
+      updatedAt: new Date("2026-06-25T10:00:00.000Z"),
+    } as never);
   });
 
-  it("syncs the collaboration document after a local content save", async () => {
+  it("saves through the normal chapter update path and emits project_chapter_saved", async () => {
     const result = await updateChapter("project-1", "chapter-1", {
-      title: "Chapter",
+      title: "Chapter Title",
       content: "<p>saved</p>",
+      expectedUpdatedAt: "2026-06-25T09:55:00.000Z",
     });
 
     expect(projectService.updateChapter).toHaveBeenCalledWith(
       "project-1",
       "user-1",
       "chapter-1",
-      expect.objectContaining({
-        title: "Chapter",
+      {
+        title: "Chapter Title",
         content: "<p>saved</p>",
-      }),
+        expectedUpdatedAt: "2026-06-25T09:55:00.000Z",
+      },
     );
-    expect(syncCollaborativeChapterDocument).toHaveBeenCalledWith({
-      projectId: "project-1",
-      chapterId: "chapter-1",
-      html: "<p>saved</p>",
-    });
     expect(revalidatePath).toHaveBeenCalledWith("/");
     expect(revalidatePath).toHaveBeenCalledWith("/project/project-1");
-    expect(result).toEqual({
-      continuity: { fresh: true },
-      contentChanged: true,
+    expect(projectService.listProjectAudience).toHaveBeenCalledWith("project-1", ["user-1"]);
+    expect(prisma.chapter.findFirst).toHaveBeenCalledWith({
+      where: { id: "chapter-1", projectId: "project-1" },
+      select: { title: true, updatedAt: true },
     });
-  });
-
-  it("does not sync the collaboration document when the content did not change", async () => {
-    (projectService.updateChapter as ReturnType<typeof vi.fn>).mockResolvedValue({
-      continuity: { fresh: true },
-      contentChanged: false,
-    });
-
-    await updateChapter("project-1", "chapter-1", {
-      title: "Retitled",
-      content: "<p>unchanged</p>",
-    });
-
-    expect(syncCollaborativeChapterDocument).not.toHaveBeenCalled();
-  });
-
-  it("returns a warning instead of failing when collaboration sync lags behind", async () => {
-    (syncCollaborativeChapterDocument as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("Collab server offline"),
+    expect(sendEvent).toHaveBeenCalledWith(
+      "user-2",
+      "project_chapter_saved",
+      expect.objectContaining({
+        projectId: "project-1",
+        chapterId: "chapter-1",
+        title: "Chapter Title",
+        updatedAt: "2026-06-25T10:00:00.000Z",
+        savedByUserId: "user-1",
+        savedByName: "Editor One",
+      }),
     );
-
-    await expect(updateChapter("project-1", "chapter-1", {
-      title: "Chapter",
-      content: "<p>saved</p>",
-    })).resolves.toEqual({
+    expect(result).toEqual({
+      status: "saved",
       continuity: { fresh: true },
       contentChanged: true,
-      collaborationWarning: "Saved locally, but live collaboration may briefly lag until it resynchronizes.",
+      updatedAt: "2026-06-25T10:00:00.000Z",
     });
+  });
+
+  it("returns the conflict payload unchanged and skips fan-out", async () => {
+    vi.mocked(projectService.updateChapter).mockResolvedValue({
+      status: "conflict",
+      latest: {
+        title: "Remote Title",
+        summary: "",
+        content: "<p>remote</p>",
+        updatedAt: "2026-06-25T10:05:00.000Z",
+      },
+    });
+
+    const result = await updateChapter("project-1", "chapter-1", {
+      title: "Local Title",
+      content: "<p>local</p>",
+      expectedUpdatedAt: "2026-06-25T10:00:00.000Z",
+    });
+
+    expect(result).toEqual({
+      status: "conflict",
+      latest: {
+        title: "Remote Title",
+        summary: "",
+        content: "<p>remote</p>",
+        updatedAt: "2026-06-25T10:05:00.000Z",
+      },
+    });
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(projectService.listProjectAudience).not.toHaveBeenCalled();
+    expect(prisma.chapter.findFirst).not.toHaveBeenCalled();
+    expect(sendEvent).not.toHaveBeenCalled();
   });
 });
 
 describe("projects.saveCollaborativeChapter", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    (getSession as ReturnType<typeof vi.fn>).mockResolvedValue({
+    vi.mocked(getSession).mockResolvedValue({
       userId: "user-1",
       email: "user@example.com",
+      name: "Editor One",
     });
-    (projectService.getChapterCollaborationAccess as ReturnType<typeof vi.fn>).mockResolvedValue({
+    vi.mocked(projectService.getChapterCollaborationAccess).mockResolvedValue({
       viewerAccess: { canEdit: true },
-      user: { id: "user-1", name: "Editor" },
+      user: { id: "user-1", name: "Editor One" },
     });
-    (exportCollaborativeChapter as ReturnType<typeof vi.fn>).mockResolvedValue({
+    vi.mocked(projectService.updateChapter).mockResolvedValue({
+      status: "saved",
+      continuity: { fresh: true },
+      contentChanged: true,
+      updatedAt: "2026-06-25T10:00:00.000Z",
+    });
+    vi.mocked(projectService.listProjectAudience).mockResolvedValue([]);
+    vi.mocked(prisma.chapter.findFirst).mockResolvedValue({
+      title: "Chapter Title",
+      updatedAt: new Date("2026-06-25T10:00:00.000Z"),
+    } as never);
+    vi.mocked(exportCollaborativeChapter).mockResolvedValue({
       html: "<p>collaborative</p>",
       continuity: { fresh: true },
     });
-    (projectService.updateChapter as ReturnType<typeof vi.fn>).mockResolvedValue({
-      continuity: { fresh: true },
-      contentChanged: true,
-    });
-  });
-
-  it("authorizes session edit access before calling internal export endpoint", async () => {
-    await saveCollaborativeChapter("project-1", "chapter-1", {
-      title: "Chapter Title",
-      summary: "",
-      createVersion: false,
-    });
-
-    expect(projectService.getChapterCollaborationAccess).toHaveBeenCalledWith("project-1", "user-1", "chapter-1");
-    expect(exportCollaborativeChapter).toHaveBeenCalledWith({ projectId: "project-1", chapterId: "chapter-1" });
-    expect(projectService.updateChapter).toHaveBeenCalledWith(
-      "project-1",
-      "user-1",
-      "chapter-1",
-      expect.objectContaining({ content: "<p>collaborative</p>" })
-    );
-  });
-
-  it("throws an error if user does not have edit permission", async () => {
-    (projectService.getChapterCollaborationAccess as ReturnType<typeof vi.fn>).mockResolvedValue({
-      viewerAccess: { canEdit: false },
-      user: { id: "user-1", name: "Editor" },
-    });
-
-    await expect(saveCollaborativeChapter("project-1", "chapter-1", {
-      title: "Chapter Title",
-      summary: "",
-      createVersion: false,
-    })).rejects.toThrow("Unauthorized");
-
-    expect(exportCollaborativeChapter).not.toHaveBeenCalled();
   });
 
   it("uses provided content and skips internal export", async () => {
     await saveCollaborativeChapter("project-1", "chapter-1", {
       title: "Chapter Title",
-      summary: "",
       content: "<p>provided content</p>",
       createVersion: false,
     });
 
-    expect(projectService.getChapterCollaborationAccess).toHaveBeenCalledWith("project-1", "user-1", "chapter-1");
     expect(exportCollaborativeChapter).not.toHaveBeenCalled();
     expect(projectService.updateChapter).toHaveBeenCalledWith(
       "project-1",
       "user-1",
       "chapter-1",
-      expect.objectContaining({ content: "<p>provided content</p>" })
-    );
-  });
-
-  it("falls back to internal export when content is omitted", async () => {
-    await saveCollaborativeChapter("project-1", "chapter-1", {
-      title: "Chapter Title",
-      summary: "",
-      createVersion: false,
-    });
-
-    expect(exportCollaborativeChapter).toHaveBeenCalledWith({ projectId: "project-1", chapterId: "chapter-1" });
-    expect(projectService.updateChapter).toHaveBeenCalledWith(
-      "project-1",
-      "user-1",
-      "chapter-1",
-      expect.objectContaining({ content: "<p>collaborative</p>" })
+      expect.objectContaining({ content: "<p>provided content</p>" }),
     );
   });
 });
@@ -193,34 +187,26 @@ describe("projects.saveCollaborativeChapter", () => {
 describe("projects.restoreVersion", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    (getSession as ReturnType<typeof vi.fn>).mockResolvedValue({
+    vi.mocked(getSession).mockResolvedValue({
       userId: "user-1",
       email: "user@example.com",
+      name: "Editor One",
     });
-    (projectService.getChapterVersionForRestore as ReturnType<typeof vi.fn>).mockResolvedValue({
+    vi.mocked(projectService.listProjectAudience).mockResolvedValue([]);
+    vi.mocked(prisma.chapter.findFirst).mockResolvedValue({
+      title: "Chapter Title",
+      updatedAt: new Date("2026-06-25T10:00:00.000Z"),
+    } as never);
+    vi.mocked(projectService.restoreVersion).mockResolvedValue({
       content: "<p>restored version</p>",
-    });
-    (exportCollaborativeChapter as ReturnType<typeof vi.fn>).mockResolvedValue({
-      html: "<p>current live content</p>",
-      continuity: { fresh: true },
-    });
-    (replaceCollaborativeChapter as ReturnType<typeof vi.fn>).mockResolvedValue({
-      html: "<p>restored version</p>",
       continuity: { fresh: true },
     });
   });
 
-  it("calls export with projectId and calls replaceCollaborativeChapter with version content", async () => {
+  it("calls projectService.restoreVersion and returns the result", async () => {
     const result = await restoreVersion("project-1", "chapter-1", "version-1");
 
-    expect(projectService.requireProjectPermission).toHaveBeenCalledWith("project-1", "user-1", "edit");
-    expect(exportCollaborativeChapter).toHaveBeenCalledWith({ projectId: "project-1", chapterId: "chapter-1" });
-    expect(projectService.createChapterVersionSnapshot).toHaveBeenCalledWith("project-1", "chapter-1", "user-1", "<p>current live content</p>");
-    expect(replaceCollaborativeChapter).toHaveBeenCalledWith({
-      projectId: "project-1",
-      chapterId: "chapter-1",
-      html: "<p>restored version</p>",
-    });
+    expect(projectService.restoreVersion).toHaveBeenCalledWith("project-1", "user-1", "chapter-1", "version-1");
     expect(result).toEqual({
       content: "<p>restored version</p>",
       continuity: { fresh: true },

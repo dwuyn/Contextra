@@ -59,6 +59,7 @@ export const UpdateChapterSchema = z.object({
   content: z.string().optional(),
   createVersion: z.boolean().optional(),
   revalidate: z.boolean().optional(),
+  expectedUpdatedAt: z.string().optional(),
 });
 
 export const GenerateChapterIllustrationSchema = z.object({
@@ -98,6 +99,10 @@ export const ProjectOutlineSchema = z.object({
 
 export const LongOutlineRequestSchema = z.object({
   targetChapterCount: z.number().int().min(20).max(1000).default(200),
+});
+
+export const OutlineRequestSchema = z.object({
+  targetChapterCount: z.number().int().min(1).max(100).optional(),
 });
 
 const GeneratedOutlineChapterSchema = z.object({

@@ -3,7 +3,8 @@ import {
   DEVELOPMENT_COLLAB_INTERNAL_SECRET,
   getCollaborationInternalSecret,
   isFreshProjectPresence,
-  shouldUseProjectLiveCollaboration,
+  isLiveCollaborationEnabled,
+  shouldUseProjectCollaborationTransport,
 } from "@/lib/collaboration/config";
 
 describe("collaboration config", () => {
@@ -24,22 +25,9 @@ describe("collaboration config", () => {
     expect(isFreshProjectPresence({ lastActiveAt: new Date(now - COLLABORATION_PRESENCE_ACTIVE_MS - 1).toISOString() }, now)).toBe(false);
   });
 
-  it("enables live collaboration for editable projects with collaborators", () => {
-    const now = Date.now();
-
-    const baseProject = {
+  it("disables live collaboration transport unconditionally", () => {
+    const editableProject = {
       currentUser: { id: "user-1", name: "Owner" },
-      collaborators: [
-        {
-          id: "collab-1",
-          projectId: "project-1",
-          userId: "user-2",
-          role: "editor",
-          permissionLevel: 2,
-          createdAt: new Date(now).toISOString(),
-          user: { id: "user-2", name: "Collaborator" },
-        },
-      ],
       viewerAccess: {
         canView: true,
         canEdit: true,
@@ -47,38 +35,13 @@ describe("collaboration config", () => {
         isOwner: true,
         isPublicViewer: false,
       },
-      presence: [
-        {
-          id: "presence-1",
-          projectId: "project-1",
-          userId: "user-2",
-          chapterId: "chapter-2",
-          state: "editing" as const,
-          lastActiveAt: new Date(now - 5_000).toISOString(),
-          createdAt: new Date(now).toISOString(),
-          updatedAt: new Date(now).toISOString(),
-          user: { id: "user-2", name: "Collaborator" },
-        },
-      ],
+      collaborators: [],
+      presence: [],
     };
 
-    expect(shouldUseProjectLiveCollaboration(baseProject, "chapter-1", now)).toBe(true);
-    expect(shouldUseProjectLiveCollaboration({ ...baseProject, presence: [] }, "chapter-1", now)).toBe(true);
-    expect(shouldUseProjectLiveCollaboration({ ...baseProject, collaborators: [] }, "chapter-1", now)).toBe(false);
-    expect(shouldUseProjectLiveCollaboration(baseProject, null, now)).toBe(false);
-    expect(shouldUseProjectLiveCollaboration({
-      ...baseProject,
-      viewerAccess: {
-        ...baseProject.viewerAccess,
-        canEdit: false,
-      },
-    }, "chapter-1", now)).toBe(false);
-    expect(shouldUseProjectLiveCollaboration({
-      ...baseProject,
-      presence: [{
-        ...baseProject.presence[0],
-        userId: "user-1",
-      }],
-    }, "chapter-1", now)).toBe(true);
+    expect(isLiveCollaborationEnabled()).toBe(false);
+    expect(shouldUseProjectCollaborationTransport(editableProject, "chapter-1")).toBe(false);
+    expect(shouldUseProjectCollaborationTransport(null, "chapter-1")).toBe(false);
+    expect(shouldUseProjectCollaborationTransport({}, "chapter-1")).toBe(false);
   });
 });

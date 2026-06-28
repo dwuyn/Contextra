@@ -115,11 +115,18 @@
       "liveSyncing": "Đồng bộ trực tiếp",
       "liveOffline": "Trực tiếp ngoại tuyến",
       "syncTimedOut": "Cộng tác trực tiếp khởi tạo quá lâu. Tạm thời chuyển sang chỉnh sửa cục bộ.",
+      "authFailed": "Xác thực cộng tác trực tiếp thất bại. Tạm thời chuyển sang chỉnh sửa cục bộ.",
       "reconnecting": "Cộng tác trực tiếp bị ngắt. Đang kết nối lại...",
       "reconnectExhausted": "Cộng tác trực tiếp đang ngoại tuyến. Hãy kết nối lại để tiếp tục chỉnh sửa chung.",
       "reconnect": "Kết nối lại",
       "localFallbackBadge": "Chỉnh sửa cục bộ",
       "localFallback": "Cộng tác trực tiếp hiện không khả dụng cho chương này. Phần nội dung đang được chỉnh sửa cục bộ và vẫn lưu bình thường."
+    },
+    "conflict": {
+      "title": "Xung đột lưu",
+      "description": "Chương này đã được sửa đổi bởi một phiên làm việc khác. Thay đổi của bạn chưa được lưu.",
+      "reloadLatest": "Tải bản mới nhất",
+      "copyText": "Sao chép văn bản"
     },
     "illustration": {
       "label": "Minh họa chương",
@@ -130,12 +137,12 @@
       "emptyDescription": "Tạo một hình minh họa kiểu bìa sách từ bản nháp chương hiện tại và chỉ dẫn nghệ thuật tùy chọn.",
       "generateLabel": "Tạo ảnh",
       "generateTitle": "Tạo bìa cho chương",
-      "regenerateTitle": "Tạo lại bìa cho chương",
-      "generateDescription": "Ứng dụng sẽ viết prompt tiếng Anh cho Imagen từ chương này, ngữ cảnh dự án và chỉ dẫn tùy chọn của bạn trước khi tạo một ảnh minh họa dọc.",
+      "regenerateTitle": "Tạo bìa cho chương",
+      "generateDescription": "",
       "customInstruction": "Chỉ dẫn tùy chọn",
       "customInstructionPlaceholder": "Ví dụ: tranh sơn dầu noir mưa đêm, ánh đèn lồng, không lộ mặt nhân vật",
       "generate": "Tạo minh họa",
-      "regenerate": "Tạo lại minh họa",
+      "regenerate": "Tạo minh họa",
       "generating": "Đang tạo minh họa...",
       "generateError": "Không thể tạo minh họa. Vui lòng thử lại.",
       "missingChapterContent": "Hãy thêm nội dung chương trước khi tạo minh họa.",
@@ -194,6 +201,7 @@
     "closeDeleteDialog": "Đóng hộp thoại xóa",
     "selectChapterToDelete": "Chọn chương để xóa",
     "deleteChapter": "Xóa {title}",
+    "projectName": "Tên dự án",
     "clickToRename": "Nhấn để đổi tên",
     "dragToReorder": "Kéo để sắp xếp lại chương",
     "cancel": "Hủy"
@@ -333,7 +341,9 @@
       "chapterSummary": "Tóm tắt chương",
       "act": "Hồi {number}",
       "chapter": "Chương {number}",
-      "selectAct": "Chọn một hồi"
+      "selectAct": "Chọn một hồi",
+      "chapterCount": "Số lượng chương",
+      "chapterCountHint": "AI sẽ tự quyết định số hồi và chia chương cho phù hợp."
     },
     "dialogs": {
       "addCharacterTitle": "Thêm nhân vật",
@@ -356,7 +366,10 @@
       "chapterDescription": "Thêm một chương để lập kế hoạch trong một hồi cụ thể. Điều này không tạo chương viết thật trong workspace.",
       "createChapter": "Tạo chương",
       "saveChapter": "Lưu chương",
-      "closeDialog": "Đóng hộp thoại"
+      "closeDialog": "Đóng hộp thoại",
+      "generateOutlineTitle": "Tạo dàn ý",
+      "generateOutlineDescription": "Chỉ định số lượng chương bạn muốn AI tạo. AI sẽ tự quyết định số hồi.",
+      "generateOutlineConfirm": "Tạo"
     },
     "confirm": {
       "replaceSynopsisTitle": "Thay thế phần tóm tắt hiện có?",
@@ -422,7 +435,11 @@
     "emptyDescription": "Các mốc lưu được tạo khi bạn nhấn Lưu hoặc khôi phục một phiên bản.",
     "latest": "Mới nhất",
     "versionNumber": "v{number}",
-    "restore": "Khôi phục phiên bản này"
+    "restore": "Khôi phục phiên bản này",
+    "confirmRestore": "Xác nhận khôi phục?",
+    "cancel": "Hủy",
+    "loadError": "Không thể tải lịch sử phiên bản.",
+    "restoreError": "Không thể khôi phục phiên bản."
   },
   "collaboration": {
     "title": "Cộng tác",

@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
+const STALE_CONTINUITY_JOB_MS = 15 * 60 * 1000;
+
 export async function GET() {
   try {
     // 1. Check DB liveness
@@ -27,7 +29,7 @@ export async function GET() {
     }
 
     // 3. Find any stale jobs (e.g. processing for more than 15 minutes)
-    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+    const fifteenMinutesAgo = new Date(Date.now() - STALE_CONTINUITY_JOB_MS);
     const staleProcessingCount = await prisma.continuityJob.count({
       where: {
         status: "processing",
@@ -35,12 +37,37 @@ export async function GET() {
       },
     });
 
+    const staleQueuedCount = await prisma.continuityJob.count({
+      where: {
+        status: "queued",
+        updatedAt: { lt: fifteenMinutesAgo },
+      },
+    });
+
+    const collabHealth = { status: "disabled" as const, lastError: null };
+    const continuityStatus =
+      jobs.failed > 0 || staleProcessingCount > 0 || staleQueuedCount > 0
+        ? "degraded"
+        : jobs.queued > 0 || jobs.processing > 0
+          ? "syncing"
+          : "healthy";
+
     return NextResponse.json({
-      status: "ok",
+      status:
+        continuityStatus === "degraded"
+          ? "degraded"
+          : continuityStatus === "syncing"
+            ? "syncing"
+            : "ok",
       database: "healthy",
+      collaborationPersistence: {
+        status: collabHealth.status,
+        lastError: collabHealth.lastError,
+      },
       continuityJobs: {
         ...jobs,
         staleProcessing: staleProcessingCount,
+        staleQueued: staleQueuedCount,
       },
     });
   } catch (error) {
@@ -49,6 +76,10 @@ export async function GET() {
       {
         status: "degraded",
         database: "unhealthy",
+        collaborationPersistence: {
+          status: "disabled",
+          lastError: null,
+        },
         error: error instanceof Error ? error.message : String(error),
       },
       { status: 503 }

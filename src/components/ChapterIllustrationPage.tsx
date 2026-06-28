@@ -113,9 +113,11 @@ export function ChapterIllustrationPage({
                 <h3 className="mt-3 text-2xl font-bold text-[var(--color-text)]">
                   {illustration ? t("editor.illustration.regenerateTitle") : t("editor.illustration.generateTitle")}
                 </h3>
-                <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-secondary)]">
-                  {t("editor.illustration.generateDescription")}
-                </p>
+                {t("editor.illustration.generateDescription") && (
+                  <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+                    {t("editor.illustration.generateDescription")}
+                  </p>
+                )}
 
                 <label
                   htmlFor="chapter-illustration-custom-instruction"

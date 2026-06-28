@@ -13,7 +13,7 @@ import { LoadingState } from "@/components/LoadingState";
 import type { AiCardsPaneTab } from "@/components/AiCardsPane";
 import { useSSE } from "@/lib/hooks/useSSE";
 import { cn } from "@/lib/utils";
-import { Menu, Bot, History, Users, RefreshCw, AlertTriangle, CheckCircle } from "lucide-react";
+import { Menu, Bot, History, Users, AlertTriangle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ProjectCommentThread, ProjectData, ProjectInvite, ProjectPresence } from "@/types/project";
 
@@ -142,15 +142,13 @@ function workspaceUiReducer(state: WorkspaceUiState, action: WorkspaceUiAction):
   }
 }
 
-interface ContinuityJobs {
-  queued: number;
-  processing: number;
-  failed: number;
-  staleProcessing: number;
+interface CollaborationPersistence {
+  status: "healthy" | "degraded" | "disabled";
+  lastError: string | null;
 }
 
 interface HealthResponse {
-  continuityJobs?: ContinuityJobs;
+  collaborationPersistence?: CollaborationPersistence;
 }
 
 async function fetchWorkspaceHealth(url: string): Promise<HealthResponse> {
@@ -214,7 +212,7 @@ function WorkspaceHeader({
   projectName,
   isZenMode,
   chromeVisible,
-  jobs,
+  collaborationPersistence,
   uiState,
   activePresenceCount,
   onToggleCollab,
@@ -225,7 +223,7 @@ function WorkspaceHeader({
   projectName: string;
   isZenMode: boolean;
   chromeVisible: boolean;
-  jobs: ContinuityJobs | null;
+  collaborationPersistence: CollaborationPersistence | null;
   uiState: WorkspaceUiState;
   activePresenceCount: number;
   onToggleCollab: () => void;
@@ -249,32 +247,13 @@ function WorkspaceHeader({
           <h1 className="text-lg font-bold text-[var(--color-text)] truncate">{projectName}</h1>
         </div>
         <div className="flex items-center gap-2">
-          {jobs && (
-            <div 
-              className={cn(
-                "flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-bold transition-all shadow-sm",
-                (jobs.queued > 0 || jobs.processing > 0)
-                  ? "border-amber-200 bg-amber-50 text-amber-800"
-                  : (jobs.failed > 0 || jobs.staleProcessing > 0)
-                  ? "border-red-200 bg-red-50 text-red-800"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-800"
-              )}
-              title={`Queued: ${jobs.queued}, Processing: ${jobs.processing}, Failed: ${jobs.failed}, Stale: ${jobs.staleProcessing}`}
+          {collaborationPersistence && collaborationPersistence.status === "degraded" && (
+            <div
+              className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800 transition-all shadow-sm"
+              title={collaborationPersistence.lastError || "Collaboration storage degraded"}
             >
-              {(jobs.queued > 0 || jobs.processing > 0) ? (
-                <RefreshCw size={14} className="animate-spin text-amber-600" />
-              ) : (jobs.failed > 0 || jobs.staleProcessing > 0) ? (
-                <AlertTriangle size={14} className="text-red-600" />
-              ) : (
-                <CheckCircle size={14} className="text-emerald-600" />
-              )}
-              <span className="hidden sm:inline">
-                {(jobs.queued > 0 || jobs.processing > 0)
-                  ? "Syncing memory..."
-                  : (jobs.failed > 0 || jobs.staleProcessing > 0)
-                  ? "Sync failed"
-                  : "Memory synced"}
-              </span>
+              <AlertTriangle size={14} className="text-red-600 animate-pulse" />
+              <span className="hidden sm:inline">Collab Degraded</span>
             </div>
           )}
           <button
@@ -445,6 +424,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
   const syncProjectPresence = useProjectStore((state) => state.syncProjectPresence);
   const removeCollaboratorLocally = useProjectStore((state) => state.removeCollaboratorLocally);
   const upsertCommentThread = useProjectStore((state) => state.upsertCommentThread);
+  const updateChapterMetaLocally = useProjectStore((state) => state.updateChapterMetaLocally);
   const hydrateProject = useProjectStore((state) => state.hydrateProject);
   const selectedChapterId = useProjectStore((state) => state.selectedChapterId);
   const isStoryBibleOpen = useProjectStore((state) => state.isStoryBibleOpen);
@@ -458,7 +438,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
       console.error("Health poll failed", error);
     },
   });
-  const jobs = healthData?.continuityJobs ?? null;
+  const collabPersistence = healthData?.collaborationPersistence ?? null;
 
   const { isZenMode, exitZen } = useZenStore();
   const chromeTimer = useRef<number | null>(null);
@@ -557,6 +537,30 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
 
     if ((event === "project_comment_created" || event === "project_comment_updated") && data.thread) {
       upsertCommentThread(data.thread as ProjectCommentThread);
+      return;
+    }
+
+    if (event === "project_chapter_saved" && typeof data.chapterId === "string") {
+      updateChapterMetaLocally(data.chapterId, {
+        title: typeof data.title === "string" ? data.title : undefined,
+        updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : undefined,
+      });
+
+      // Show non-blocking notice when another user saves the currently open chapter
+      const projectState = useProjectStore.getState();
+      const currentUserId = projectState.project?.currentUser?.id;
+      const isOwnSave = typeof data.savedByUserId === "string" && data.savedByUserId === currentUserId;
+      if (
+        !isOwnSave &&
+        data.chapterId === projectState.selectedChapterId &&
+        typeof data.savedByName === "string"
+      ) {
+        useProjectStore.getState().setRemoteSaveNotice({
+          chapterId: data.chapterId,
+          updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
+          savedByName: data.savedByName,
+        });
+      }
     }
   });
 
@@ -610,7 +614,7 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
           projectName={hydratedProject.metadata.name}
           isZenMode={isZenMode}
           chromeVisible={chromeVisible}
-          jobs={jobs}
+          collaborationPersistence={collabPersistence}
           uiState={state}
           activePresenceCount={activePresence.length}
           onToggleCollab={() => dispatch({ type: "TOGGLE_COLLAB" })}
@@ -624,14 +628,14 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
           "flex-1 overflow-hidden",
           isZenMode && "max-w-2xl mx-auto w-full",
         )}>
-          {isStoryBibleOpen ? (
-            <StoryBibleView />
-          ) : (
+          {/* MainEditor stays mounted — hidden via CSS when Story Bible is open to avoid unmount/remount content loss */}
+          <div className={isStoryBibleOpen ? "hidden" : "contents"}>
             <MainEditor
               onToggleHistory={() => dispatch({ type: "TOGGLE_HISTORY" })}
               onOpenAiHistory={handleOpenAiHistory}
             />
-          )}
+          </div>
+          {isStoryBibleOpen && <StoryBibleView />}
         </div>
       </main>
 

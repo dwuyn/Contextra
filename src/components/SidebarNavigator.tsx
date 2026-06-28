@@ -2,12 +2,13 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useProjectStore } from "@/store/useProjectStore";
+import { fetchChapterContent } from "@/lib/chapterContentClient";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, Plus, Download, BookOpen, Trash2, Globe, Lock, GripVertical, Loader2, X, GitBranch } from "lucide-react";
 import { Link, useRouter } from "@/lib/i18n-client";
 import { useTranslations } from "next-intl";
 import { createBranch, createChapter, renameProject, updateSettings, reorderChapters, deleteChapter } from "@/actions/projects";
-import { useRef, useState, useReducer, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, useReducer, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 import type { ChapterMeta, Branch, ProjectData } from "@/types/project";
 import {
   DndContext,
@@ -88,6 +89,7 @@ function SortableChapter({
   isSelected,
   isStoryBibleOpen,
   onSelect,
+  onPrefetch,
   canEdit,
 }: {
   chapter: ChapterMeta;
@@ -95,6 +97,7 @@ function SortableChapter({
   isSelected: boolean;
   isStoryBibleOpen: boolean;
   onSelect: () => void;
+  onPrefetch: () => void;
   canEdit: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chapter.id });
@@ -122,6 +125,8 @@ function SortableChapter({
       <button
         type="button"
         onClick={onSelect}
+        onPointerEnter={onPrefetch}
+        onFocus={onPrefetch}
         className={cn(
           "flex-1 text-left px-3 py-2.5 rounded-xl text-sm transition-all flex items-center gap-3",
           isSelected && !isStoryBibleOpen
@@ -524,6 +529,7 @@ function ChaptersList({
   canEdit,
   chapterCommentCounts,
   onSelectChapter,
+  onPrefetchChapter,
 }: {
   visibleChapters: ChapterMeta[];
   sensors: ReturnType<typeof useSensors>;
@@ -533,6 +539,7 @@ function ChaptersList({
   canEdit: boolean;
   chapterCommentCounts: Map<string, number>;
   onSelectChapter: (chapterId: string) => void;
+  onPrefetchChapter: (chapterId: string) => void;
 }) {
   const st = useTranslations("sidebar");
 
@@ -564,6 +571,7 @@ function ChaptersList({
               isStoryBibleOpen={isStoryBibleOpen}
               canEdit={canEdit}
               onSelect={() => onSelectChapter(chapter.id)}
+              onPrefetch={() => onPrefetchChapter(chapter.id)}
             />
           ))}
         </SortableContext>
@@ -1118,11 +1126,14 @@ function useSidebarActions(
 export function SidebarNavigator() {
   const st = useTranslations("sidebar");
   const project = useProjectStore((state) => state.project);
+  const projectId = project?.metadata.id ?? null;
   const activeBranchId = useProjectStore((state) => state.activeBranchId);
+  const setChapterContent = useProjectStore((state) => state.setChapterContent);
   const setSelectedChapterId = useProjectStore((state) => state.setSelectedChapterId);
   const selectedChapterId = useProjectStore((state) => state.selectedChapterId);
   const isStoryBibleOpen = useProjectStore((state) => state.isStoryBibleOpen);
   const setIsStoryBibleOpen = useProjectStore((state) => state.setIsStoryBibleOpen);
+  const updateChapterMetaLocally = useProjectStore((state) => state.updateChapterMetaLocally);
 
   const [state, dispatch] = useReducer(sidebarReducer, initialSidebarState);
 
@@ -1141,29 +1152,78 @@ export function SidebarNavigator() {
     handleDeleteSelectedChapter,
   } = useSidebarActions(state, dispatch);
 
-  if (!project) return null;
+  const canManage = project?.viewerAccess?.canManage;
+  const canEdit = project?.viewerAccess?.canEdit;
 
-  const canManage = project.viewerAccess?.canManage;
-  const canEdit = project.viewerAccess?.canEdit;
-
-  const selectedChapter = selectedChapterId
+  const selectedChapter = selectedChapterId && project
     ? project.chapters.find((chapter: ChapterMeta) => chapter.id === selectedChapterId) ?? null
     : null;
   const chapterCommentCounts = new Map(
-    project.chapterCommentCounts.map((count) => [count.chapterId, count.openCount] as const)
+    project?.chapterCommentCounts.map((count) => [count.chapterId, count.openCount] as const) ?? []
   );
 
-  const visibleChapters = project.chapters.filter((c: ChapterMeta) => c.branchId === activeBranchId);
-  const activeBranches = project.branches.filter((branch) => branch.status === "active");
+  const visibleChapters = project?.chapters.filter((c: ChapterMeta) => c.branchId === activeBranchId) ?? [];
+  const activeBranches = project?.branches.filter((branch) => branch.status === "active") ?? [];
   const activeBranch = activeBranches.find((branch) => branch.id === activeBranchId);
   const baseChapterId = typeof activeBranch?.basedOnChapterId === "string" ? activeBranch.basedOnChapterId : "root";
-  const baseChapter = baseChapterId !== "root"
+  const baseChapter = baseChapterId !== "root" && project
     ? project.chapters.find((chapter: ChapterMeta) => chapter.id === baseChapterId)
     : null;
   const branchLineageLabel =
     baseChapterId === "root"
       ? st("independentBranch")
       : st("forkedFromChapter", { chapter: baseChapter?.title ?? st("unknownChapter") });
+
+  const prefetchChapter = useCallback((chapterId: string) => {
+    if (!projectId) {
+      return;
+    }
+
+    const storeState = useProjectStore.getState();
+    if (storeState.chapterContentCache[chapterId] !== undefined) {
+      return;
+    }
+
+    void fetchChapterContent(projectId, chapterId)
+      .then((data) => {
+        const latestStoreState = useProjectStore.getState();
+        if (latestStoreState.project?.metadata.id !== projectId) {
+          return;
+        }
+
+        if (latestStoreState.chapterContentCache[chapterId] === undefined) {
+          setChapterContent(chapterId, data.content || "");
+        }
+        updateChapterMetaLocally(chapterId, { title: data.title, updatedAt: data.updatedAt });
+      })
+      .catch(() => {
+        // Ignore prefetch failures and let the active editor load on demand.
+      });
+  }, [projectId, setChapterContent, updateChapterMetaLocally]);
+
+  useEffect(() => {
+    const branchChapters = project?.chapters.filter((chapter: ChapterMeta) => chapter.branchId === activeBranchId) ?? [];
+    if (!projectId || branchChapters.length === 0) {
+      return;
+    }
+
+    const selectedIndex = selectedChapterId
+      ? branchChapters.findIndex((chapter) => chapter.id === selectedChapterId)
+      : -1;
+    const fallbackIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    const prefetchTargets = [
+      branchChapters[fallbackIndex]?.id,
+      branchChapters[fallbackIndex + 1]?.id,
+      branchChapters[fallbackIndex - 1]?.id,
+      branchChapters[fallbackIndex + 2]?.id,
+    ].filter((chapterId): chapterId is string => Boolean(chapterId));
+
+    for (const chapterId of new Set(prefetchTargets)) {
+      prefetchChapter(chapterId);
+    }
+  }, [activeBranchId, project?.chapters, projectId, prefetchChapter, selectedChapterId]);
+
+  if (!project) return null;
 
   return (
     <aside className="flex h-full w-64 flex-col border-r border-[var(--color-border)] bg-[var(--background)]">
@@ -1209,6 +1269,7 @@ export function SidebarNavigator() {
           setIsStoryBibleOpen(false);
           dispatch({ type: "CLEAR_ERRORS" });
         }}
+        onPrefetchChapter={prefetchChapter}
       />
 
       <SidebarFooter

@@ -21,16 +21,15 @@ export function isFreshProjectPresence(presence: Pick<ProjectPresence, "lastActi
   return now - new Date(presence.lastActiveAt).getTime() < COLLABORATION_PRESENCE_ACTIVE_MS;
 }
 
-export function shouldUseProjectLiveCollaboration(
-  project: Pick<ProjectData, "collaborators" | "presence" | "currentUser" | "viewerAccess"> | null,
+export function isLiveCollaborationEnabled() {
+  return false;
+}
+
+export function shouldUseProjectCollaborationTransport(
+  project: Partial<Pick<ProjectData, "collaborators" | "presence" | "currentUser" | "viewerAccess">> | null,
   selectedChapterId: string | null,
-  now = Date.now(),
 ) {
-  void now;
-
-  if (!project || !selectedChapterId || project.viewerAccess.isPublicViewer || !project.viewerAccess.canEdit) {
-    return false;
-  }
-
-  return project.collaborators.length > 0;
+  void project;
+  void selectedChapterId;
+  return false;
 }

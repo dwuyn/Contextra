@@ -13,6 +13,8 @@ import { writeCharacterVector, invalidateContextCache } from "@/services/context
 import { Prisma } from "@prisma/client";
 import type {
   ChapterIllustrationMeta,
+  ChapterSaveConflictPayload,
+  ChapterSaveSuccessPayload,
   CreateChapterResult,
   HomeOverviewData,
   ProjectCommentThread,
@@ -51,6 +53,7 @@ type UpdateChapterInput = {
   summary?: string;
   content?: string;
   createVersion?: boolean;
+  expectedUpdatedAt?: string;
 };
 
 type GenerateChapterIllustrationInput = ReturnType<typeof z.GenerateChapterIllustrationSchema.parse>;
@@ -1093,13 +1096,30 @@ export async function createChapter(projectId: string, userId: string, input: Cr
   await requireBranchInProject(projectId, input.branchId);
 
   const chapter = await prisma.$transaction(async (tx) => {
-    // Lock chapters of this branch in this project for update to prevent concurrent index allocation races
-    const lastChapter = await tx.$queryRaw<Array<{ max_index: number | null }>>`
-      SELECT max(index) as max_index FROM "Chapter" 
-      WHERE "projectId" = ${projectId} AND "branchId" = ${input.branchId} 
+    // Lock the branch row so chapter index allocation stays serialized per branch,
+    // including the empty-branch case where there is no chapter row to lock yet.
+    const lockedBranch = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "Branch"
+      WHERE id = ${input.branchId} AND "projectId" = ${projectId}
       FOR UPDATE
     `;
-    const nextIndex = (lastChapter[0]?.max_index ?? 0) + 1;
+    if (lockedBranch.length === 0) {
+      throw new Error("Branch not found");
+    }
+
+    const lastChapter = await tx.chapter.findFirst({
+      where: {
+        projectId,
+        branchId: input.branchId,
+      },
+      orderBy: {
+        index: "desc",
+      },
+      select: {
+        index: true,
+      },
+    });
+    const nextIndex = (lastChapter?.index ?? 0) + 1;
 
     const createdChapter = await tx.chapter.create({
       data: {
@@ -1141,19 +1161,35 @@ export async function createChapter(projectId: string, userId: string, input: Cr
   };
 }
 
+type UpdateChapterServiceResult =
+  | ChapterSaveSuccessPayload
+  | ChapterSaveConflictPayload;
+
 export async function updateChapter(
   projectId: string,
   userId: string,
   chapterId: string,
   input: UpdateChapterInput,
-): Promise<UpdateChapterResult> {
+): Promise<UpdateChapterServiceResult> {
   await requireProjectPermission(projectId, userId, "edit");
 
   const existing = await prisma.chapter.findFirst({
     where: { id: chapterId, projectId },
-    select: { id: true, branchId: true, title: true, summary: true, content: true },
+    select: { id: true, branchId: true, title: true, summary: true, content: true, updatedAt: true },
   });
   if (!existing) throw new Error("Chapter not found");
+
+  if (input.expectedUpdatedAt && new Date(existing.updatedAt).toISOString() !== input.expectedUpdatedAt) {
+    return {
+      status: "conflict",
+      latest: {
+        title: existing.title,
+        summary: existing.summary,
+        content: existing.content,
+        updatedAt: existing.updatedAt.toISOString(),
+      },
+    };
+  }
 
   const nextTitle = input.title ?? existing.title;
   const nextSummary = input.summary ?? existing.summary;
@@ -1175,11 +1211,12 @@ export async function updateChapter(
   }
 
   if (!hasTitleChange && !hasSummaryChange && !hasContentChange && !shouldCreateVersion) {
-    return { continuity: { fresh: true }, contentChanged: false };
+    return { status: "saved", continuity: { fresh: true }, contentChanged: false, updatedAt: existing.updatedAt.toISOString() };
   }
 
+  let updatedChapter = existing;
   if (hasTitleChange || hasSummaryChange || hasContentChange) {
-    await Promise.all([
+    [updatedChapter] = await Promise.all([
       prisma.chapter.update({
         where: { id: existing.id },
         data: {
@@ -1187,6 +1224,7 @@ export async function updateChapter(
           content: hasContentChange ? nextContent : undefined,
           summary: hasSummaryChange ? nextSummary : undefined,
         },
+        select: { updatedAt: true },
       }),
       prisma.project.update({
         where: { id: projectId },
@@ -1212,8 +1250,10 @@ export async function updateChapter(
     : { fresh: true as const };
 
   return {
+    status: "saved",
     continuity,
     contentChanged: hasContentChange,
+    updatedAt: updatedChapter.updatedAt.toISOString(),
   };
 }
 
@@ -1337,6 +1377,63 @@ export async function updateContext(projectId: string, userId: string, input: Up
   return getProject(projectId, userId);
 }
 
+export async function syncChaptersWithOutline(
+  projectId: string,
+  outline: ProjectOutline,
+  txClient?: Prisma.TransactionClient,
+) {
+  const client = txClient ?? prisma;
+
+  const outlineChapters: Array<{ index: number; title: string }> = [];
+  let position = 1;
+  for (const act of outline.acts) {
+    for (const chapter of act.chapters) {
+      outlineChapters.push({ index: position, title: chapter.title });
+      position++;
+    }
+  }
+
+  if (outlineChapters.length === 0) return;
+
+  const activeBranches = await client.branch.findMany({
+    where: { projectId, status: "active" },
+    select: { id: true },
+  });
+
+  for (const branch of activeBranches) {
+    const existingChapters = await client.chapter.findMany({
+      where: { projectId, branchId: branch.id },
+      select: { id: true, index: true, title: true },
+      orderBy: { index: "asc" },
+    });
+
+    const existingByIndex = new Map(existingChapters.map((ch) => [ch.index, ch]));
+
+    for (const oc of outlineChapters) {
+      const existing = existingByIndex.get(oc.index);
+      if (existing) {
+        if (existing.title !== oc.title) {
+          await client.chapter.update({
+            where: { id: existing.id },
+            data: { title: oc.title },
+          });
+        }
+      } else {
+        await client.chapter.create({
+          data: {
+            projectId,
+            branchId: branch.id,
+            title: oc.title,
+            summary: "",
+            content: "",
+            index: oc.index,
+          },
+        });
+      }
+    }
+  }
+}
+
 export async function updateOutline(projectId: string, userId: string, input: UpdateOutlineInput) {
   await requireProjectPermission(projectId, userId, "edit");
 
@@ -1346,6 +1443,8 @@ export async function updateOutline(projectId: string, userId: string, input: Up
       outline: input as unknown as Prisma.InputJsonValue,
     },
   });
+
+  await syncChaptersWithOutline(projectId, input);
 
   return getProject(projectId, userId);
 }
@@ -1687,33 +1786,36 @@ export async function upsertProjectPresence(projectId: string, userId: string, i
   }
 
   const nextState = viewerAccess.canEdit ? input.state : "viewing";
-  const presence = await prisma.projectPresence.upsert({
-    where: {
-      projectId_userId: {
-        projectId,
-        userId,
-      },
-    },
-    create: {
-      projectId,
-      userId,
-      chapterId: input.chapterId ?? null,
-      state: nextState,
-      lastActiveAt: new Date(),
-    },
-    update: {
-      chapterId: input.chapterId ?? null,
-      state: nextState,
-      lastActiveAt: new Date(),
-    },
-    include: {
-      user: {
-        select: PROJECT_USER_SELECT,
-      },
-    },
+  const now = new Date();
+  const chapterId = input.chapterId ?? null;
+
+  const updated = await prisma.projectPresence.updateMany({
+    where: { projectId, userId },
+    data: { chapterId, state: nextState, lastActiveAt: now },
   });
 
-  return toProjectPresence(presence);
+  if (updated.count > 0) {
+    const presence = await prisma.projectPresence.findUniqueOrThrow({
+      where: { projectId_userId: { projectId, userId } },
+      include: { user: { select: PROJECT_USER_SELECT } },
+    });
+    return toProjectPresence(presence);
+  }
+
+  try {
+    const presence = await prisma.projectPresence.create({
+      data: { projectId, userId, chapterId, state: nextState, lastActiveAt: now },
+      include: { user: { select: PROJECT_USER_SELECT } },
+    });
+    return toProjectPresence(presence);
+  } catch {
+    const presence = await prisma.projectPresence.update({
+      where: { projectId_userId: { projectId, userId } },
+      data: { chapterId, state: nextState, lastActiveAt: now },
+      include: { user: { select: PROJECT_USER_SELECT } },
+    });
+    return toProjectPresence(presence);
+  }
 }
 
 export async function leaveProjectPresence(projectId: string, userId: string) {
@@ -2063,11 +2165,15 @@ export async function getChapterContent(projectId: string, userId: string, chapt
 
   const chapter = await prisma.chapter.findFirst({
     where: { id: chapterId, projectId },
-    select: { content: true }
+    select: { title: true, content: true, updatedAt: true }
   });
 
   if (!chapter) throw new Error("Chapter not found");
-  return chapter.content;
+  return {
+    title: chapter.title,
+    content: chapter.content,
+    updatedAt: chapter.updatedAt.toISOString(),
+  };
 }
 
 export async function getChapterIllustration(projectId: string, userId: string, chapterId: string) {
