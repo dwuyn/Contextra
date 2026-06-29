@@ -434,6 +434,36 @@ function AiCardsPaneFooter({
   onSubmit: (event: React.FormEvent) => Promise<void>;
   t: ReturnType<typeof useTranslations>;
 }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    // Reset height to compute scrollHeight accurately
+    textarea.style.height = "auto";
+    // Set height based on scrollHeight, up to a max-height of 160px
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+  }, [input]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!input.trim() || isLoading) return;
+      const form = e.currentTarget.form;
+      if (form) {
+        if (typeof form.requestSubmit === "function") {
+          form.requestSubmit();
+        } else {
+          const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement | null;
+          if (submitBtn) {
+            submitBtn.click();
+          }
+        }
+      }
+    }
+  };
+
   return (
     <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       {activeTab === "chat" && (
@@ -441,20 +471,22 @@ function AiCardsPaneFooter({
           <label htmlFor="ai-chat-input" className="sr-only">
             {t("inputLabel")}
           </label>
-          <input
+          <textarea
+            ref={textareaRef}
             id="ai-chat-input"
-            type="text"
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
+            onKeyDown={handleKeyDown}
             disabled={isLoading}
             placeholder={t("inputPlaceholder")}
-            className="w-full rounded-2xl border-none bg-[var(--color-surface-alt)] pl-4 pr-12 py-3 text-sm outline-none transition-all placeholder:text-[var(--color-text-muted)] focus:ring-1 focus:ring-[var(--color-accent)]"
+            rows={1}
+            className="w-full rounded-2xl border-none bg-[var(--color-surface-alt)] pl-4 pr-12 py-3 text-sm outline-none transition-all placeholder:text-[var(--color-text-muted)] focus:ring-1 focus:ring-[var(--color-accent)] resize-none overflow-y-auto"
           />
           <button
             type="submit"
             aria-label={t("sendMessage")}
             disabled={!input.trim() || isLoading}
-            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl bg-[var(--color-text)] text-[var(--color-surface)] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
+            className="absolute right-2 bottom-[6px] flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--color-text)] text-[var(--color-surface)] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
           >
             <Send aria-hidden="true" size={14} />
           </button>
