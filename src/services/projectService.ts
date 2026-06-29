@@ -1200,7 +1200,7 @@ export async function updateChapter(
   const hasStoryContentChange = !isStoryContentEqual(existing.content, nextContent);
   let shouldCreateVersion = false;
 
-  if (input.createVersion && hasStoryContentChange) {
+  if (input.createVersion) {
     const latestVersion = await prisma.chapterVersion.findFirst({
       where: { projectId, chapterId },
       orderBy: { createdAt: "desc" },
