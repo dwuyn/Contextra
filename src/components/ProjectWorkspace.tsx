@@ -93,7 +93,7 @@ type WorkspaceUiAction =
   | { type: "SET_SHOW_CHROME"; show: boolean };
 
 const initialWorkspaceUiState: WorkspaceUiState = {
-  isSidebarOpen: false,
+  isSidebarOpen: true,
   isAiPaneOpen: false,
   hasOpenedAiPane: false,
   aiPaneTab: "history",
@@ -242,11 +242,26 @@ function WorkspaceHeader({
         isZenMode && chromeVisible && "opacity-100",
         "transition-all duration-500",
       )}>
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("projectLabel")}</p>
-          <h1 className="text-lg font-bold text-[var(--color-text)] truncate">{projectName}</h1>
+        <div className="min-w-0 flex-1 pr-4 flex items-center gap-3">
+          {!uiState.isSidebarOpen && (
+            <button
+              type="button"
+              onClick={onOpenSidebar}
+              className="p-2 rounded-xl text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors shrink-0"
+              aria-label="Show sidebar"
+              title="Show sidebar"
+            >
+              <Menu size={20} />
+            </button>
+          )}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">{t("projectLabel")}</p>
+            <h1 title={projectName} className="break-words text-lg font-bold text-[var(--color-text)]">
+              {projectName}
+            </h1>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="shrink-0 flex items-center gap-2">
           {collaborationPersistence && collaborationPersistence.status === "degraded" && (
             <div
               className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800 transition-all shadow-sm"
@@ -600,11 +615,16 @@ export function ProjectWorkspace({ project }: { project: ProjectData }) {
 
       {/* Sidebar — fixed drawer on mobile, static on desktop */}
       {!isZenMode && (
-      <nav aria-label={t("projectNavigation")} className={[
-        "fixed lg:static inset-y-0 left-0 z-40 lg:z-auto transition-transform duration-300",
-        state.isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
-      ].join(" ")}>
-        <SidebarNavigator />
+      <nav 
+        aria-label={t("projectNavigation")} 
+        className={cn(
+          "fixed lg:static inset-y-0 left-0 z-40 lg:z-auto transition-all duration-300 overflow-hidden",
+          state.isSidebarOpen 
+            ? "translate-x-0 w-96 max-w-[calc(100vw-3rem)] lg:max-w-none opacity-100" 
+            : "-translate-x-full lg:translate-x-0 lg:w-0 lg:opacity-0 lg:pointer-events-none"
+        )}
+      >
+        <SidebarNavigator onCloseSidebar={() => dispatch({ type: "SET_SIDEBAR", open: false })} />
       </nav>
       )}
 

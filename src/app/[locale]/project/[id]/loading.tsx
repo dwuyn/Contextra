@@ -2,7 +2,7 @@ export default function Loading() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#f7f7f5]">
       {/* Sidebar Skeleton */}
-      <aside className="flex h-full w-64 flex-col border-r border-slate-200 bg-white p-4">
+      <aside className="flex h-full w-96 max-w-[calc(100vw-3rem)] lg:max-w-none flex-col border-r border-slate-200 bg-white p-4">
         <div className="mb-4 h-4 w-24 rounded bg-slate-100 animate-pulse" />
         <div className="mb-8 h-6 w-48 rounded bg-slate-200 animate-pulse" />
         

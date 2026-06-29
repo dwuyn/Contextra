@@ -284,10 +284,12 @@ function SidebarHeader({
   projectName,
   projectId,
   canEdit,
+  onCloseSidebar,
 }: {
   projectName: string;
   projectId: string;
   canEdit: boolean;
+  onCloseSidebar?: () => void;
 }) {
   const st = useTranslations("sidebar");
   const renameProjectLocally = useProjectStore((state) => state.renameProjectLocally);
@@ -324,10 +326,23 @@ function SidebarHeader({
 
   return (
     <div className="p-4 border-b border-[var(--color-border)]">
-      <Link href="/" className="flex items-center gap-1 text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest hover:text-[var(--color-text)] transition-colors mb-4">
-        <ChevronLeft size={12} />
-        {st("dashboard")}
-      </Link>
+      <div className="flex items-center justify-between mb-4">
+        <Link href="/" className="flex items-center gap-1 text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest hover:text-[var(--color-text)] transition-colors">
+          <ChevronLeft size={12} />
+          {st("dashboard")}
+        </Link>
+        {onCloseSidebar && (
+          <button
+            type="button"
+            onClick={onCloseSidebar}
+            className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors"
+            title="Hide sidebar"
+            aria-label="Hide sidebar"
+          >
+            <ChevronLeft size={16} />
+          </button>
+        )}
+      </div>
       {isRenaming ? (
         <input
           ref={renameInputRef}
@@ -344,7 +359,7 @@ function SidebarHeader({
         <button
           type="button"
           onClick={handleStartRename}
-          className="text-lg font-bold text-[var(--color-text)] leading-tight truncate bg-transparent border-0 p-0"
+          className="w-full text-left text-lg font-bold text-[var(--color-text)] leading-tight break-words bg-transparent border-0 p-0"
           title={st("clickToRename")}
           style={{ cursor: "pointer" }}
         >
@@ -1123,7 +1138,7 @@ function useSidebarActions(
   };
 }
 
-export function SidebarNavigator() {
+export function SidebarNavigator({ onCloseSidebar }: { onCloseSidebar?: () => void }) {
   const st = useTranslations("sidebar");
   const project = useProjectStore((state) => state.project);
   const projectId = project?.metadata.id ?? null;
@@ -1226,11 +1241,12 @@ export function SidebarNavigator() {
   if (!project) return null;
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-[var(--color-border)] bg-[var(--background)]">
+    <aside className="flex h-full w-96 max-w-[calc(100vw-3rem)] lg:max-w-none flex-col border-r border-[var(--color-border)] bg-[var(--background)]">
       <SidebarHeader
         projectName={project.metadata.name}
         projectId={project.metadata.id}
         canEdit={!!canEdit}
+        onCloseSidebar={onCloseSidebar}
       />
 
       <BranchSelector
