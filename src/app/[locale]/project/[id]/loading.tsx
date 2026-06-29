@@ -33,7 +33,7 @@ export default function Loading() {
       </main>
 
       {/* AI Pane Skeleton */}
-      <aside className="h-full w-96 border-l border-slate-200 bg-white p-4">
+      <aside className="h-full w-[440px] max-w-[calc(100vw-3rem)] lg:max-w-none border-l border-slate-200 bg-white p-4">
         <div className="flex gap-4 mb-6">
           <div className="h-6 w-20 rounded bg-slate-100 animate-pulse" />
           <div className="h-6 w-20 rounded bg-slate-100 animate-pulse" />

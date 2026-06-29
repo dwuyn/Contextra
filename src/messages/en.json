@@ -414,6 +414,7 @@
     "removeHistoryCard": "Remove AI history card",
     "insert": "Insert",
     "copy": "Copy",
+    "copied": "Copied!",
     "working": "Working",
     "failed": "Failed",
     "emptyChatTitle": "AI Writing Assistant",

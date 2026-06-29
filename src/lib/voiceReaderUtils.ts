@@ -107,6 +107,27 @@ export async function readSegmentAudioResponse(
 export function getVoiceDisplayLabel(voice: VoiceOption, isVietnamese: boolean) {
   const normalizedId = voice.id.toLowerCase();
 
+  if (normalizedId === "despina") {
+    return isVietnamese
+      ? "Despina (Nữ - ấm, rõ ràng, mượt mà)"
+      : "Despina (Female - warm, clear, smooth)";
+  }
+  if (normalizedId === "vindemiatrix") {
+    return isVietnamese
+      ? "Vindemiatrix (Nữ - trưởng thành, tông trung-trầm, điềm tĩnh)"
+      : "Vindemiatrix (Female - mature, mid-low tone, calm)";
+  }
+  if (normalizedId === "orus") {
+    return isVietnamese
+      ? "Orus (Nam - trầm sâu, từ tốn, chín chắn)"
+      : "Orus (Male - deep, slow, mature)";
+  }
+  if (normalizedId === "charon") {
+    return isVietnamese
+      ? "Charon (Nam - trầm ấm vừa phải, mượt mà, tự nhiên)"
+      : "Charon (Male - moderately deep-warm, smooth, natural)";
+  }
+
   if (
     normalizedId.endsWith("-a") ||
     normalizedId.endsWith("-f") ||

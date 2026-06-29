@@ -405,7 +405,7 @@ function WorkspacePanels({
       {!isZenMode && shouldRenderAiPane && (
         <div className={[
           "fixed inset-y-0 right-0 z-40 transition-transform duration-300 lg:relative lg:inset-y-auto lg:right-auto lg:z-auto lg:transition-[width] lg:duration-300",
-          uiState.isAiPaneOpen ? "translate-x-0 lg:w-96" : "translate-x-full lg:translate-x-0 lg:w-0",
+          uiState.isAiPaneOpen ? "translate-x-0 lg:w-[440px]" : "translate-x-full lg:translate-x-0 lg:w-0",
         ].join(" ")}>
           <div className="h-full overflow-hidden shadow-2xl lg:shadow-none">
             <AiCardsPane

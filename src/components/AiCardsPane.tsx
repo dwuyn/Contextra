@@ -157,7 +157,7 @@ export function AiCardsPane({
   }, [aiCards]);
 
   return (
-    <aside className="flex h-full w-96 flex-col border-l border-[var(--color-border)] bg-[var(--background)]">
+    <aside className="flex h-full w-[440px] max-w-[calc(100vw-3rem)] lg:max-w-none flex-col border-l border-[var(--color-border)] bg-[var(--background)]">
       <AiCardsPaneHeader
         activeTab={activeTab}
         onClose={onClose}
@@ -377,6 +377,19 @@ function AiChatMessage({
   isLoading: boolean;
   t: ReturnType<typeof useTranslations>;
 }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    if (!message.content) return;
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy text: ", err);
+    }
+  };
+
   return (
     <div className={cn("flex flex-col", message.role === "user" ? "items-end" : "items-start")}>
       <div
@@ -391,7 +404,7 @@ function AiChatMessage({
           <ReactMarkdown>{message.content || (isLoading && message.role === "assistant" ? t("thinking") : "")}</ReactMarkdown>
         </div>
       </div>
-      <div className="mt-1 flex items-center gap-1 px-1">
+      <div className="mt-1 flex items-center gap-1.5 px-1">
         {message.role === "assistant" ? (
           <div className="flex h-3 w-3 items-center justify-center rounded-full bg-[var(--color-accent-muted)]">
             <Sparkles size={6} className="text-[var(--color-accent)]" />
@@ -402,6 +415,26 @@ function AiChatMessage({
         <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
           {message.role === "assistant" ? t("assistantName") : t("you")}
         </span>
+        {message.role === "assistant" && message.content && (
+          <>
+            <span className="text-[8px] font-bold text-[var(--color-text-muted)]">•</span>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="flex items-center gap-1 rounded px-1 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--color-text-muted)] transition-all hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text)] active:scale-95"
+              aria-label={t("copy")}
+            >
+              {copied ? (
+                <span className="text-[var(--color-accent)]">✓ {t("copied")}</span>
+              ) : (
+                <>
+                  <Copy size={8} />
+                  {t("copy")}
+                </>
+              )}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

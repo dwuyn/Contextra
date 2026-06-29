@@ -2,7 +2,7 @@ import "@/lib/server-only";
 
 import { createHash } from "node:crypto";
 import { Storage } from "@google-cloud/storage";
-import { TextToSpeechClient, protos } from "@google-cloud/text-to-speech";
+import { GoogleAuth } from "google-auth-library";
 import {
   buildSpeechSegments,
   formatVoiceOptionLabel,
@@ -38,8 +38,9 @@ type SynthesizeSegmentInput = {
 
 let cachedConfig: GoogleTtsConfig | null = null;
 let cachedStorage: Storage | null = null;
-let cachedTtsClient: TextToSpeechClient | null = null;
-
+let cachedAuth: GoogleAuth | null = null;
+let cachedToken: string | null = null;
+let tokenExpiry: number = 0;
 function getGoogleClientOptions() {
   const projectId = process.env.GOOGLE_CLOUD_PROJECT?.trim();
   return projectId ? { projectId } : undefined;
@@ -51,8 +52,7 @@ function getStorageClient() {
 }
 
 export function getTextToSpeechClient() {
-  cachedTtsClient ??= new TextToSpeechClient(getGoogleClientOptions());
-  return cachedTtsClient;
+  return {};
 }
 
 function requireEnv(name: string) {
@@ -98,6 +98,59 @@ function sanitizeKeyPart(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "_");
 }
 
+function looksLikeWavAudioBuffer(buffer: Uint8Array) {
+  return (
+    buffer.byteLength >= 12 &&
+    buffer[0] === 0x52 && // 'R'
+    buffer[1] === 0x49 && // 'I'
+    buffer[2] === 0x46 && // 'F'
+    buffer[3] === 0x46 && // 'F'
+    buffer[8] === 0x57 && // 'W'
+    buffer[9] === 0x41 && // 'A'
+    buffer[10] === 0x56 && // 'V'
+    buffer[11] === 0x45    // 'E'
+  );
+}
+
+function pcmToWav(pcmBuffer: Buffer, sampleRate: number = 24000): Buffer {
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+  const blockAlign = (numChannels * bitsPerSample) / 8;
+  const dataSize = pcmBuffer.length;
+  const chunkSize = 36 + dataSize;
+
+  const header = Buffer.alloc(44);
+
+  header.write("RIFF", 0);
+  header.writeUInt32LE(chunkSize, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20); // PCM format = 1
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(dataSize, 40);
+
+  return Buffer.concat([header, pcmBuffer]);
+}
+
+function ssmlToPlaintext(ssml: string): string {
+  let text = ssml;
+  text = text.replace(/<sub\s+alias="([^"]+)"[^>]*>.*?<\/sub>/gi, "$1");
+  text = text.replace(/<phoneme\s+[^>]*ph="([^"]+)"[^>]*>(.*?)<\/phoneme>/gi, "$2");
+  text = text.replace(/<say-as\s+interpret-as="spell-out"[^>]*>(.*?)<\/say-as>/gi, (_, term) => term.split("").join(" "));
+  text = text.replace(/<say-as\s+[^>]*>(.*?)<\/say-as>/gi, "$1");
+  text = text.replace(/<speak>/gi, "").replace(/<\/speak>/gi, "");
+  text = text.replace(/<break[^>]*\/>/gi, " ");
+  text = text.replace(/<[^>]+>/g, "");
+  return text.replace(/\s+/g, " ").trim();
+}
+
 function toAudioBuffer(audioContent: Uint8Array | string | null | undefined) {
   if (!audioContent) {
     throw new Error("Google TTS returned empty audio.");
@@ -105,27 +158,36 @@ function toAudioBuffer(audioContent: Uint8Array | string | null | undefined) {
 
   if (typeof audioContent === "string") {
     const decodedBuffer = Buffer.from(audioContent, "base64");
+    if (looksLikeWavAudioBuffer(decodedBuffer)) {
+      return decodedBuffer;
+    }
     const normalizedBuffer = normalizeMpegAudioBuffer(decodedBuffer);
     if (normalizedBuffer) {
       return normalizedBuffer;
     }
-    throw new Error("Google TTS returned non-MP3 audio.");
+    throw new Error("Google TTS returned invalid audio.");
   }
 
+  if (looksLikeWavAudioBuffer(audioContent)) {
+    return Buffer.from(audioContent);
+  }
   const normalizedBuffer = normalizeMpegAudioBuffer(audioContent);
   if (normalizedBuffer) {
     return normalizedBuffer;
   }
 
-  throw new Error("Google TTS returned non-MP3 audio.");
+  throw new Error("Google TTS returned invalid audio.");
 }
 
 function assertMpegAudioBuffer(audioBuffer: Uint8Array, source: "cache" | "synthesis") {
+  if (looksLikeWavAudioBuffer(audioBuffer)) {
+    return;
+  }
   if (!normalizeMpegAudioBuffer(audioBuffer)) {
     throw new Error(
       source === "cache"
-        ? "Cached voice segment is not valid MP3 audio."
-        : "Google TTS returned non-MP3 audio.",
+        ? "Cached voice segment is not valid audio."
+        : "Google TTS returned invalid audio.",
     );
   }
 }
@@ -197,46 +259,115 @@ async function loadPronunciationEntries(
   return entries as PronunciationEntryData[];
 }
 
+async function callGeminiTts(
+  text: string,
+  language: ReaderLanguage,
+  voiceId: string,
+  rate: number,
+): Promise<Buffer> {
+  const location = process.env.GOOGLE_TTS_LOCATION?.trim() || "us-central1";
+  const project = process.env.GOOGLE_CLOUD_PROJECT?.trim();
+  if (!project) {
+    throw new Error("GOOGLE_CLOUD_PROJECT is not configured.");
+  }
+
+  const now = Date.now();
+  let token: string | null = null;
+
+  if (cachedToken && tokenExpiry > now + 5 * 60 * 1000) {
+    token = cachedToken;
+  } else {
+    cachedAuth ??= new GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+    });
+    const authClient = await cachedAuth.getClient();
+    const tokenResponse = await authClient.getAccessToken();
+    token = tokenResponse.token;
+    if (!token) {
+      throw new Error("Failed to retrieve Google API access token.");
+    }
+    cachedToken = token;
+    const expiry = (authClient as any).credentials?.expiry_date;
+    tokenExpiry = typeof expiry === "number" ? expiry : now + 3600 * 1000;
+  }
+
+  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/gemini-3.1-flash-tts-preview:generateContent`;
+
+  let steeredText = text;
+  if (rate < 0.9) {
+    steeredText = `Speak slowly: ${text}`;
+  } else if (rate > 1.1) {
+    steeredText = `Speak quickly: ${text}`;
+  }
+
+  const payload = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: steeredText,
+          },
+        ],
+      },
+    ],
+    generationConfig: {
+      responseModalities: ["AUDIO"],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: {
+            voiceName: voiceId,
+          },
+        },
+      },
+    },
+  };
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    throw new Error(`Gemini TTS API request failed: ${response.statusText}. Response: ${errorBody}`);
+  }
+
+  const data = await response.json();
+  const base64Data = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  if (!base64Data) {
+    console.error("Gemini TTS response structure error:", JSON.stringify(data));
+    throw new Error("Failed to get audio data from Gemini TTS model response.");
+  }
+
+  const pcmBuffer = Buffer.from(base64Data, "base64");
+  return pcmToWav(pcmBuffer, 24000);
+}
+
 export async function synthesizeWithSsml(
-  client: TextToSpeechClient,
+  client: any,
   ssml: string,
   language: ReaderLanguage,
   voiceId: string,
   rate: number,
 ) {
-  const [response] = await client.synthesizeSpeech({
-    input: { ssml },
-    voice: {
-      languageCode: language,
-      name: voiceId,
-    },
-    audioConfig: {
-      audioEncoding: protos.google.cloud.texttospeech.v1.AudioEncoding.MP3,
-      speakingRate: rate,
-    },
-  });
-  return toAudioBuffer(response.audioContent);
+  const plainText = ssmlToPlaintext(ssml);
+  return callGeminiTts(plainText, language, voiceId, rate);
 }
 
 export async function synthesizeWithText(
-  client: TextToSpeechClient,
+  client: any,
   text: string,
   language: ReaderLanguage,
   voiceId: string,
   rate: number,
 ) {
-  const [response] = await client.synthesizeSpeech({
-    input: { text },
-    voice: {
-      languageCode: language,
-      name: voiceId,
-    },
-    audioConfig: {
-      audioEncoding: protos.google.cloud.texttospeech.v1.AudioEncoding.MP3,
-      speakingRate: rate,
-    },
-  });
-  return toAudioBuffer(response.audioContent);
+  const plainText = ssmlToPlaintext(text);
+  return callGeminiTts(plainText, language, voiceId, rate);
 }
 
 async function uploadToCache(file: ReturnType<ReturnType<Storage["bucket"]>["file"]>, audioBuffer: Buffer) {
@@ -294,7 +425,12 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
   const [exists] = await file.exists();
   if (exists) {
     const [audioBuffer] = await file.download();
-    const normalizedCachedBuffer = normalizeMpegAudioBuffer(audioBuffer);
+    let normalizedCachedBuffer: Buffer | null = null;
+    if (looksLikeWavAudioBuffer(audioBuffer)) {
+      normalizedCachedBuffer = Buffer.from(audioBuffer);
+    } else {
+      normalizedCachedBuffer = normalizeMpegAudioBuffer(audioBuffer);
+    }
     if (normalizedCachedBuffer) {
       if (!Buffer.from(audioBuffer).equals(normalizedCachedBuffer)) {
         await uploadToCache(file, normalizedCachedBuffer).catch((error: unknown) => {
