@@ -282,7 +282,7 @@ async function callGeminiTts(
     });
     const authClient = await cachedAuth.getClient();
     const tokenResponse = await authClient.getAccessToken();
-    token = tokenResponse.token;
+    token = tokenResponse.token ?? null;
     if (!token) {
       throw new Error("Failed to retrieve Google API access token.");
     }
