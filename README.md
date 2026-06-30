@@ -1,4 +1,9 @@
 # Contextra
+
+## Demo
+
+https://github.com/user-attachments/assets/e869958f-bf27-49a7-93b0-4d067c7a05d0
+
 Link Web [Contextra](https://contextra.dwyn.id.vn/en)
 
 Contextra is a collaborative writing workspace for long-form fiction. It combines a chapter editor, story bible, branching/version history, AI-assisted drafting, continuity memory, and shared project workflows like presence, comments, invites, and saved-chapter notifications in a single Next.js app.
