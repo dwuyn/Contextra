@@ -153,7 +153,7 @@ Private project for personal or internal use.
 <img width="1895" height="943" alt="image" src="https://github.com/user-attachments/assets/f2a0eb3d-9223-42a2-be81-d95132702960" />
 
 ## Tỷ lệ đóng góp:
-24521208 - Trần Đình Nguyên: 50%
-24521675 - Đinh Quốc Thịnh: 50%
+- 24521208 - Trần Đình Nguyên: 50%
+- 24521675 - Đinh Quốc Thịnh: 50%
 
 ### Chúng em đã biết làm web và hiểu hệ thống web hoạt động như thế nào.
