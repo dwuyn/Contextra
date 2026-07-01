@@ -117,7 +117,13 @@ Open `http://localhost:3000` by default. If you set `APP_PORT` in `.env`, use th
 
 ### Optional Google credentials in Docker
 
-If you want AI or TTS features from inside the containers, mount a service-account key into the app and migrator containers and point `GOOGLE_APPLICATION_CREDENTIALS` at the in-container path, for example `/app/google-key.json`.
+If you want AI or TTS features from inside the containers, standard Google Cloud authentication uses Application Default Credentials (ADC) or a service-account key. You can mount a service-account key into the app and migrator containers and point `GOOGLE_APPLICATION_CREDENTIALS` at the in-container path, for example `/app/google-key.json`.
+
+For Google Cloud Text-to-Speech:
+- Standard Cloud TTS API is used for speech synthesis and voice listing.
+- The voice reader only exposes `Neural2` voices.
+- Authenticate via `GOOGLE_APPLICATION_CREDENTIALS` or ADC when deployed.
+- Cached audio segments are persisted in the GCS bucket specified by `GOOGLE_TTS_CACHE_BUCKET`.
 
 ### Stop the stack
 

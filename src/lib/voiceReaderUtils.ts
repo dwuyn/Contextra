@@ -1,10 +1,4 @@
-export type VoiceOption = {
-  id: string;
-  label: string;
-  language: string;
-};
-
-export type ReaderLanguage = "en-US" | "vi-VN";
+import { type VoiceOption, type ReaderLanguage } from "./voiceReader";
 
 export type ReaderLanguageMode = ReaderLanguage | "auto";
 
@@ -105,46 +99,35 @@ export async function readSegmentAudioResponse(
 }
 
 export function getVoiceDisplayLabel(voice: VoiceOption, isVietnamese: boolean) {
-  const normalizedId = voice.id.toLowerCase();
-
-  if (normalizedId === "despina") {
-    return isVietnamese
-      ? "Despina (Nữ - ấm, rõ ràng, mượt mà)"
-      : "Despina (Female - warm, clear, smooth)";
-  }
-  if (normalizedId === "vindemiatrix") {
-    return isVietnamese
-      ? "Vindemiatrix (Nữ - trưởng thành, tông trung-trầm, điềm tĩnh)"
-      : "Vindemiatrix (Female - mature, mid-low tone, calm)";
-  }
-  if (normalizedId === "orus") {
-    return isVietnamese
-      ? "Orus (Nam - trầm sâu, từ tốn, chín chắn)"
-      : "Orus (Male - deep, slow, mature)";
-  }
-  if (normalizedId === "charon") {
-    return isVietnamese
-      ? "Charon (Nam - trầm ấm vừa phải, mượt mà, tự nhiên)"
-      : "Charon (Male - moderately deep-warm, smooth, natural)";
+  if (voice.label) {
+    if (voice.label === "Female") {
+      return isVietnamese ? "Nữ" : "Female";
+    }
+    if (voice.label === "Male") {
+      return isVietnamese ? "Nam" : "Male";
+    }
+    if (voice.label === "Voice") {
+      return isVietnamese ? "Trung tính" : "Voice";
+    }
   }
 
-  if (
-    normalizedId.endsWith("-a") ||
-    normalizedId.endsWith("-f") ||
-    normalizedId.endsWith("-h") ||
-    normalizedId.endsWith("-aoede")
-  ) {
-    return isVietnamese ? "Nữ" : "Female";
+  const parts = voice.id.split("-");
+  const nameOnly = parts.length >= 3 ? parts.slice(2).join(" ") : voice.id;
+
+  let genderLabel = "";
+  if (voice.gender) {
+    const g = voice.gender.toUpperCase();
+    if (g === "FEMALE" || g === "SSML_VOICE_GENDER_FEMALE") {
+      genderLabel = isVietnamese ? "Nữ" : "Female";
+    } else if (g === "MALE" || g === "SSML_VOICE_GENDER_MALE") {
+      genderLabel = isVietnamese ? "Nam" : "Male";
+    } else if (g === "NEUTRAL" || g === "SSML_VOICE_GENDER_NEUTRAL") {
+      genderLabel = isVietnamese ? "Trung tính" : "Neutral";
+    }
   }
 
-  if (
-    normalizedId.endsWith("-d") ||
-    normalizedId.endsWith("-i") ||
-    normalizedId.endsWith("-j") ||
-    normalizedId.endsWith("-charon")
-  ) {
-    return isVietnamese ? "Nam" : "Male";
+  if (genderLabel) {
+    return `${nameOnly} • ${genderLabel}`;
   }
-
-  return voice.label;
+  return nameOnly || voice.label;
 }

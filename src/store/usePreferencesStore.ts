@@ -12,7 +12,7 @@ import type { ReaderLanguage } from "@/lib/voiceReader";
 
 export type { FontType, ThemeType };
 export type { ReaderLanguage };
-const PREFERENCES_STORE_VERSION = 6;
+const PREFERENCES_STORE_VERSION = 7;
 
 interface PreferencesState {
   theme: ThemeType;
@@ -28,7 +28,7 @@ interface PreferencesState {
   setReaderVoice: (language: ReaderLanguage, voiceURI: string) => void;
 }
 
-type PersistedPreferencesState = {
+export type PersistedPreferencesState = {
   theme?: unknown;
   font?: unknown;
   readerLanguage?: string;
@@ -39,6 +39,42 @@ type PersistedPreferencesState = {
 
 function isReaderLanguage(value: string): value is ReaderLanguage {
   return value === "en-US" || value === "vi-VN";
+}
+
+export function migratePreferencesStore(persistedState: unknown, version: number) {
+  const state =
+    persistedState && typeof persistedState === "object"
+      ? { ...(persistedState as PersistedPreferencesState) }
+      : {};
+
+  if (version < 3) {
+    state.readerVoiceEn = "";
+    state.readerVoiceVi = "";
+  }
+
+  if (version < 6) {
+    const raw = "readerLanguage" in state ? state.readerLanguage : (state as Record<string, unknown>).readerLanguageMode;
+    const value = typeof raw === "string" ? raw : "auto";
+    state.readerLanguage = isReaderLanguage(value) ? value : "en-US";
+    // biome-ignore lint/performance/noDelete: migration cleanup
+    delete (state as Record<string, unknown>).readerLanguageMode;
+  }
+
+  if (version < 7) {
+    const legacyAliases = ["despina", "orus", "vindemiatrix", "charon"];
+    if (state.readerVoiceEn && legacyAliases.includes(state.readerVoiceEn.toLowerCase())) {
+      state.readerVoiceEn = "";
+    }
+    if (state.readerVoiceVi && legacyAliases.includes(state.readerVoiceVi.toLowerCase())) {
+      state.readerVoiceVi = "";
+    }
+  }
+
+  return {
+    ...state,
+    theme: normalizeTheme(state.theme),
+    font: normalizeFont(state.font),
+  };
 }
 
 export const usePreferencesStore = create<PreferencesState>()(
@@ -60,31 +96,7 @@ export const usePreferencesStore = create<PreferencesState>()(
     {
       name: "contextra-preferences",
       version: PREFERENCES_STORE_VERSION,
-      migrate: (persistedState: unknown, version) => {
-        const state =
-          persistedState && typeof persistedState === "object"
-            ? { ...(persistedState as PersistedPreferencesState) }
-            : {};
-
-        if (version < 3) {
-          state.readerVoiceEn = "";
-          state.readerVoiceVi = "";
-        }
-
-        if (version < 6) {
-          const raw = "readerLanguage" in state ? state.readerLanguage : (state as Record<string, unknown>).readerLanguageMode;
-          const value = typeof raw === "string" ? raw : "auto";
-          state.readerLanguage = isReaderLanguage(value) ? value : "en-US";
-          // biome-ignore lint/performance/noDelete: migration cleanup
-          delete (state as Record<string, unknown>).readerLanguageMode;
-        }
-
-        return {
-          ...state,
-          theme: normalizeTheme(state.theme),
-          font: normalizeFont(state.font),
-        };
-      },
+      migrate: migratePreferencesStore,
     }
   )
 );

@@ -50,7 +50,7 @@ import { prisma } from "@/lib/prisma";
 const VALID_BODY = {
   projectId: "proj-001",
   language: "vi-VN",
-  voiceId: "vi-VN-Standard-A",
+  voiceId: "vi-VN-Neural2-A",
   rate: 1,
   text: "Xin chào",
 };
@@ -82,7 +82,7 @@ beforeEach(() => {
     email: "test@example.com",
   });
   (requireProjectPermission as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
-  (isConfiguredVoice as ReturnType<typeof vi.fn>).mockReturnValue(true);
+  (isConfiguredVoice as ReturnType<typeof vi.fn>).mockResolvedValue(true);
   (getTextToSpeechClient as ReturnType<typeof vi.fn>).mockReturnValue({});
   (synthesizeWithText as ReturnType<typeof vi.fn>).mockResolvedValue(Buffer.from("audio"));
   (synthesizeWithSsml as ReturnType<typeof vi.fn>).mockResolvedValue(Buffer.from("audio"));
@@ -148,7 +148,7 @@ describe("POST /api/voice-reader/pronunciation-preview — validation", () => {
   });
 
   it("returns 400 when voice is not configured", async () => {
-    (isConfiguredVoice as ReturnType<typeof vi.fn>).mockReturnValue(false);
+    (isConfiguredVoice as ReturnType<typeof vi.fn>).mockResolvedValue(false);
     const res = await POST(makeRequest(VALID_BODY));
     expect(res.status).toBe(400);
     await expect(res.text()).resolves.toContain("Voice not configured");

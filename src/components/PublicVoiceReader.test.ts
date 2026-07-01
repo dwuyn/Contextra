@@ -62,18 +62,18 @@ describe("PublicVoiceReader helpers", () => {
     ).toBe(true);
   });
 
-  it("maps curated voice ids to localized gender labels", () => {
+  it("maps voice labels to localized gender labels", () => {
     expect(
-      getVoiceDisplayLabel({ id: "vi-VN-Neural2-A", label: "Google Neural2 A", language: "vi-VN" }, false),
+      getVoiceDisplayLabel({ id: "vi-VN-Neural2-A", label: "Female", language: "vi-VN", gender: "FEMALE" }, false),
     ).toBe("Female");
     expect(
-      getVoiceDisplayLabel({ id: "vi-VN-Neural2-A", label: "Google Neural2 A", language: "vi-VN" }, true),
+      getVoiceDisplayLabel({ id: "vi-VN-Neural2-A", label: "Female", language: "vi-VN", gender: "FEMALE" }, true),
     ).toBe("Nữ");
     expect(
-      getVoiceDisplayLabel({ id: "en-US-Neural2-D", label: "Google Neural2 D", language: "en-US" }, false),
+      getVoiceDisplayLabel({ id: "en-US-Neural2-D", label: "Male", language: "en-US", gender: "MALE" }, false),
     ).toBe("Male");
     expect(
-      getVoiceDisplayLabel({ id: "vi-VN-Chirp3-HD-Charon", label: "Google Charon", language: "vi-VN" }, true),
+      getVoiceDisplayLabel({ id: "vi-VN-Neural2-J", label: "Male", language: "vi-VN", gender: "MALE" }, true),
     ).toBe("Nam");
   });
 });

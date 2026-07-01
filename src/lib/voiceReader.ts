@@ -4,6 +4,9 @@ export interface VoiceOption {
   id: string;
   label: string;
   language: ReaderLanguage;
+  gender?: string;
+  family?: string;
+  sampleRateHertz?: number;
 }
 
 const READABLE_BLOCK_CLOSE_TAG_PATTERN = /<\/(h[1-6]|p|li|blockquote|pre|div|section|article)>/gi;

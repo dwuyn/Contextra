@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Validate voice is configured for the language
-  if (!isConfiguredVoice(language, voiceId)) {
+  if (!(await isConfiguredVoice(language, voiceId))) {
     return new Response("Voice not configured for this language.", { status: 400 });
   }
 

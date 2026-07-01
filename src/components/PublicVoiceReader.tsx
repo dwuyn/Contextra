@@ -80,7 +80,7 @@ async function loadVoiceOptions(projectId: string) {
       });
 
       if (!response.ok) {
-        throw new Error((await response.text()) || "Failed to load Google Cloud voices.");
+        throw new Error((await response.text()) || "Failed to load Google Cloud Neural2 voices.");
       }
 
       const json = (await response.json()) as VoiceResponse;
@@ -121,6 +121,7 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
   const [currentSegmentNumber, setCurrentSegmentNumber] = useState(0);
   const [chaptersToRead, setChaptersToRead] = useState(1);
   const [playlistEntries, setPlaylistEntries] = useState<PlaylistEntry[]>([]);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playbackStateRef = useRef<PlaybackState>("idle");
@@ -205,14 +206,14 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
       : "Loading the current chapter before playback can start."
     : isLoadingVoices
       ? isVietnamese
-        ? "Đang tải các giọng đọc Google Cloud đã tuyển chọn..."
-        : "Loading curated Google Cloud voices..."
+        ? "Đang tải các giọng đọc Google Cloud Neural2..."
+        : "Loading Google Cloud Neural2 voices..."
       : voiceLoadError
         ? voiceLoadError
         : !activeVoice
           ? isVietnamese
-            ? `Chưa cấu hình giọng đọc Google ${languageLabel(activeLanguage)} đã tuyển chọn.`
-            : `No curated ${languageLabel(activeLanguage)} Google voice is configured.`
+            ? `Không có giọng đọc Google Neural2 ${languageLabel(activeLanguage)} khả dụng.`
+            : `No ${languageLabel(activeLanguage)} Google Neural2 voice is available.`
           : null;
 
   // Total progress across all playlist chapters
@@ -298,6 +299,7 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
       clearPrefetchedSegment();
       resetPlaybackPosition();
       updatePlaybackState("idle");
+      setIsLoadingAudio(false);
       setRuntimeError(nextError);
     },
     [clearCurrentAudioSource, clearPendingRequests, clearPrefetchedSegment, resetPlaybackPosition, updatePlaybackState],
@@ -413,6 +415,7 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
           nextSegmentSource = prefetchedSegmentRef.current;
           prefetchedSegmentRef.current = null;
         } else {
+          setIsLoadingAudio(true);
           activeFetchAbortRef.current?.abort();
           const controller = new AbortController();
           activeFetchAbortRef.current = controller;
@@ -445,11 +448,17 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
         audio.currentTime = 0;
         await audio.play();
         updatePlaybackState("playing");
+        setIsLoadingAudio(false);
 
         // Prefetch next segment in same chapter
         prefetchSegment(sessionId, chapterIdx, segmentIdx + 1);
       } catch (error) {
-        if (isAbortError(error)) return;
+        if (isAbortError(error)) {
+          if (playbackSessionIdRef.current === sessionId) {
+            setIsLoadingAudio(false);
+          }
+          return;
+        }
         const message =
           error instanceof Error && isBrowserMediaSourceErrorMessage(error.message)
             ? buildUnsupportedMediaMessage(isVietnamese, currentAudioSourceRef.current)
@@ -541,51 +550,66 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
     const sessionId = playbackSessionIdRef.current + 1;
     playbackSessionIdRef.current = sessionId;
 
-    const entries: PlaylistEntry[] = [];
-    for (let i = 0; i < playlistChapterMetas.length; i++) {
-      const meta = playlistChapterMetas[i];
+    setIsLoadingAudio(true);
+    try {
+      const entries: PlaylistEntry[] = [];
+      for (let i = 0; i < playlistChapterMetas.length; i++) {
+        const meta = playlistChapterMetas[i];
 
-      if (i === 0 && meta.id === chapterId) {
-        // Current chapter: use props
-        const segments = buildSpeechSegments(chapterTitle, chapterContent);
-        if (segments.length === 0) {
-          entries.push({ chapterId: meta.id, chapterTitle: meta.title, content: chapterContent, speechSegments: [], skipped: true });
-        } else {
-          entries.push({ chapterId: meta.id, chapterTitle: meta.title, content: chapterContent, speechSegments: segments, skipped: false });
-        }
-      } else {
-        // Other chapter: fetch on demand
-        try {
-          const fetched = await fetchContentForChapter(projectId, meta.id, meta.title);
-          const segments = buildSpeechSegments(fetched.title, fetched.content);
+        if (i === 0 && meta.id === chapterId) {
+          // Current chapter: use props
+          const segments = buildSpeechSegments(chapterTitle, chapterContent);
           if (segments.length === 0) {
-            entries.push({ chapterId: meta.id, chapterTitle: meta.title, content: fetched.content, speechSegments: [], skipped: true });
+            entries.push({ chapterId: meta.id, chapterTitle: meta.title, content: chapterContent, speechSegments: [], skipped: true });
           } else {
-            entries.push({ chapterId: meta.id, chapterTitle: meta.title, content: fetched.content, speechSegments: segments, skipped: false });
+            entries.push({ chapterId: meta.id, chapterTitle: meta.title, content: chapterContent, speechSegments: segments, skipped: false });
           }
-        } catch {
-          entries.push({ chapterId: meta.id, chapterTitle: meta.title, content: "", speechSegments: [], skipped: true });
+        } else {
+          // Other chapter: fetch on demand
+          try {
+            const fetched = await fetchContentForChapter(projectId, meta.id, meta.title);
+            const segments = buildSpeechSegments(fetched.title, fetched.content);
+            if (segments.length === 0) {
+              entries.push({ chapterId: meta.id, chapterTitle: meta.title, content: fetched.content, speechSegments: [], skipped: true });
+            } else {
+              entries.push({ chapterId: meta.id, chapterTitle: meta.title, content: fetched.content, speechSegments: segments, skipped: false });
+            }
+          } catch {
+            entries.push({ chapterId: meta.id, chapterTitle: meta.title, content: "", speechSegments: [], skipped: true });
+          }
         }
       }
+
+      if (playbackSessionIdRef.current !== sessionId) {
+        // A newer session was started, or stopped
+        return;
+      }
+
+      setPlaylistEntries(entries);
+
+      // Find first non-skipped chapter
+      let firstPlayable = 0;
+      while (
+        firstPlayable < entries.length &&
+        (entries[firstPlayable].skipped || entries[firstPlayable].speechSegments.length === 0)
+      ) {
+        firstPlayable += 1;
+      }
+
+      if (firstPlayable >= entries.length) {
+        // All chapters are unreadable — don't start playback
+        setIsLoadingAudio(false);
+        return;
+      }
+
+      resetPlaybackPosition();
+      currentChapterOffsetRef.current = firstPlayable;
+
+      void playSegment(sessionId, firstPlayable, 0);
+    } catch (error) {
+      setIsLoadingAudio(false);
+      console.error("Failed to start voice reader playback:", error);
     }
-
-    setPlaylistEntries(entries);
-
-    // Find first non-skipped chapter
-    let firstPlayable = 0;
-    while (firstPlayable < entries.length && (entries[firstPlayable].skipped || entries[firstPlayable].speechSegments.length === 0)) {
-      firstPlayable += 1;
-    }
-
-    if (firstPlayable >= entries.length) {
-      // All chapters are unreadable — don't start playback
-      return;
-    }
-
-    resetPlaybackPosition();
-    currentChapterOffsetRef.current = firstPlayable;
-
-    void playSegment(sessionId, firstPlayable, 0);
   }, [
     unavailableReason,
     playlistChapterMetas,
@@ -643,6 +667,7 @@ function useVoiceReader(props: PublicVoiceReaderProps) {
     handlePlay,
     handlePauseResume,
     stopPlayback,
+    isLoadingAudio,
   };
 }
 
@@ -668,7 +693,7 @@ function PublicVoiceReaderPanel({ reader }: { reader: ReturnType<typeof useVoice
           <button
             type="button"
             onClick={() => reader.setIsPanelOpen(false)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-text)]"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-text)] cursor-pointer"
             aria-label={reader.isVietnamese ? "Đóng bảng trình đọc giọng nói" : "Close voice reader panel"}
           >
             <X size={16} />
@@ -683,7 +708,7 @@ function PublicVoiceReaderPanel({ reader }: { reader: ReturnType<typeof useVoice
             <select
               value={reader.readerLanguage}
               onChange={(e) => reader.setReaderLanguage(e.target.value as ReaderLanguage)}
-              className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-text)]"
+              className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-text)] cursor-pointer"
             >
               <option value="en-US">{reader.isVietnamese ? "Tiếng Anh" : "English"}</option>
               <option value="vi-VN">{reader.isVietnamese ? "Tiếng Việt" : "Vietnamese"}</option>
@@ -697,11 +722,11 @@ function PublicVoiceReaderPanel({ reader }: { reader: ReturnType<typeof useVoice
               value={reader.activeVoice?.id ?? ""}
               onChange={(e) => reader.setReaderVoice(reader.activeLanguage, e.target.value)}
               disabled={reader.availableVoices.length === 0}
-              className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-text)] disabled:cursor-not-allowed disabled:bg-[var(--color-canvas)] disabled:text-[var(--color-text-muted)]"
+              className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-text)] disabled:cursor-not-allowed disabled:bg-[var(--color-canvas)] disabled:text-[var(--color-text-muted)] cursor-pointer"
             >
               {reader.availableVoices.length === 0 ? (
                 <option value="">
-                  {reader.isVietnamese ? "Chưa có giọng đọc tuyển chọn" : "No curated voice"}
+                  {reader.isVietnamese ? "Chưa có giọng đọc Neural2 khả dụng" : "No Neural2 voice available"}
                 </option>
               ) : (
                 reader.availableVoices.map((voice) => (
@@ -719,7 +744,7 @@ function PublicVoiceReaderPanel({ reader }: { reader: ReturnType<typeof useVoice
             <select
               value={String(reader.readerRate)}
               onChange={(e) => reader.setReaderRate(Number(e.target.value))}
-              className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-text)]"
+              className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-text)] cursor-pointer"
             >
               {SPEECH_RATE_OPTIONS.map((rateOption) => (
                 <option key={rateOption} value={String(rateOption)}>
@@ -731,7 +756,7 @@ function PublicVoiceReaderPanel({ reader }: { reader: ReturnType<typeof useVoice
           {reader.remainingChapters > 1 && (
             <label className="flex min-w-0 flex-col gap-2">
               <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
-                {reader.isVietnamese ? "Chương" : "Chapters"}
+                {reader.isVietnamese ? "Chương cần đọc" : "Chapters to read"}
               </span>
               <input
                 type="number"
@@ -753,16 +778,23 @@ function PublicVoiceReaderPanel({ reader }: { reader: ReturnType<typeof useVoice
           <button
             type="button"
             onClick={reader.handlePlay}
-            disabled={Boolean(reader.unavailableReason)}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[var(--color-text)] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[var(--color-text)] disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-secondary)]"
+            disabled={Boolean(reader.unavailableReason) || reader.isLoadingAudio}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[var(--color-text)] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[var(--color-text)] cursor-pointer disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-secondary)]"
           >
-            <Play size={16} /> {reader.isVietnamese ? "Phát" : "Play"}
+            {reader.isLoadingAudio ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Play size={16} />
+            )}
+            {reader.isLoadingAudio
+              ? (reader.isVietnamese ? "Đang tải..." : "Loading...")
+              : (reader.isVietnamese ? "Phát" : "Play")}
           </button>
           <button
             type="button"
             onClick={() => void reader.handlePauseResume()}
-            disabled={Boolean(reader.unavailableReason) || reader.playbackState === "idle"}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:bg-[var(--color-canvas)] disabled:text-[var(--color-text-muted)]"
+            disabled={Boolean(reader.unavailableReason) || reader.playbackState === "idle" || reader.isLoadingAudio}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] cursor-pointer disabled:cursor-not-allowed disabled:bg-[var(--color-canvas)] disabled:text-[var(--color-text-muted)]"
           >
             <Pause size={16} />{" "}
             {reader.playbackState === "paused"
@@ -776,8 +808,8 @@ function PublicVoiceReaderPanel({ reader }: { reader: ReturnType<typeof useVoice
           <button
             type="button"
             onClick={() => reader.stopPlayback()}
-            disabled={reader.playbackState === "idle"}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed disabled:bg-[var(--color-canvas)] disabled:text-[var(--color-text-muted)]"
+            disabled={reader.playbackState === "idle" && !reader.isLoadingAudio}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-bold text-[var(--color-text)] transition-colors hover:bg-[var(--color-canvas)] cursor-pointer disabled:cursor-not-allowed disabled:bg-[var(--color-canvas)] disabled:text-[var(--color-text-muted)]"
           >
             <Square size={14} /> {reader.isVietnamese ? "Dừng" : "Stop"}
           </button>
@@ -811,7 +843,7 @@ export function PublicVoiceReader(props: PublicVoiceReaderProps) {
           onClick={() => reader.setIsPanelOpen((v) => !v)}
           aria-expanded={reader.isPanelOpen}
           className={cn(
-            "group inline-flex items-center gap-3 rounded-[24px] border px-4 py-3 shadow-lg backdrop-blur transition-all",
+            "group inline-flex items-center gap-3 rounded-[24px] border px-4 py-3 shadow-lg backdrop-blur transition-all cursor-pointer",
             reader.playbackState === "playing"
               ? "border-[var(--color-success)]/30 bg-[var(--color-success)]/10 text-[var(--color-success)]"
               : reader.playbackState === "paused"

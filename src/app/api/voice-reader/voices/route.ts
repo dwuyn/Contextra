@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth";
 import { isReaderLanguage } from "@/lib/voiceReader";
-import { listCuratedVoices } from "@/services/googleTtsService";
+import { listAvailableVoices } from "@/services/googleTtsService";
 import { requireProjectPermission } from "@/services/projectService";
 
 export const runtime = "nodejs";
@@ -22,11 +22,12 @@ export async function GET(req: NextRequest) {
 
   try {
     await requireProjectPermission(projectId, session.userId, "view");
+    const voices = await listAvailableVoices(language);
     return Response.json({
-      voices: listCuratedVoices(language),
+      voices,
     });
   } catch (error) {
-    console.error("Failed to load curated Google TTS voices:", error);
+    console.error("Failed to load Google Cloud TTS voices:", error);
     const message =
       error instanceof Error && error.message === "Unauthorized"
         ? "Unauthorized"

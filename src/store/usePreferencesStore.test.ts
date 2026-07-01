@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { usePreferencesStore } from "@/store/usePreferencesStore";
+import { usePreferencesStore, migratePreferencesStore } from "@/store/usePreferencesStore";
 import type { ReaderLanguage } from "@/lib/voiceReader";
 
 function isReaderLanguage(value: string): value is ReaderLanguage {
@@ -98,5 +98,31 @@ describe("Preferences migration v5 → v6", () => {
 
   it("defaults to en-US for non-string readerLanguageMode", () => {
     expect(migrateV5ToV6({ readerLanguageMode: 123 }).readerLanguage).toBe("en-US");
+  });
+});
+
+describe("Preferences migration v6 → v7", () => {
+  it("clears legacy Gemini aliases while keeping valid Google voice IDs", () => {
+    const result = migratePreferencesStore(
+      {
+        readerVoiceEn: "Despina",
+        readerVoiceVi: "vi-VN-Neural2-A",
+      },
+      6
+    );
+    expect(result.readerVoiceEn).toBe("");
+    expect(result.readerVoiceVi).toBe("vi-VN-Neural2-A");
+  });
+
+  it("clears all combinations of legacy Gemini aliases case-insensitively", () => {
+    const result = migratePreferencesStore(
+      {
+        readerVoiceEn: "orus",
+        readerVoiceVi: "Vindemiatrix",
+      },
+      6
+    );
+    expect(result.readerVoiceEn).toBe("");
+    expect(result.readerVoiceVi).toBe("");
   });
 });

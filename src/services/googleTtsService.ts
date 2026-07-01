@@ -2,10 +2,9 @@ import "@/lib/server-only";
 
 import { createHash } from "node:crypto";
 import { Storage } from "@google-cloud/storage";
-import { GoogleAuth } from "google-auth-library";
+import { TextToSpeechClient } from "@google-cloud/text-to-speech";
 import {
   buildSpeechSegments,
-  formatVoiceOptionLabel,
   isReaderLanguage,
   isSupportedSpeechRate,
   type ReaderLanguage,
@@ -21,7 +20,6 @@ import { normalizeMpegAudioBuffer } from "@/lib/audio";
 
 type GoogleTtsConfig = {
   bucketName: string;
-  curatedVoices: Record<ReaderLanguage, VoiceOption[]>;
 };
 
 type SynthesizeSegmentInput = {
@@ -38,9 +36,8 @@ type SynthesizeSegmentInput = {
 
 let cachedConfig: GoogleTtsConfig | null = null;
 let cachedStorage: Storage | null = null;
-let cachedAuth: GoogleAuth | null = null;
-let cachedToken: string | null = null;
-let tokenExpiry: number = 0;
+let cachedTtsClient: TextToSpeechClient | null = null;
+
 function getGoogleClientOptions() {
   const projectId = process.env.GOOGLE_CLOUD_PROJECT?.trim();
   return projectId ? { projectId } : undefined;
@@ -52,7 +49,8 @@ function getStorageClient() {
 }
 
 export function getTextToSpeechClient() {
-  return {};
+  cachedTtsClient ??= new TextToSpeechClient(getGoogleClientOptions());
+  return cachedTtsClient;
 }
 
 function requireEnv(name: string) {
@@ -63,21 +61,6 @@ function requireEnv(name: string) {
   return value;
 }
 
-function parseCuratedVoices(value: string, language: ReaderLanguage) {
-  const voices = value
-    .split(",")
-    .flatMap((entry) => {
-      const trimmed = entry.trim();
-      return trimmed ? [{ id: trimmed, label: formatVoiceOptionLabel(trimmed), language }] : [];
-    });
-
-  if (voices.length === 0) {
-    throw new Error(`No curated Google TTS voices configured for ${language}.`);
-  }
-
-  return voices;
-}
-
 function getConfig() {
   if (cachedConfig) {
     return cachedConfig;
@@ -85,10 +68,6 @@ function getConfig() {
 
   cachedConfig = {
     bucketName: requireEnv("GOOGLE_TTS_CACHE_BUCKET"),
-    curatedVoices: {
-      "en-US": parseCuratedVoices(requireEnv("GOOGLE_TTS_CURATED_VOICES_EN"), "en-US"),
-      "vi-VN": parseCuratedVoices(requireEnv("GOOGLE_TTS_CURATED_VOICES_VI"), "vi-VN"),
-    },
   };
 
   return cachedConfig;
@@ -112,73 +91,6 @@ function looksLikeWavAudioBuffer(buffer: Uint8Array) {
   );
 }
 
-function pcmToWav(pcmBuffer: Buffer, sampleRate: number = 24000): Buffer {
-  const numChannels = 1;
-  const bitsPerSample = 16;
-  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
-  const blockAlign = (numChannels * bitsPerSample) / 8;
-  const dataSize = pcmBuffer.length;
-  const chunkSize = 36 + dataSize;
-
-  const header = Buffer.alloc(44);
-
-  header.write("RIFF", 0);
-  header.writeUInt32LE(chunkSize, 4);
-  header.write("WAVE", 8);
-  header.write("fmt ", 12);
-  header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20); // PCM format = 1
-  header.writeUInt16LE(numChannels, 22);
-  header.writeUInt32LE(sampleRate, 24);
-  header.writeUInt32LE(byteRate, 28);
-  header.writeUInt16LE(blockAlign, 32);
-  header.writeUInt16LE(bitsPerSample, 34);
-  header.write("data", 36);
-  header.writeUInt32LE(dataSize, 40);
-
-  return Buffer.concat([header, pcmBuffer]);
-}
-
-function ssmlToPlaintext(ssml: string): string {
-  let text = ssml;
-  text = text.replace(/<sub\s+alias="([^"]+)"[^>]*>.*?<\/sub>/gi, "$1");
-  text = text.replace(/<phoneme\s+[^>]*ph="([^"]+)"[^>]*>(.*?)<\/phoneme>/gi, "$2");
-  text = text.replace(/<say-as\s+interpret-as="spell-out"[^>]*>(.*?)<\/say-as>/gi, (_, term) => term.split("").join(" "));
-  text = text.replace(/<say-as\s+[^>]*>(.*?)<\/say-as>/gi, "$1");
-  text = text.replace(/<speak>/gi, "").replace(/<\/speak>/gi, "");
-  text = text.replace(/<break[^>]*\/>/gi, " ");
-  text = text.replace(/<[^>]+>/g, "");
-  return text.replace(/\s+/g, " ").trim();
-}
-
-function toAudioBuffer(audioContent: Uint8Array | string | null | undefined) {
-  if (!audioContent) {
-    throw new Error("Google TTS returned empty audio.");
-  }
-
-  if (typeof audioContent === "string") {
-    const decodedBuffer = Buffer.from(audioContent, "base64");
-    if (looksLikeWavAudioBuffer(decodedBuffer)) {
-      return decodedBuffer;
-    }
-    const normalizedBuffer = normalizeMpegAudioBuffer(decodedBuffer);
-    if (normalizedBuffer) {
-      return normalizedBuffer;
-    }
-    throw new Error("Google TTS returned invalid audio.");
-  }
-
-  if (looksLikeWavAudioBuffer(audioContent)) {
-    return Buffer.from(audioContent);
-  }
-  const normalizedBuffer = normalizeMpegAudioBuffer(audioContent);
-  if (normalizedBuffer) {
-    return normalizedBuffer;
-  }
-
-  throw new Error("Google TTS returned invalid audio.");
-}
-
 function assertMpegAudioBuffer(audioBuffer: Uint8Array, source: "cache" | "synthesis") {
   if (looksLikeWavAudioBuffer(audioBuffer)) {
     return;
@@ -187,7 +99,7 @@ function assertMpegAudioBuffer(audioBuffer: Uint8Array, source: "cache" | "synth
     throw new Error(
       source === "cache"
         ? "Cached voice segment is not valid audio."
-        : "Google TTS returned invalid audio.",
+        : "Google Cloud TTS returned invalid audio.",
     );
   }
 }
@@ -204,6 +116,7 @@ function buildCacheObjectPath(input: {
   pronunciationProfileHash?: string;
 }) {
   const hash = createHash("sha256")
+    .update("google-cloud-tts-v1")
     .update(input.chapterId)
     .update(input.chapterUpdatedAt.toISOString())
     .update(input.language)
@@ -215,7 +128,7 @@ function buildCacheObjectPath(input: {
     .digest("hex");
 
   return [
-    "voice-reader",
+    "voice-reader-v2",
     sanitizeKeyPart(input.projectId),
     sanitizeKeyPart(input.chapterId),
     sanitizeKeyPart(input.language),
@@ -230,12 +143,14 @@ function getCachedBucket() {
   return getStorageClient().bucket(config.bucketName);
 }
 
-export function listCuratedVoices(language: ReaderLanguage) {
-  return getConfig().curatedVoices[language];
-}
-
-export function isConfiguredVoice(language: ReaderLanguage, voiceId: string) {
-  return listCuratedVoices(language).some((voice) => voice.id === voiceId);
+export async function isConfiguredVoice(language: ReaderLanguage, voiceId: string): Promise<boolean> {
+  try {
+    const voices = await listAvailableVoices(language);
+    return voices.some((voice) => voice.id === voiceId);
+  } catch (error) {
+    console.error("Error validating voice config:", error);
+    return false;
+  }
 }
 
 async function loadPronunciationEntries(
@@ -255,119 +170,61 @@ async function loadPronunciationEntries(
       enabled: true,
     },
   });
-  // Prisma widens enum fields to string; cast is safe given schema constraints
   return entries as PronunciationEntryData[];
 }
 
-async function callGeminiTts(
+export async function synthesizeWithSsml(
+  client: TextToSpeechClient,
+  ssml: string,
+  language: ReaderLanguage,
+  voiceId: string,
+  rate: number,
+): Promise<Buffer> {
+  try {
+    const [response] = await client.synthesizeSpeech({
+      input: { ssml },
+      voice: { languageCode: language, name: voiceId },
+      audioConfig: { audioEncoding: "MP3", speakingRate: rate },
+    });
+
+    const content = response.audioContent;
+    if (!content) {
+      throw new Error("Google Cloud TTS returned empty audio.");
+    }
+    return typeof content === "string"
+      ? Buffer.from(content, "base64")
+      : Buffer.from(content);
+  } catch (error) {
+    console.error("Google Cloud TTS synthesis error:", error);
+    throw error;
+  }
+}
+
+export async function synthesizeWithText(
+  client: TextToSpeechClient,
   text: string,
   language: ReaderLanguage,
   voiceId: string,
   rate: number,
 ): Promise<Buffer> {
-  const location = process.env.GOOGLE_TTS_LOCATION?.trim() || "us-central1";
-  const project = process.env.GOOGLE_CLOUD_PROJECT?.trim();
-  if (!project) {
-    throw new Error("GOOGLE_CLOUD_PROJECT is not configured.");
-  }
-
-  const now = Date.now();
-  let token: string | null = null;
-
-  if (cachedToken && tokenExpiry > now + 5 * 60 * 1000) {
-    token = cachedToken;
-  } else {
-    cachedAuth ??= new GoogleAuth({
-      scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+  try {
+    const [response] = await client.synthesizeSpeech({
+      input: { text },
+      voice: { languageCode: language, name: voiceId },
+      audioConfig: { audioEncoding: "MP3", speakingRate: rate },
     });
-    const authClient = await cachedAuth.getClient();
-    const tokenResponse = await authClient.getAccessToken();
-    token = tokenResponse.token ?? null;
-    if (!token) {
-      throw new Error("Failed to retrieve Google API access token.");
+
+    const content = response.audioContent;
+    if (!content) {
+      throw new Error("Google Cloud TTS returned empty audio.");
     }
-    cachedToken = token;
-    const expiry = (authClient as any).credentials?.expiry_date;
-    tokenExpiry = typeof expiry === "number" ? expiry : now + 3600 * 1000;
+    return typeof content === "string"
+      ? Buffer.from(content, "base64")
+      : Buffer.from(content);
+  } catch (error) {
+    console.error("Google Cloud TTS synthesis error:", error);
+    throw error;
   }
-
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/gemini-3.1-flash-tts-preview:generateContent`;
-
-  let steeredText = text;
-  if (rate < 0.9) {
-    steeredText = `Speak slowly: ${text}`;
-  } else if (rate > 1.1) {
-    steeredText = `Speak quickly: ${text}`;
-  }
-
-  const payload = {
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text: steeredText,
-          },
-        ],
-      },
-    ],
-    generationConfig: {
-      responseModalities: ["AUDIO"],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: {
-            voiceName: voiceId,
-          },
-        },
-      },
-    },
-  };
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "");
-    throw new Error(`Gemini TTS API request failed: ${response.statusText}. Response: ${errorBody}`);
-  }
-
-  const data = await response.json();
-  const base64Data = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  if (!base64Data) {
-    console.error("Gemini TTS response structure error:", JSON.stringify(data));
-    throw new Error("Failed to get audio data from Gemini TTS model response.");
-  }
-
-  const pcmBuffer = Buffer.from(base64Data, "base64");
-  return pcmToWav(pcmBuffer, 24000);
-}
-
-export async function synthesizeWithSsml(
-  client: any,
-  ssml: string,
-  language: ReaderLanguage,
-  voiceId: string,
-  rate: number,
-) {
-  const plainText = ssmlToPlaintext(ssml);
-  return callGeminiTts(plainText, language, voiceId, rate);
-}
-
-export async function synthesizeWithText(
-  client: any,
-  text: string,
-  language: ReaderLanguage,
-  voiceId: string,
-  rate: number,
-) {
-  const plainText = ssmlToPlaintext(text);
-  return callGeminiTts(plainText, language, voiceId, rate);
 }
 
 async function uploadToCache(file: ReturnType<ReturnType<Storage["bucket"]>["file"]>, audioBuffer: Buffer) {
@@ -380,6 +237,91 @@ async function uploadToCache(file: ReturnType<ReturnType<Storage["bucket"]>["fil
   });
 }
 
+type CacheEntry = {
+  voices: VoiceOption[];
+  expiresAt: number;
+};
+
+const voiceListCache: Record<string, CacheEntry> = {};
+
+export function clearVoiceListCache() {
+  for (const key of Object.keys(voiceListCache)) {
+    delete voiceListCache[key];
+  }
+}
+
+export async function listAvailableVoices(language: ReaderLanguage): Promise<VoiceOption[]> {
+  const now = Date.now();
+  const cached = voiceListCache[language];
+
+  if (cached && cached.expiresAt > now) {
+    return cached.voices;
+  }
+
+  try {
+    const client = getTextToSpeechClient();
+    const [response] = await client.listVoices({ languageCode: language });
+    const rawVoices = response.voices || [];
+
+    const mappedVoices: VoiceOption[] = [];
+    const seenNames = new Set<string>();
+
+    for (const v of rawVoices) {
+      if (!v.name) continue;
+      if (seenNames.has(v.name)) continue;
+      seenNames.add(v.name);
+
+      const parts = v.name.split("-");
+      const family = parts[2] || "";
+      const familyLower = family.toLowerCase();
+
+      // The voice reader only exposes Neural2 voices.
+      if (familyLower !== "neural2") continue;
+
+      const gender = v.ssmlGender || undefined;
+      const sampleRateHertz = v.naturalSampleRateHertz || undefined;
+
+      mappedVoices.push({
+        id: v.name,
+        label: "", // Will be set after sorting
+        language,
+        gender,
+        family,
+        sampleRateHertz,
+      });
+    }
+
+    mappedVoices.sort((a, b) => {
+      return a.id.localeCompare(b.id);
+    });
+
+    for (const voice of mappedVoices) {
+      const g = (voice.gender || "").toUpperCase();
+      if (g === "FEMALE" || g === "SSML_VOICE_GENDER_FEMALE") {
+        voice.label = "Female";
+      } else if (g === "MALE" || g === "SSML_VOICE_GENDER_MALE") {
+        voice.label = "Male";
+      } else {
+        voice.label = "Voice";
+      }
+    }
+
+    voiceListCache[language] = {
+      voices: mappedVoices,
+      expiresAt: now + 12 * 60 * 60 * 1000,
+    };
+
+    return mappedVoices;
+  } catch (error) {
+    console.error(`Failed to list voices from Google Cloud TTS for language ${language}:`, error);
+    if (cached) {
+      console.warn(`Returning stale voice list cache for language ${language}.`);
+      return cached.voices;
+    }
+    throw error;
+  }
+}
+
 export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
   if (!isReaderLanguage(input.language)) {
     throw new Error("Unsupported reader language.");
@@ -389,7 +331,7 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
     throw new Error("Unsupported reader speed.");
   }
 
-  if (!isConfiguredVoice(input.language, input.voiceId)) {
+  if (!(await isConfiguredVoice(input.language, input.voiceId))) {
     throw new Error("Unsupported Google TTS voice.");
   }
 
@@ -434,7 +376,7 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
     if (normalizedCachedBuffer) {
       if (!Buffer.from(audioBuffer).equals(normalizedCachedBuffer)) {
         await uploadToCache(file, normalizedCachedBuffer).catch((error: unknown) => {
-          console.warn("Failed to rewrite normalized cached Google TTS segment:", {
+          console.warn("Failed to rewrite normalized cached Google Cloud TTS segment:", {
             cachePath,
             error: error instanceof Error ? error.message : String(error),
           });
@@ -449,7 +391,7 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
       };
     }
 
-    console.warn("Invalid cached Google TTS segment detected, regenerating:", {
+    console.warn("Invalid cached Google Cloud TTS segment detected, regenerating:", {
       projectId: input.projectId,
       chapterId: input.chapterId,
       voiceId: input.voiceId,
@@ -458,7 +400,7 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
       cachePath,
     });
     await file.delete({ ignoreNotFound: true }).catch((error: unknown) => {
-      console.warn("Failed to delete invalid cached Google TTS segment:", {
+      console.warn("Failed to delete invalid cached Google Cloud TTS segment:", {
         cachePath,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -485,7 +427,6 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
       cacheHit: false,
     };
   } catch (error) {
-    // SSML failed — log and fallback to plain text
     console.error("SSML synthesis failed, falling back to plain text:", {
       projectId: input.projectId,
       chapterId: input.chapterId,
@@ -505,7 +446,6 @@ export async function synthesizeChapterSegment(input: SynthesizeSegmentInput) {
     );
     assertMpegAudioBuffer(fallbackBuffer, "synthesis");
 
-    // Do NOT cache fallback under SSML key
     return {
       audioBuffer: fallbackBuffer,
       contentType: "audio/mpeg",
