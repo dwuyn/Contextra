@@ -278,7 +278,20 @@ export async function listAvailableVoices(language: ReaderLanguage): Promise<Voi
       // The voice reader only exposes Neural2 voices.
       if (familyLower !== "neural2") continue;
 
-      const gender = v.ssmlGender || undefined;
+      let gender: string | undefined = undefined;
+      if (v.ssmlGender !== null && v.ssmlGender !== undefined) {
+        if (typeof v.ssmlGender === "number") {
+          if (v.ssmlGender === 1) {
+            gender = "MALE";
+          } else if (v.ssmlGender === 2) {
+            gender = "FEMALE";
+          } else if (v.ssmlGender === 3) {
+            gender = "NEUTRAL";
+          }
+        } else {
+          gender = String(v.ssmlGender);
+        }
+      }
       const sampleRateHertz = v.naturalSampleRateHertz || undefined;
 
       mappedVoices.push({

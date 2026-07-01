@@ -12,7 +12,7 @@ vi.mock("@google-cloud/text-to-speech", () => {
     TextToSpeechClient: vi.fn().mockImplementation(class {
       synthesizeSpeech = mockSynthesizeSpeech;
       listVoices = mockListVoices;
-    }),
+    } as any),
   };
 });
 
