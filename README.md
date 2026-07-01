@@ -1,5 +1,11 @@
 # Contextra
 
+## Demo
+
+https://github.com/user-attachments/assets/e869958f-bf27-49a7-93b0-4d067c7a05d0
+
+Link Web [Contextra](https://contextra.dwyn.id.vn/en)
+
 Contextra is a collaborative writing workspace for long-form fiction. It combines a chapter editor, story bible, branching/version history, AI-assisted drafting, continuity memory, and shared project workflows like presence, comments, invites, and saved-chapter notifications in a single Next.js app.
 
 ## Tech Stack
@@ -154,3 +160,12 @@ docker compose down
 ## License
 
 Private project for personal or internal use.
+
+## Example novel:
+<img width="1895" height="943" alt="image" src="https://github.com/user-attachments/assets/f2a0eb3d-9223-42a2-be81-d95132702960" />
+
+## Tỷ lệ đóng góp:
+- 24521208 - Trần Đình Nguyên: 50%
+- 24521675 - Đinh Quốc Thịnh: 50%
+
+### Chúng em đã biết làm web và hiểu hệ thống web hoạt động như thế nào.
